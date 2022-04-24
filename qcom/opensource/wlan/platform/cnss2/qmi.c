@@ -17,6 +17,7 @@
 #include "main.h"
 #include "qmi.h"
 #include "genl.h"
+#include "cnss_utils.h"
 
 #define WLFW_SERVICE_INS_ID_V01		1
 #define WLFW_CLIENT_ID			0x4b4e454c
@@ -1389,6 +1390,11 @@ int cnss_wlfw_wlan_mac_req_send_sync(struct cnss_plat_data *plat_priv,
 	memcpy(req.mac_addr, mac, mac_len);
 #endif /* OPLUS_FEATURE_WIFI_MAC */
 	req.mac_addr_valid = 1;
+
+	ret = cnss_utils_set_wlan_mac_address(req.mac_addr, mac_len);
+	if (ret < 0) {
+		cnss_pr_err("Failed to set cnss utils wlan mac address (non-fatal), err: %d\n", ret);
+	}
 
 	ret = qmi_send_request(&plat_priv->qmi_wlfw, NULL, &txn,
 			       QMI_WLFW_MAC_ADDR_REQ_V01,
