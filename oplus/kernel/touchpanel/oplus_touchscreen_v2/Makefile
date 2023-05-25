@@ -14,6 +14,8 @@ else
 $(info CONFIG_TOUCHPANEL_FAULT_INJECT_ENABLE is N)
 endif
 
+KBUILD_CFLAGS += -Wframe-larger-than=4096
+
 oplus_bsp_tp_comon-y := util_interface/touch_interfaces.o
 oplus_bsp_tp_comon-y += touch_comon_api/touch_comon_api.o
 oplus_bsp_tp_comon-y += touchpanel_healthinfo/touchpanel_healthinfo.o
