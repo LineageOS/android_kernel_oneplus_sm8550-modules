@@ -690,7 +690,7 @@ static char *cnss_bdf_type_to_str(enum cnss_bdf_type bdf_type)
 
 #ifdef OPLUS_FEATURE_WIFI_BDF
 //Modify for: multi projects using different bdf
-static bool is_prj_support_region_id() {
+static bool is_prj_support_region_id(void) {
 	int project_id = get_project();
 	cnss_pr_dbg("the project support region id is: %d\n", project_id);
 	if (project_id == 22861 ||
@@ -702,7 +702,7 @@ static bool is_prj_support_region_id() {
 	return false;
 }
 
-static bool is_prj_support_second_bdf() {
+static bool is_prj_support_second_bdf(void) {
 	int project_id = get_project();
 	cnss_pr_dbg("the project support second bdf is: %d\n", project_id);
 	if (project_id == 22811) {

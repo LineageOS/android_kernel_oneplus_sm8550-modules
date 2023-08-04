@@ -120,7 +120,7 @@ static const struct drm_prop_enum_list e_panel_mode[] = {
 };
 
 #if defined(CONFIG_PXLW_IRIS) || defined(CONFIG_PXLW_SOFT_IRIS)
-extern iris_backlight_update;
+extern int iris_backlight_update;
 #endif
 
 static void sde_dimming_bl_notify(struct sde_connector *conn, struct dsi_backlight_config *config)

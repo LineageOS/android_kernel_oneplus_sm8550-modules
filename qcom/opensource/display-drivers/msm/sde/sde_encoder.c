@@ -92,7 +92,7 @@ extern u32 iris_pq_disable;
 #define DELAY_LOW_FPS_TIMEOUT_US 10000
 #define DELAY_MEDIUM_FPS_TIMEOUT_US 5500
 #define DELAY_HIGHT_FPS_TIMEOUT_US 1000
-extern iris_backlight_update;
+extern int iris_backlight_update;
 #endif
 
 /* worst case poll time for delay_kickoff to be cleared */
