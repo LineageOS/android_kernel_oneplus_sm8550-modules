@@ -3491,7 +3491,7 @@ static int _iris_get_sr_info(char *kbuf, int size)
 static ssize_t _iris_dbg_show_sr_info(struct file *file, char __user *ubuf,
 		size_t count, loff_t *ppos)
 {
-	const BUF_SIZE = 256;
+	const int BUF_SIZE = 256;
 	char *kbuf = NULL;
 	int size = count < BUF_SIZE ? BUF_SIZE : count;
 
