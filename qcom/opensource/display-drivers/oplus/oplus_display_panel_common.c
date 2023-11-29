@@ -2500,7 +2500,7 @@ void oplus_need_to_sync_te(struct dsi_panel *panel)
 	return;
 }
 
-int oplus_display_panel_set_demua()
+int oplus_display_panel_set_demua(void)
 {
 	u32 bl_lvl = 0;
 	int rc = 0;
