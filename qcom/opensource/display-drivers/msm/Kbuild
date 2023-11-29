@@ -53,9 +53,8 @@ LINUX_INC +=	-I$(DISPLAY_ROOT) \
 	-I$(DISPLAY_ROOT)/include/uapi/display \
 
 ifeq (${CONFIG_PXLW_IRIS},y)
-# PWATOP=../../../../..
-PWATOP=$(srctree)/../..
-LINUX_INC += -I$(DISPLAY_ROOT)/msm/dsi/iris
+PWATOP=$(DISPLAY_ROOT)/msm/iris
+LINUX_INC += -I$(PWATOP)/
 endif
 
 CDEFINES +=	-DANI_LITTLE_BYTE_ENDIAN \
@@ -158,6 +157,8 @@ msm_drm-$(CONFIG_DRM_MSM_DP_USBPD_LEGACY) += dp/dp_usbpd.o
 msm_drm-$(CONFIG_DRM_OPLUS) += ../oplus/oplus_dsi_support.o \
 	../oplus/oplus_display_private_api.o \
 	../oplus/oplus_dc_diming.o \
+	../oplus/oplus_adfr.o \
+	../oplus/oplus_display_temp_compensation.o \
 	../oplus/oplus_onscreenfingerprint.o \
 	../oplus/oplus_ffl.o \
 	../oplus/oplus_display_panel.o \
@@ -167,7 +168,6 @@ msm_drm-$(CONFIG_DRM_OPLUS) += ../oplus/oplus_dsi_support.o \
 	../oplus/oplus_display_esd.o \
 	../oplus/oplus_bl.o \
 	../oplus/oplus_display_panel_feature.o \
-	../oplus/oplus_adfr.o \
 	../oplus/oplus_display_interface.o
 #endif /* OPLUS_FEATURE_DISPLAY */
 
@@ -254,7 +254,7 @@ msm_drm-$(CONFIG_DRM_MSM_DSI) += dsi/dsi_phy.o \
 
 ifeq (${CONFIG_PXLW_IRIS},y)
 $(warning The feature of pixelworks iris will be added to the kernel)
-include $(DISPLAY_ROOT)/msm/dsi/iris/Kbuild
+include $(PWATOP)/Kbuild
 endif
 msm_drm-$(CONFIG_DSI_PARSER) += dsi/dsi_parser.o
 

@@ -370,18 +370,6 @@ struct sde_encoder_phys {
 	bool recovered;
 	bool autorefresh_disable_trans;
 	bool cwb_disable_pending;
-#ifdef OPLUS_FEATURE_DISPLAY
-	/* OPLUS_FEATURE_ADFR, qsync enhance */
-	//2 : transferring (wr_ptr_irq)
-	//1 : transfer finish (pp_tx_done_irq)
-	//0 : panel read finish (rd_ptr_irq)
-	//disable qsync or wait vblank to avoid tearing
-	atomic_t frame_state;
-	//threshold for current frame
-	u32 current_sync_threshold_start;
-	//threshold for current qsync mode
-	u32 qsync_sync_threshold_start;
-#endif /* OPLUS_FEATURE_DISPLAY */
 };
 
 static inline int sde_encoder_phys_inc_pending(struct sde_encoder_phys *phys)
@@ -634,10 +622,15 @@ int sde_encoder_helper_wait_event_timeout(
 
 /*
  * sde_encoder_get_fps - get the allowed panel jitter in nanoseconds
- * @encoder: Pointer to drm encoder object
+ * @frame_rate: custom input frame rate
+ * @jitter_num: jitter numerator value
+ * @jitter_denom: jitter denomerator value,
+ * @l_bound: lower frame period boundary
+ * @u_bound: upper frame period boundary
  */
-void sde_encoder_helper_get_jitter_bounds_ns(struct drm_encoder *encoder,
-			u64 *l_bound, u64 *u_bound);
+void sde_encoder_helper_get_jitter_bounds_ns(uint32_t frame_rate,
+			u32 jitter_num, u32 jitter_denom,
+			ktime_t *l_bound, ktime_t *u_bound);
 
 /**
  * sde_encoder_helper_switch_vsync - switch vsync source to WD or default

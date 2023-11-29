@@ -550,4 +550,8 @@ void sde_rsc_debug_dump(u32 mux_sel);
  */
 void sde_dbg_update_dump_mode(bool enable_coredump);
 
+#ifdef OPLUS_FEATURE_DISPLAY
+void oplus_sde_evtlog_dump_all(void);
+#endif /* OPLUS_FEATURE_DISPLAY */
+
 #endif /* SDE_DBG_H_ */

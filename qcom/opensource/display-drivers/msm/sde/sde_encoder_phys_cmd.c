@@ -10,16 +10,22 @@
 #include "sde_core_irq.h"
 #include "sde_formats.h"
 #include "sde_trace.h"
-#ifdef OPLUS_FEATURE_DISPLAY
-/* OPLUS_FEATURE_ADFR, oplus adfr */
-#include "../oplus/oplus_adfr.h"
-#endif /* OPLUS_FEATURE_DISPLAY */
 #if defined(CONFIG_PXLW_IRIS)
 #include "dsi_iris_api.h"
 #endif
+#ifdef OPLUS_FEATURE_DISPLAY
+#include "../oplus/oplus_display_panel_common.h"
+#include "../oplus/oplus_display_interface.h"
+#endif /* OPLUS_FEATURE_DISPLAY */
+
+
+#ifdef OPLUS_FEATURE_DISPLAY_ADFR
+#include "../oplus/oplus_adfr.h"
+#endif /* OPLUS_FEATURE_DISPLAY_ADFR */
 
 #ifdef OPLUS_FEATURE_DISPLAY_ONSCREENFINGERPRINT
 #include "../oplus/oplus_onscreenfingerprint.h"
+#define OPLUS_OFP_ULTRA_LOW_POWER_AOD_VBLANK_TIMEOUT_MS	1000
 #endif /* OPLUS_FEATURE_DISPLAY_ONSCREENFINGERPRINT */
 
 #define SDE_DEBUG_CMDENC(e, fmt, ...) SDE_DEBUG("enc%d intf%d " fmt, \
@@ -220,8 +226,8 @@ static void sde_encoder_override_tearcheck_rd_ptr(struct sde_encoder_phys *phys_
 
 	sde_encoder_helper_get_pp_line_count(phys_enc->parent, info);
 	SDE_EVT32_VERBOSE(phys_enc->hw_intf->idx - INTF_0, mode->vdisplay,
-		cmd_enc->qsync_threshold_lines, info[0].rd_ptr_line_count,
-		info[0].rd_ptr_frame_count, info[0].wr_ptr_line_count,
+		cmd_enc->qsync_threshold_lines, adjusted_tear_rd_ptr_line_cnt,
+		info[0].rd_ptr_line_count, info[0].rd_ptr_frame_count, info[0].wr_ptr_line_count,
 		info[1].rd_ptr_line_count, info[1].rd_ptr_frame_count, info[1].wr_ptr_line_count);
 }
 
@@ -272,16 +278,12 @@ static void _sde_encoder_phys_signal_frame_done(struct sde_encoder_phys *phys_en
 		phys_enc->autorefresh_disable_trans = false;
 	}
 
-#ifdef OPLUS_FEATURE_DISPLAY
-	/* OPLUS_FEATURE_ADFR, qsync enhance */
-	if (oplus_adfr_is_support()) {
-		atomic_set(&phys_enc->frame_state, 1);
-		SDE_DEBUG("frame_state = %d\n", atomic_read(&phys_enc->frame_state));
-	}
-#endif /* OPLUS_FEATURE_DISPLAY */
-
 	/* Signal any waiting atomic commit thread */
 	wake_up_all(&phys_enc->pending_kickoff_wq);
+
+#ifdef OPLUS_FEATURE_DISPLAY_ADFR
+	oplus_adfr_irq_handler(phys_enc, OPLUS_ADFR_PP_DONE);
+#endif /* OPLUS_FEATURE_DISPLAY_ADFR */
 
 #ifdef OPLUS_FEATURE_DISPLAY_ONSCREENFINGERPRINT
 	if (oplus_ofp_is_supported()) {
@@ -355,26 +357,12 @@ static void sde_encoder_phys_cmd_te_rd_ptr_irq(void *arg, int irq_idx)
 	struct sde_encoder_phys_cmd_te_timestamp *te_timestamp;
 	unsigned long lock_flags;
 	u32 fence_ready = 0;
-#if defined(CONFIG_PXLW_IRIS) || defined(CONFIG_PXLW_SOFT_IRIS)
+#if defined(CONFIG_PXLW_IRIS) || defined(CONFIG_PXLW_SOFT_IRIS) || defined(OPLUS_FEATURE_DISPLAY)
 	struct sde_connector *conn;
 #endif
-#ifdef OPLUS_FEATURE_DISPLAY
-	/* OPLUS_FEATURE_ADFR, qsync enhance */
-	static unsigned long now;
-#endif /* OPLUS_FEATURE_DISPLAY */
 
 	if (!phys_enc || !phys_enc->hw_pp || !phys_enc->hw_intf || !phys_enc->hw_ctl)
 		return;
-
-#ifdef OPLUS_FEATURE_DISPLAY
-	/* OPLUS_FEATURE_ADFR, qsync enhance */
-	// The initial value of the now variable is 0,
-	// but we don't care about the first calculation error.
-	if (oplus_adfr_is_support()) {
-		SDE_DEBUG("rd_ptr_irq interval: %lu\n", ((unsigned long)ktime_to_us(ktime_get()) - now));
-		now = (unsigned long)ktime_to_us(ktime_get());
-	}
-#endif /* OPLUS_FEATURE_DISPLAY */
 
 #if defined(CONFIG_PXLW_IRIS) || defined(CONFIG_PXLW_SOFT_IRIS)
 	if (iris_is_chip_supported() || iris_is_softiris_supported()) {
@@ -404,6 +392,13 @@ static void sde_encoder_phys_cmd_te_rd_ptr_irq(void *arg, int irq_idx)
 	}
 	spin_unlock_irqrestore(phys_enc->enc_spinlock, lock_flags);
 
+#ifdef OPLUS_FEATURE_DISPLAY
+        conn = to_sde_connector(phys_enc->connector);
+        if (conn && te_timestamp) {
+            oplus_save_te_timestamp(conn, te_timestamp->timestamp);
+        }
+#endif /* OPLUS_FEATURE_DISPLAY */
+
 	if ((scheduler_status != 0x1) && ctl->ops.get_hw_fence_status)
 		fence_ready = ctl->ops.get_hw_fence_status(ctl);
 
@@ -417,29 +412,19 @@ static void sde_encoder_phys_cmd_te_rd_ptr_irq(void *arg, int irq_idx)
 		phys_enc->parent_ops.handle_vblank_virt(phys_enc->parent,
 			phys_enc);
 
+	atomic_add_unless(&cmd_enc->pending_vblank_cnt, -1, 0);
+	wake_up_all(&cmd_enc->pending_vblank_wq);
+
 #ifdef OPLUS_FEATURE_DISPLAY
-	/* OPLUS_FEATURE_ADFR, qsync enhance */
-	if (oplus_adfr_is_support()) {
-		if(atomic_read(&phys_enc->frame_state) == 1 ) {
-			atomic_set(&phys_enc->frame_state, 0);
-		}
-		SDE_DEBUG("frame_state = %d\n", atomic_read(&phys_enc->frame_state));
-
-		/* OPLUS_FEATURE_ADFR, Add for auto on cmd filter */
-		if (oplus_adfr_auto_on_cmd_filter_get()) {
-			/* when the rd_ptr_irq comes there is no need to filter auto on cmd anymore */
-			oplus_adfr_auto_on_cmd_filter_set(false);
-		}
-
-		if (oplus_adfr_backlight_cmd_filter_get()) {
-			/* when the rd_ptr_irq comes there is no need to filter backlight cmd anymore */
-			oplus_adfr_backlight_cmd_filter_set(false);
-		}
+	conn = to_sde_connector(phys_enc->connector);
+	if (conn) {
+		oplus_panel_cmdq_pack_status_reset(conn);
 	}
 #endif /* OPLUS_FEATURE_DISPLAY */
 
-	atomic_add_unless(&cmd_enc->pending_vblank_cnt, -1, 0);
-	wake_up_all(&cmd_enc->pending_vblank_wq);
+#ifdef OPLUS_FEATURE_DISPLAY_ADFR
+	oplus_adfr_irq_handler(phys_enc, OPLUS_ADFR_RD_PTR);
+#endif /* OPLUS_FEATURE_DISPLAY_ADFR */
 
 #ifdef OPLUS_FEATURE_DISPLAY_ONSCREENFINGERPRINT
 	if (oplus_ofp_is_supported()) {
@@ -459,11 +444,6 @@ static void sde_encoder_phys_cmd_wr_ptr_irq(void *arg, int irq_idx)
 	struct sde_hw_ctl *ctl;
 	u32 event = 0, qsync_mode = 0;
 	struct sde_hw_pp_vsync_info info[MAX_CHANNELS_PER_ENC] = {{0}};
-#ifdef OPLUS_FEATURE_DISPLAY
-	/* OPLUS_FEATURE_ADFR, add for qsync tearing issue debug */
-	static u64 now;
-	u64 interval;
-#endif /* OPLUS_FEATURE_DISPLAY */
 
 	if (!phys_enc || !phys_enc->hw_ctl)
 		return;
@@ -492,24 +472,12 @@ static void sde_encoder_phys_cmd_wr_ptr_irq(void *arg, int irq_idx)
 	if (qsync_mode)
 		sde_encoder_override_tearcheck_rd_ptr(phys_enc);
 
-#ifdef OPLUS_FEATURE_DISPLAY
-	/* OPLUS_FEATURE_ADFR, qsync enhance */
-	if (oplus_adfr_is_support()) {
-		atomic_set(&phys_enc->frame_state, 2);
-		SDE_DEBUG("frame_state = %d\n", atomic_read(&phys_enc->frame_state));
-
-		/* OPLUS_FEATURE_ADFR, add for qsync tearing issue debug */
-		interval = (u64)ktime_to_us(ktime_get()) - now;
-		SDE_DEBUG("wr_ptr_irq interval: %llu\n", interval);
-		if (interval < 13600) {
-			SDE_DEBUG("kVRR wr_ptr_irq is too close, interval: %llu\n", interval);
-		}
-		now = (u64)ktime_to_us(ktime_get());
-	}
-#endif /* OPLUS_FEATURE_DISPLAY */
-
 	/* Signal any waiting wr_ptr start interrupt */
 	wake_up_all(&phys_enc->pending_kickoff_wq);
+
+#ifdef OPLUS_FEATURE_DISPLAY_ADFR
+	oplus_adfr_irq_handler(phys_enc, OPLUS_ADFR_WD_PTR);
+#endif /* OPLUS_FEATURE_DISPLAY_ADFR */
 
 #ifdef OPLUS_FEATURE_DISPLAY_ONSCREENFINGERPRINT
 	if (oplus_ofp_is_supported()) {
@@ -1106,59 +1074,65 @@ void sde_encoder_phys_cmd_irq_control(struct sde_encoder_phys *phys_enc,
 	}
 }
 
+#ifdef OPLUS_FEATURE_DISPLAY_ADFR
+int _get_tearcheck_threshold(struct sde_encoder_phys *phys_enc)
+#else
 static int _get_tearcheck_threshold(struct sde_encoder_phys *phys_enc)
+#endif /* OPLUS_FEATURE_DISPLAY_ADFR */
 {
 	struct drm_connector *conn = phys_enc->connector;
 	u32 qsync_mode;
 	struct drm_display_mode *mode;
-	u32 threshold_lines = DEFAULT_TEARCHECK_SYNC_THRESH_START;
+	u32 threshold_lines, adjusted_threshold_lines;
 	struct sde_encoder_phys_cmd *cmd_enc =
 			to_sde_encoder_phys_cmd(phys_enc);
+	struct sde_encoder_virt *sde_enc;
+	struct msm_mode_info *info;
 
 	if (!conn || !conn->state)
 		return 0;
 
+	sde_enc = to_sde_encoder_virt(phys_enc->parent);
+	info = &sde_enc->mode_info;
 	mode = &phys_enc->cached_mode;
 	qsync_mode = sde_connector_get_qsync_mode(conn);
+	threshold_lines = adjusted_threshold_lines = DEFAULT_TEARCHECK_SYNC_THRESH_START;
 
-#ifdef OPLUS_FEATURE_DISPLAY
-	/* OPLUS_FEATURE_ADFR, qsync enhance */
-	if (oplus_adfr_is_support()) {
-		SDE_ATRACE_BEGIN("get_tearcheck_threshold");
-		SDE_ATRACE_INT("qsync_mode", qsync_mode);
-		SDE_ATRACE_INT("qsync_minfps", sde_connector_get_qsync_dynamic_min_fps(conn));
-	}
-#endif /* OPLUS_FEATURE_DISPLAY */
+#ifdef OPLUS_FEATURE_DISPLAY_ADFR
+	OPLUS_ADFR_TRACE_BEGIN("_get_tearcheck_threshold");
+#endif /* OPLUS_FEATURE_DISPLAY_ADFR */
 
 	if (mode && (qsync_mode == SDE_RM_QSYNC_CONTINUOUS_MODE)) {
 		u32 qsync_min_fps = 0;
+		ktime_t qsync_time_ns;
+		ktime_t qsync_l_bound_ns, qsync_u_bound_ns;
 		u32 default_fps = drm_mode_vrefresh(mode);
+		ktime_t default_time_ns;
+		ktime_t default_line_time_ns;
+		ktime_t extra_time_ns;
 		u32 yres = mode->vtotal;
-		u32 slow_time_ns;
-		u32 default_time_ns;
-		u32 extra_time_ns;
-		u32 default_line_time_ns;
 
 		if (phys_enc->parent_ops.get_qsync_fps)
-			phys_enc->parent_ops.get_qsync_fps(
-				phys_enc->parent, &qsync_min_fps, conn->state);
+			phys_enc->parent_ops.get_qsync_fps(phys_enc->parent, &qsync_min_fps,
+					conn->state);
 
-#ifdef OPLUS_FEATURE_DISPLAY
-		/* OPLUS_FEATURE_ADFR, qsync enhance */
-		if (oplus_adfr_is_support()) {
-			qsync_min_fps = sde_connector_get_qsync_dynamic_min_fps(conn);
-			SDE_DEBUG_CMDENC(cmd_enc,
-				"qsync updated: %u, mode: %u, min fps:%u, default:%u\n",
-				sde_connector_is_qsync_updated(conn),
-				qsync_mode,
-				qsync_min_fps, default_fps);
+
+#ifdef OPLUS_FEATURE_DISPLAY_ADFR
+		if (oplus_adfr_get_osync_window_min_fps(conn) >= 0) {
+			qsync_min_fps = oplus_adfr_get_osync_window_min_fps(conn);
 		}
-#endif /* OPLUS_FEATURE_DISPLAY */
+#endif /* OPLUS_FEATURE_DISPLAY_ADFR */
 
 		if (!qsync_min_fps || !default_fps || !yres) {
+#ifdef OPLUS_FEATURE_DISPLAY_ADFR
+			SDE_DEBUG_CMDENC(cmd_enc,
+				"wrong qsync params %d %d %d\n",
+				qsync_min_fps, default_fps, yres);
+#else
 			SDE_ERROR_CMDENC(cmd_enc,
 				"wrong qsync params %d %d %d\n",
 				qsync_min_fps, default_fps, yres);
+#endif /* OPLUS_FEATURE_DISPLAY_ADFR */
 			goto exit;
 		}
 
@@ -1169,62 +1143,62 @@ static int _get_tearcheck_threshold(struct sde_encoder_phys *phys_enc)
 			goto exit;
 		}
 
-		/* Calculate the number of extra lines*/
-		slow_time_ns = DIV_ROUND_UP(1000000000, qsync_min_fps);
-		default_time_ns = DIV_ROUND_UP(1000000000, default_fps);
-		extra_time_ns = slow_time_ns - default_time_ns;
-		default_line_time_ns = DIV_ROUND_UP(default_time_ns, yres);
+		/*
+		 * Calculate safe qsync trigger window by compensating
+		 * the qsync timeout period by panel jitter value.
+		 *
+		 * qsync_safe_window_period = qsync_timeout_period * (1 - jitter) - nominal_period
+		 * nominal_line_time = nominal_period / vtotal
+		 * qsync_safe_window_lines = qsync_safe_window_period / nominal_line_time
+		 */
+		qsync_time_ns = mult_frac(1000000000, 1, qsync_min_fps);
+		default_time_ns = mult_frac(1000000000, 1, default_fps);
 
-		threshold_lines = extra_time_ns / default_line_time_ns;
+		sde_encoder_helper_get_jitter_bounds_ns(qsync_min_fps, info->jitter_numer,
+				info->jitter_denom, &qsync_l_bound_ns, &qsync_u_bound_ns);
+		if (!qsync_l_bound_ns || !qsync_u_bound_ns)
+			qsync_l_bound_ns = qsync_u_bound_ns = qsync_time_ns;
+
+		extra_time_ns = qsync_l_bound_ns - default_time_ns;
+		default_line_time_ns = mult_frac(1, default_time_ns, yres);
+		threshold_lines = mult_frac(1, extra_time_ns, default_line_time_ns);
 
 		/* some DDICs express the timeout value in lines/4, round down to compensate */
-		threshold_lines = round_down(threshold_lines, 4);
+		adjusted_threshold_lines = round_down(threshold_lines, 4);
 		/* remove 2 lines to cover for latency */
-		if (threshold_lines - 2 > DEFAULT_TEARCHECK_SYNC_THRESH_START)
-			threshold_lines -= 2;
+		if (adjusted_threshold_lines - 2 > DEFAULT_TEARCHECK_SYNC_THRESH_START)
+			adjusted_threshold_lines -= 2;
 
-#ifdef OPLUS_FEATURE_DISPLAY
-		/* OPLUS_FEATURE_ADFR, correct the AP window setting to be less than the DDIC window */
-		if (oplus_adfr_is_support()) {
-			if (qsync_min_fps == 51) {
-				if (yres > 3216) {
-					threshold_lines = threshold_lines - 39 - 47 - 58;
-				} else {
-					threshold_lines = threshold_lines - 29 - 35 - 43;
-				}
-			} else {
-				if (yres > 3216) {
-					threshold_lines = threshold_lines - 47 - 58;
-				} else {
-					threshold_lines = threshold_lines - 35 - 43;
-				}
-			}
-		}
-#endif /* OPLUS_FEATURE_DISPLAY */
+#ifdef OPLUS_FEATURE_DISPLAY_ADFR
+		oplus_adfr_osync_threshold_lines_update(conn, &adjusted_threshold_lines, yres);
+#endif /* OPLUS_FEATURE_DISPLAY_ADFR */
 
-		SDE_DEBUG_CMDENC(cmd_enc, "slow:%d default:%d extra:%d(ns)\n",
-			slow_time_ns, default_time_ns, extra_time_ns);
-		SDE_DEBUG_CMDENC(cmd_enc, "min_fps:%d fps:%d yres:%d lines:%d\n",
-			qsync_min_fps, default_fps, yres, threshold_lines);
+		SDE_DEBUG_CMDENC(cmd_enc,
+			"qsync mode:%u min_fps:%u time:%lld low:%lld up:%lld jitter:%u/%u\n",
+			qsync_mode, qsync_min_fps, qsync_time_ns, qsync_l_bound_ns,
+			qsync_u_bound_ns, info->jitter_numer, info->jitter_denom);
+		SDE_DEBUG_CMDENC(cmd_enc,
+			"default fps:%u time:%lld yres:%u line_time:%lld\n",
+			default_fps, default_time_ns, yres, default_line_time_ns);
+		SDE_DEBUG_CMDENC(cmd_enc,
+			"extra_time:%lld  threshold_lines:%u adjusted_threshold_lines:%u\n",
+			extra_time_ns, threshold_lines, adjusted_threshold_lines);
 
-		SDE_EVT32(qsync_mode, qsync_min_fps, extra_time_ns, default_fps,
-			yres, threshold_lines);
+		SDE_EVT32(qsync_mode, qsync_min_fps, default_fps, info->jitter_numer,
+				info->jitter_denom, yres, extra_time_ns, default_line_time_ns,
+				adjusted_threshold_lines);
 	}
 
 exit:
 
-#ifdef OPLUS_FEATURE_DISPLAY
-	/* OPLUS_FEATURE_ADFR, qsync enhance */
-	if (oplus_adfr_is_support()) {
-		/* OPLUS_FEATURE_ADFR, Add for qsync tearing issue debug */
-		SDE_DEBUG_CMDENC(cmd_enc, "kVRR : qsync_mode %d, qsync_minfps %d, threshold_lines %d\n",
-			qsync_mode, sde_connector_get_qsync_dynamic_min_fps(conn), threshold_lines);
-		SDE_ATRACE_END("get_tearcheck_threshold");
-		SDE_ATRACE_INT("threshold_lines", threshold_lines);
-	}
-#endif /* OPLUS_FEATURE_DISPLAY */
+#ifdef OPLUS_FEATURE_DISPLAY_ADFR
+	SDE_DEBUG_CMDENC(cmd_enc, "osync_mode:%u,osync_window_min_fps:%u,threshold_lines:%u\n",
+								qsync_mode, oplus_adfr_get_osync_window_min_fps(conn), adjusted_threshold_lines);
+	OPLUS_ADFR_TRACE_INT("oplus_adfr_threshold_lines", adjusted_threshold_lines);
+	OPLUS_ADFR_TRACE_END("_get_tearcheck_threshold");
+#endif /* OPLUS_FEATURE_DISPLAY_ADFR */
 
-	return threshold_lines;
+	return adjusted_threshold_lines;
 }
 
 static void sde_encoder_phys_cmd_tearcheck_config(
@@ -1374,7 +1348,9 @@ static void _sde_encoder_phys_cmd_pingpong_config(
 static void sde_encoder_phys_cmd_enable_helper(
 		struct sde_encoder_phys *phys_enc)
 {
+	struct sde_encoder_virt *sde_enc;
 	struct sde_hw_intf *hw_intf;
+	u32 qsync_mode;
 
 	if (!phys_enc || !phys_enc->hw_ctl || !phys_enc->hw_pp ||
 			!phys_enc->hw_intf) {
@@ -1395,6 +1371,19 @@ static void sde_encoder_phys_cmd_enable_helper(
 	if (hw_intf->ops.enable_wide_bus)
 		hw_intf->ops.enable_wide_bus(hw_intf,
 			sde_encoder_is_widebus_enabled(phys_enc->parent));
+
+	/*
+	 * Override internal rd_ptr value when coming out of IPC.
+	 * This is required on QSYNC panel with low refresh rate to
+	 * avoid out of sync frame trigger as panel rd_ptr was still
+	 * incrementing while MDP was power collapsed.
+	 */
+	sde_enc = to_sde_encoder_virt(phys_enc->parent);
+	if (sde_enc->idle_pc_restore) {
+		qsync_mode = sde_connector_get_qsync_mode(phys_enc->connector);
+		if (qsync_mode)
+			sde_encoder_override_tearcheck_rd_ptr(phys_enc);
+	}
 
 	/*
 	 * For pp-split, skip setting the flush bit for the slave intf, since
@@ -1596,9 +1585,7 @@ static int sde_encoder_phys_cmd_prepare_for_kickoff(
 			to_sde_encoder_phys_cmd(phys_enc);
 	int ret = 0;
 	bool recovery_events;
-#ifdef OPLUS_FEATURE_DISPLAY
-	struct sde_connector *c_conn = NULL;
-#endif /* OPLUS_FEATURE_DISPLAY */
+
 	if (!phys_enc || !phys_enc->hw_pp) {
 		SDE_ERROR("invalid encoder\n");
 		return -EINVAL;
@@ -1639,38 +1626,12 @@ static int sde_encoder_phys_cmd_prepare_for_kickoff(
 		phys_enc->recovered = false;
 	}
 
-#ifdef OPLUS_FEATURE_DISPLAY
-	/* OPLUS_FEATURE_ADFR, fixed qsync window and panel min fps nonsynchronous issue */
-	if (oplus_adfr_is_support()) {
-		c_conn = to_sde_connector(phys_enc->connector);
-		/* OPLUS_FEATURE_ADFR, Add for qsync tearing issue */
-		oplus_adfr_force_qsync_mode_off(phys_enc->connector);
-		if (c_conn->qsync_deferred_window_status == DEFERRED_WINDOW_START) {
-			/* window should be set in the next frame since ddic cmd take effect */
-			c_conn->qsync_deferred_window_status = DEFERRED_WINDOW_NEXT_FRAME;
-		} else if (c_conn->qsync_deferred_window_status == DEFERRED_WINDOW_NEXT_FRAME ||
-					/* OPLUS_FEATURE_ADFR, Modify for closing window immediately when qsync off */
-					c_conn->qsync_deferred_window_status == SET_WINDOW_IMMEDIATELY) {
-			SDE_ATRACE_BEGIN("update_qsync");
-			c_conn->qsync_dynamic_min_fps = c_conn->qsync_curr_dynamic_min_fps;
-			tc_cfg.sync_threshold_start = _get_tearcheck_threshold(
-					phys_enc);
-			if (phys_enc->has_intf_te &&
-					phys_enc->hw_intf->ops.update_tearcheck)
-				phys_enc->hw_intf->ops.update_tearcheck(
-						phys_enc->hw_intf, &tc_cfg);
-			else if (phys_enc->hw_pp->ops.update_tearcheck)
-				phys_enc->hw_pp->ops.update_tearcheck(
-						phys_enc->hw_pp, &tc_cfg);
-			SDE_EVT32(DRMID(phys_enc->parent), tc_cfg.sync_threshold_start);
-			c_conn->qsync_updated = true;
-			phys_enc->qsync_sync_threshold_start = tc_cfg.sync_threshold_start;
-			phys_enc->current_sync_threshold_start = phys_enc->qsync_sync_threshold_start;
-			c_conn->qsync_deferred_window_status = DEFERRED_WINDOW_END;
-			SDE_ATRACE_END("update_qsync");
-		}
+#ifdef OPLUS_FEATURE_DISPLAY_ADFR
+	oplus_adfr_force_off_osync_mode(phys_enc);
+	if (oplus_adfr_osync_tearcheck_update(phys_enc) != -ENOTSUPP) {
+		SDE_DEBUG_CMDENC(cmd_enc, "use custom function\n");
 	} else {
-#endif /* OPLUS_FEATURE_DISPLAY */
+#endif /* OPLUS_FEATURE_DISPLAY_ADFR */
 	if (sde_connector_is_qsync_updated(phys_enc->connector)) {
 		tc_cfg.sync_threshold_start = _get_tearcheck_threshold(
 				phys_enc);
@@ -1685,14 +1646,11 @@ static int sde_encoder_phys_cmd_prepare_for_kickoff(
 		SDE_EVT32(DRMID(phys_enc->parent), tc_cfg.sync_threshold_start);
 	}
 
-#ifdef OPLUS_FEATURE_DISPLAY
+#ifdef OPLUS_FEATURE_DISPLAY_ADFR
 	}
-	/* OPLUS_FEATURE_ADFR, qsync enhance */
-	// without qsync updated, update qsync window still if qsync enable
-	if (oplus_adfr_is_support()) {
-		oplus_adfr_adjust_tearcheck_for_dynamic_qsync(phys_enc);
-	}
-#endif /* OPLUS_FEATURE_DISPLAY */
+
+	oplus_adfr_adjust_osync_tearcheck(phys_enc);
+#endif /* OPLUS_FEATURE_DISPLAY_ADFR */
 
 	SDE_DEBUG_CMDENC(cmd_enc, "pp:%d pending_cnt %d\n",
 			phys_enc->hw_pp->idx - PINGPONG_0,
@@ -1703,17 +1661,22 @@ static int sde_encoder_phys_cmd_prepare_for_kickoff(
 static bool _sde_encoder_phys_cmd_needs_vsync_change(
 		struct sde_encoder_phys *phys_enc, ktime_t profile_timestamp)
 {
+	struct sde_encoder_virt *sde_enc;
 	struct sde_encoder_phys_cmd *cmd_enc;
 	struct sde_encoder_phys_cmd_te_timestamp *cur;
 	struct sde_encoder_phys_cmd_te_timestamp *prev = NULL;
 	ktime_t time_diff;
-	u64 l_bound = 0, u_bound = 0;
+	struct msm_mode_info *info;
+	ktime_t l_bound = 0, u_bound = 0;
 	bool ret = false;
 	unsigned long lock_flags;
 
 	cmd_enc = to_sde_encoder_phys_cmd(phys_enc);
-	sde_encoder_helper_get_jitter_bounds_ns(phys_enc->parent,
-							&l_bound, &u_bound);
+	sde_enc = to_sde_encoder_virt(phys_enc->parent);
+	info = &sde_enc->mode_info;
+
+	sde_encoder_helper_get_jitter_bounds_ns(info->frame_rate, info->jitter_numer,
+			info->jitter_denom, &l_bound, &u_bound);
 	if (!l_bound || !u_bound) {
 		SDE_ERROR_CMDENC(cmd_enc, "invalid vsync jitter bounds\n");
 		return false;
@@ -1857,6 +1820,7 @@ static int sde_encoder_phys_cmd_wait_for_tx_complete(
 		SDE_EVT32(DRMID(phys_enc->parent),
 				phys_enc->intf_idx - INTF_0);
 		SDE_ERROR("failed wait_for_idle: %d\n", rc);
+		oplus_sde_evtlog_dump_all();
 	}
 
 	return rc;
@@ -2009,7 +1973,17 @@ static int sde_encoder_phys_cmd_wait_for_vblank(
 
 	wait_info.wq = &cmd_enc->pending_vblank_wq;
 	wait_info.atomic_cnt = &cmd_enc->pending_vblank_cnt;
+
+#ifdef OPLUS_FEATURE_DISPLAY_ONSCREENFINGERPRINT
+	if (oplus_ofp_is_supported() && oplus_ofp_ultra_low_power_aod_is_enabled()
+			&& oplus_ofp_get_ultra_low_power_aod_state()) {
+		wait_info.timeout_ms = OPLUS_OFP_ULTRA_LOW_POWER_AOD_VBLANK_TIMEOUT_MS;
+	} else {
+		wait_info.timeout_ms = _sde_encoder_phys_cmd_get_idle_timeout(phys_enc);
+	}
+#else
 	wait_info.timeout_ms = _sde_encoder_phys_cmd_get_idle_timeout(phys_enc);
+#endif /* OPLUS_FEATURE_DISPLAY_ONSCREENFINGERPRINT */
 
 	atomic_inc(&cmd_enc->pending_vblank_cnt);
 
@@ -2456,15 +2430,6 @@ struct sde_encoder_phys *sde_encoder_phys_cmd_init(
 	for (i = 0; i < MAX_TE_PROFILE_COUNT; i++)
 		list_add(&cmd_enc->te_timestamp[i].list,
 				&cmd_enc->te_timestamp_list);
-
-#ifdef OPLUS_FEATURE_DISPLAY
-	/* OPLUS_FEATURE_ADFR, qsync enhance */
-	if (oplus_adfr_is_support()) {
-		atomic_set(&phys_enc->frame_state, 0);
-		phys_enc->current_sync_threshold_start = 0;
-		phys_enc->qsync_sync_threshold_start = 0;
-	}
-#endif /* OPLUS_FEATURE_DISPLAY */
 
 	SDE_DEBUG_CMDENC(cmd_enc, "created\n");
 

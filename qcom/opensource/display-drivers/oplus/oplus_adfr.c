@@ -1,2780 +1,2888 @@
 /***************************************************************
-** Copyright (C), 2022, OPLUS Mobile Comm Corp., Ltd
-** File : oplus_adfr.h
-** Description : ADFR kernel module
-** Version : 1.0
-** Date : 2020/10/23
+** Copyright (C), 2023, OPLUS Mobile Comm Corp., Ltd
+** File : oplus_adfr.c
+** Description : oplus_adfr implement
+** Version : 2.0
+** Date : 2023/05/04
 ** Author : Display
-******************************************************************/
-#include "sde_trace.h"
-#include "msm_drv.h"
-#include "sde_kms.h"
-#include "sde_connector.h"
-#include "sde_crtc.h"
-#include "sde_encoder_phys.h"
-#include <uapi/linux/sched/types.h>
-
-#include "dsi_display.h"
-#include "dsi_panel.h"
-#include "dsi_parser.h"
-#include "dsi_drm.h"
-#include "dsi_defs.h"
+***************************************************************/
 
 #include "oplus_adfr.h"
-#include "oplus_dsi_support.h"
+#include "oplus_display_panel_common.h"
+#include "dsi_display.h"
+#include "sde_trace.h"
+#include "sde_encoder_phys.h"
+
 #ifdef OPLUS_FEATURE_DISPLAY_ONSCREENFINGERPRINT
 #include "oplus_onscreenfingerprint.h"
 #endif /* OPLUS_FEATURE_DISPLAY_ONSCREENFINGERPRINT */
+
 #if defined(CONFIG_PXLW_IRIS)
 #include "dsi_iris_api.h"
-#include "dsi_iris_lightup.h"
-#include "dsi_iris_def.h"
-#include "dsi_iris_pq.h"
-#endif
+#endif /* CONFIG_PXLW_IRIS */
 
-#define OPLUS_ADFR_CONFIG_GLOBAL (1<<0)
-#define OPLUS_ADFR_CONFIG_FAKEFRAME (1<<1)
-#define OPLUS_ADFR_CONFIG_VSYNC_SWITCH (1<<2)
-#define OPLUS_ADFR_CONFIG_VSYNC_SWITCH_MODE (1<<3)
-#define OPLUS_ADFR_CONFIG_IDLE_MODE (1<<4)
+/* -------------------- macro -------------------- */
+/* config bit setting */
+#define OPLUS_ADFR_CONFIG_GLOBAL							(BIT(0))
+#define OPLUS_ADFR_CONFIG_FAKEFRAME							(BIT(1))
+#define OPLUS_ADFR_CONFIG_VSYNC_SWITCH						(BIT(2))
+#define OPLUS_ADFR_CONFIG_VSYNC_SWITCH_MODE					(BIT(3))
+#define OPLUS_ADFR_CONFIG_IDLE_MODE							(BIT(4))
+#define OPLUS_ADFR_CONFIG_TEMPERATURE_DETECTION				(BIT(5))
+#define OPLUS_ADFR_CONFIG_OA_BL_MUTUAL_EXCLUSION			(BIT(6))
+#define OPLUS_ADFR_CONFIG_SA_MODE_RESTORE					(BIT(7))
+#define OPLUS_ADFR_CONFIG_DRY_RUN							(BIT(8))
 
-#define OPLUS_ADFR_DEBUG_GLOBAL_DISABLE (1<<0)
-#define OPLUS_ADFR_DEBUG_FAKEFRAME_DISABLE (1<<1)
-#define OPLUS_ADFR_DEBUG_VSYNC_SWITCH_DISABLE (1<<2)
-#define OPLUS_ADFR_DEBUG_IDLE_MODE_DISABLE (1<<4)
+/* get config value */
+#define OPLUS_ADFR_GET_GLOBAL_CONFIG(config)				((config) & OPLUS_ADFR_CONFIG_GLOBAL)
+#define OPLUS_ADFR_GET_FAKEFRAME_CONFIG(config)				((config) & OPLUS_ADFR_CONFIG_FAKEFRAME)
+#define OPLUS_ADFR_GET_VSYNC_SWITCH_CONFIG(config)			((config) & OPLUS_ADFR_CONFIG_VSYNC_SWITCH)
+#define OPLUS_ADFR_GET_VSYNC_SWITCH_MODE_CONFIG(config)		((config) & OPLUS_ADFR_CONFIG_VSYNC_SWITCH_MODE)
+#define OPLUS_ADFR_GET_IDLE_MODE_CONFIG(config)				((config) & OPLUS_ADFR_CONFIG_IDLE_MODE)
+#define OPLUS_ADFR_GET_TEMPERATURE_DETECTION_CONFIG(config)	((config) & OPLUS_ADFR_CONFIG_TEMPERATURE_DETECTION)
+#define OPLUS_ADFR_GET_OA_BL_MUTUAL_EXCLUSION_CONFIG(config) ((config) & OPLUS_ADFR_CONFIG_OA_BL_MUTUAL_EXCLUSION)
+#define OPLUS_ADFR_GET_SA_MODE_RESTORE_CONFIG(config)		((config) & OPLUS_ADFR_CONFIG_SA_MODE_RESTORE)
+#define OPLUS_ADFR_GET_DRY_RUN_CONFIG(config)				((config) & OPLUS_ADFR_CONFIG_DRY_RUN)
 
-#define ADFR_GET_GLOBAL_CONFIG(config) ((config) & OPLUS_ADFR_CONFIG_GLOBAL)
-#define ADFR_GET_FAKEFRAME_CONFIG(config) ((config) & OPLUS_ADFR_CONFIG_FAKEFRAME)
-#define ADFR_GET_VSYNC_SWITCH_CONFIG(config) ((config) & OPLUS_ADFR_CONFIG_VSYNC_SWITCH)
-#define ADFR_GET_VSYNC_SWITCH_MODE(config) ((config) & OPLUS_ADFR_CONFIG_VSYNC_SWITCH_MODE)
-#define ADFR_GET_IDLE_MODE_CONFIG(config) ((config) & OPLUS_ADFR_CONFIG_IDLE_MODE)
+/* SA property value */
+#define OPLUS_ADFR_SA_MAGIC									0x00800000
+#define OPLUS_ADFR_AUTO_MODE_MAGIC							0x00400000
+#define OPLUS_ADFR_AUTO_MODE_VALUE(value)					(((value) & 0x003F0000) >> 16)
+#define OPLUS_ADFR_FAKEFRAME_MAGIC							0x00008000
+#define OPLUS_ADFR_FAKEFRAME_VALUE(value)					(((value) & 0x00007F00) >> 8)
+#define OPLUS_ADFR_SA_MIN_FPS_MAGIC							0x00000080
+#define OPLUS_ADFR_SA_MIN_FPS_VALUE(value)					((value) & 0x0000007F)
 
-#define OPLUS_ADFR_AUTO_MAGIC 0X00800000
-#define OPLUS_ADFR_AUTO_MODE_MAGIC 0X00400000
-#define OPLUS_ADFR_AUTO_MODE_VALUE(auto_value) (((auto_value)&0X003F0000)>>16)
-#define OPLUS_ADFR_AUTO_FAKEFRAME_MAGIC 0X00008000
-#define OPLUS_ADFR_AUTO_FAKEFRAME_VALUE(auto_value) (((auto_value)&0X00007F00)>>8)
-#define OPLUS_ADFR_AUTO_MIN_FPS_MAGIC 0X00000080
-#define OPLUS_ADFR_AUTO_MIN_FPS_VALUE(auto_value) ((auto_value)&0X0000007F)
+#define to_sde_encoder_phys_cmd(x)							container_of(x, struct sde_encoder_phys_cmd, base)
 
-#define SDC_AUTO_MIN_FPS_CMD_OFFSET 2
-#define SDC_MANUAL_MIN_FPS_CMD_OFFSET 2
-#define SDC_AUTO_MIN_FPS_CMD_HIGH_OFFSET 4
-#define SDC_MANUAL_MIN_FPS_CMD_HIGH_OFFSET 4
-#define SDC_MIN_FPS_CMD_SIZE 2
-
-#define to_dsi_bridge(x)  container_of((x), struct dsi_bridge, base)
-#define to_sde_encoder_phys_cmd(x) container_of(x, struct sde_encoder_phys_cmd, base)
-#define to_dsi_display(x) container_of(x, struct dsi_display, host)
-
-static u32 oplus_adfr_config = 0;
-static u32 oplus_adfr_debug = 0;
-static bool need_deferred_fakeframe = false;
-/* add for adfr hardware revision compatibility */
-static bool oplus_adfr_compatibility_mode = false;
-
-/* qsync mode minfps */
-bool oplus_adfr_qsync_mode_minfps_updated = false;
-static u32 oplus_adfr_qsync_mode_minfps = 0;
-/* disable qsync when backlight updated */
-bool oplus_adfr_need_filter_backlight_cmd = false;
-
-/* samsung auto mode */
-bool oplus_adfr_auto_mode_updated = false;
-static u32 oplus_adfr_auto_mode = 0;
-bool oplus_adfr_auto_fakeframe_updated = false;
-static u32 oplus_adfr_auto_fakeframe = 0;
-bool oplus_adfr_auto_min_fps_updated = false;
-static u32 oplus_adfr_auto_min_fps = 0;
-static u32 oplus_adfr_auto_sw_fps = 0;
-static u64 oplus_adfr_auto_update_counter = 0;
-bool oplus_adfr_need_filter_auto_on_cmd = false;
-
-/* pixelworks X7 emv */
-#if defined(CONFIG_PXLW_IRIS)
-u32 iris_current_extend_frame = OPLUS_ADFR_AUTO_MIN_FPS_MAX;
-#endif
-
-/* idle mode */
-static u32 oplus_adfr_idle_mode = OPLUS_ADFR_IDLE_OFF;
-
-struct oplus_te_refcount te_refcount = {0, 0, 0, 0};
-/* dynamic te detect */
-struct oplus_adfr_dynamic_te oplus_adfr_dynamic_te = {0};
-DEFINE_MUTEX(dynamic_te_lock);
-
-/* -------------- parameters ---------------*/
+/* -------------------- parameters -------------------- */
 /* log level config */
-unsigned int oplus_vrr_log_level = OPLUS_LOG_LEVEL_DEBUG;
-EXPORT_SYMBOL(oplus_vrr_log_level);
+unsigned int oplus_adfr_log_level = OPLUS_ADFR_LOG_LEVEL_DEBUG;
+EXPORT_SYMBOL(oplus_adfr_log_level);
+/* dual display id */
+unsigned int oplus_adfr_display_id = OPLUS_ADFR_PRIMARY_DISPLAY;
+EXPORT_SYMBOL(oplus_adfr_display_id);
+/* adfr global structure */
+static struct oplus_adfr_params g_oplus_adfr_params[2] = {0};
 
-/* --------------- adfr misc ---------------*/
-void oplus_adfr_init(void *panel_node)
+/* -------------------- extern -------------------- */
+/* extern params */
+/* dsi cmd set prop map */
+extern const char *cmd_set_prop_map[DSI_CMD_SET_MAX];
+
+/* extern functions */
+int _get_tearcheck_threshold(struct sde_encoder_phys *phys_enc);
+
+/* -------------------- oplus_adfr_params -------------------- */
+static int oplus_adfr_set_display_id(unsigned int display_id)
 {
-	u32 config = 0;
-	int rc = 0;
-	struct device_node *of_node = panel_node;
+	ADFR_DEBUG("start\n");
 
-	VRR_INFO("oplus_adfr_init now.");
+	OPLUS_ADFR_TRACE_BEGIN("oplus_adfr_set_display_id");
 
-	if (!of_node) {
-		VRR_ERR("oplus_adfr_init: the param is null\n");
-		return;
-	}
+	oplus_adfr_display_id = display_id;
+	ADFR_DEBUG("oplus_adfr_display_id:%u\n", oplus_adfr_display_id);
+	OPLUS_ADFR_TRACE_INT("oplus_adfr_display_id", oplus_adfr_display_id);
 
+	OPLUS_ADFR_TRACE_END("oplus_adfr_set_display_id");
 
-	rc = of_property_read_u32(of_node, "oplus,adfr-config", &config);
-	if (rc == 0) {
-		oplus_adfr_config = config;
-	} else {
-		oplus_adfr_config = 0;
-	}
-
-	if (oplus_is_factory_boot()) {
-		oplus_adfr_config = 0;
-		VRR_INFO("adfr disabled in factory mode\n");
-		return;
-	}
-
-	/* add for adfr hardware revision compatibility */
-	if (oplus_adfr_is_support()) {
-		/* if adfr-compatibility-mode is define, should not do the vsync switch, just set to TE vsync always */
-		oplus_adfr_compatibility_mode = of_property_read_bool(of_node, "oplus,adfr-compatibility-mode");
-		/* add for dynamic te check */
-		hrtimer_init(&oplus_adfr_dynamic_te.timer, CLOCK_MONOTONIC, HRTIMER_MODE_REL);
-		oplus_adfr_dynamic_te.timer.function = oplus_adfr_dynamic_te_timer_handler;
-	}
-
-	VRR_INFO("adfr config = %#X, adfr compatibility mode = %d\n", oplus_adfr_config, oplus_adfr_compatibility_mode);
-}
-
-ssize_t oplus_adfr_get_debug(struct kobject *obj,
-	struct kobj_attribute *attr, char *buf)
-{
-	VRR_ERR("get adfr config %#X debug %#X \n", oplus_adfr_config, oplus_adfr_debug);
-	return sprintf(buf, "debug:0x%08X config:0x%08X auto_mode:0x%08X fakeframe:0x%08X auto_minfps:0x%08X auto_counter:%llu\n",
-		oplus_adfr_debug, oplus_adfr_config, oplus_adfr_auto_mode, oplus_adfr_auto_fakeframe, oplus_adfr_auto_min_fps, oplus_adfr_auto_update_counter);
-}
-
-ssize_t oplus_adfr_set_debug(struct kobject *obj,
-	struct kobj_attribute *attr, const char *buf, size_t count)
-{
-	sscanf(buf, "%u", &oplus_adfr_debug);
-	VRR_ERR("get adfr config %#X debug %#X \n", oplus_adfr_config, oplus_adfr_debug);
-
-	return count;
-}
-
-static inline bool oplus_adfr_fakeframe_is_enable(void)
-{
-	return (bool)(ADFR_GET_FAKEFRAME_CONFIG(oplus_adfr_config) &&
-		!(oplus_adfr_debug & OPLUS_ADFR_DEBUG_FAKEFRAME_DISABLE) &&
-		oplus_adfr_auto_fakeframe);
-}
-
-bool oplus_adfr_vsync_switch_is_enable(void)
-{
-	return (bool)(ADFR_GET_VSYNC_SWITCH_CONFIG(oplus_adfr_config) &&
-		!(oplus_adfr_debug & OPLUS_ADFR_DEBUG_VSYNC_SWITCH_DISABLE));
-}
-
-enum oplus_vsync_mode oplus_adfr_get_vsync_mode(void)
-{
-	if (!oplus_adfr_vsync_switch_is_enable()) {
-		return OPLUS_INVALID_VSYNC;
-	}
-
-	return (enum oplus_vsync_mode)ADFR_GET_VSYNC_SWITCH_MODE(oplus_adfr_config);
-}
-
-inline bool oplus_adfr_idle_mode_is_enable(void)
-{
-	return (bool)(ADFR_GET_IDLE_MODE_CONFIG(oplus_adfr_config) &&
-		!(oplus_adfr_debug & OPLUS_ADFR_DEBUG_IDLE_MODE_DISABLE));
-}
-
-inline bool oplus_adfr_is_support(void)
-{
-	return (bool)(ADFR_GET_GLOBAL_CONFIG(oplus_adfr_config) &&
-		!(oplus_adfr_debug & OPLUS_ADFR_DEBUG_GLOBAL_DISABLE));
-}
-
-
-/* --------------- msm_drv ---------------*/
-
-static void oplus_adfr_thread_priority_worker(struct kthread_work *work)
-{
-	int ret = 0;
-	struct sched_param param = { 0 };
-	struct task_struct *task = current->group_leader;
-
-	/**
-	 * this priority was found during empiric testing to have appropriate
-	 * realtime scheduling to process display updates and interact with
-	 * other real time and normal priority task
-	 */
-	param.sched_priority = 16;
-	ret = sched_setscheduler(task, SCHED_FIFO, &param);
-	if (ret)
-		VRR_WARN("pid:%d name:%s priority update failed: %d\n",
-			current->tgid, task->comm, ret);
-}
-
-int oplus_adfr_thread_create(void *msm_priv, void *msm_ddev, void *msm_dev)
-{
-	struct msm_drm_private *priv;
-	struct drm_device *ddev;
-	struct device *dev;
-	int i = 0;
-
-	priv = msm_priv;
-	ddev = msm_ddev;
-	dev = msm_dev;
-
-	for (i = 0; i < priv->num_crtcs; i++) {
-		/* initialize adfr thread */
-		priv->adfr_thread[i].crtc_id = priv->crtcs[i]->base.id;
-		kthread_init_worker(&priv->adfr_thread[i].worker);
-		priv->adfr_thread[i].dev = ddev;
-		priv->adfr_thread[i].thread =
-			kthread_run(kthread_worker_fn,
-				&priv->adfr_thread[i].worker,
-				"adfr:%d", priv->adfr_thread[i].crtc_id);
-		kthread_init_work(&priv->thread_priority_work, oplus_adfr_thread_priority_worker);
-		kthread_queue_work(&priv->adfr_thread[i].worker, &priv->thread_priority_work);
-		kthread_flush_work(&priv->thread_priority_work);
-
-		if (IS_ERR(priv->adfr_thread[i].thread)) {
-			dev_err(dev, "kVRR failed to create adfr_commit kthread\n");
-			priv->adfr_thread[i].thread = NULL;
-		}
-
-		if ((!priv->adfr_thread[i].thread)) {
-			/* clean up previously created threads if any */
-			for (; i >= 0; i--) {
-				if (priv->adfr_thread[i].thread) {
-					kthread_stop(
-						priv->adfr_thread[i].thread);
-					priv->adfr_thread[i].thread = NULL;
-				}
-			}
-			return -EINVAL;
-		}
-	}
-	VRR_INFO("adfr thread create successfully\n");
+	ADFR_DEBUG("end\n");
 
 	return 0;
 }
 
-void oplus_adfr_thread_destroy(void *msm_priv)
+/* update display id for dual panel */
+int oplus_adfr_update_display_id(void)
 {
-	struct msm_drm_private *priv;
-	int i;
+	struct dsi_display *display = oplus_display_get_current_display();
 
-	priv = msm_priv;
+	ADFR_DEBUG("start\n");
 
-	for (i = 0; i < priv->num_crtcs; i++) {
-		if (priv->adfr_thread[i].thread) {
-			kthread_flush_worker(&priv->adfr_thread[i].worker);
-			kthread_stop(priv->adfr_thread[i].thread);
-			priv->adfr_thread[i].thread = NULL;
+	OPLUS_ADFR_TRACE_BEGIN("oplus_adfr_update_display_id");
+
+	if (!display) {
+		ADFR_ERR("failed to get current display, set default display id to 0\n");
+		oplus_adfr_set_display_id(OPLUS_ADFR_PRIMARY_DISPLAY);
+	} else {
+		if (!strcmp(display->display_type, "primary")) {
+		oplus_adfr_set_display_id(OPLUS_ADFR_PRIMARY_DISPLAY);
+		} else if (!strcmp(display->display_type, "secondary")) {
+			oplus_adfr_set_display_id(OPLUS_ADFR_SECONDARY_DISPLAY);
+		} else {
+			ADFR_ERR("unknown display type:%s\n", display->display_type);
 		}
+	}
+
+	OPLUS_ADFR_TRACE_END("oplus_adfr_update_display_id");
+
+	ADFR_DEBUG("end\n");
+
+	return 0;
+}
+
+static struct oplus_adfr_params *oplus_adfr_get_params(void *dsi_panel)
+{
+	struct dsi_panel *panel = dsi_panel;
+
+	if (!panel) {
+		ADFR_ERR("invalid panel param\n");
+		return NULL;
+	}
+
+	if (!strcmp(panel->type, "primary")) {
+		oplus_adfr_set_display_id(OPLUS_ADFR_PRIMARY_DISPLAY);
+		return &g_oplus_adfr_params[OPLUS_ADFR_PRIMARY_DISPLAY];
+	} else if (!strcmp(panel->type, "secondary")) {
+		oplus_adfr_set_display_id(OPLUS_ADFR_SECONDARY_DISPLAY);
+		return &g_oplus_adfr_params[OPLUS_ADFR_SECONDARY_DISPLAY];
+	} else {
+		ADFR_ERR("unknown panel type:%s\n", panel->type);
+		return NULL;
 	}
 }
 
-/* ------------ sde_connector ------------ */
-/* handle it early since qsync min fps dirty will disappeared with high probabilities */
-int oplus_adfr_handle_qsync_mode_minfps(u32 propval)
+/* get config value from panel dtsi */
+int oplus_adfr_init(void *dsi_panel)
 {
-	int handled = 0;
-	VRR_INFO("update qsync mode minfps %u[%08X]\n", propval, propval);
+	int rc = 0;
+	unsigned int value = 0;
+	struct dsi_panel *panel = dsi_panel;
+	struct dsi_parser_utils *utils = NULL;
+	struct oplus_adfr_params *p_oplus_adfr_params = NULL;
 
-	OPLUS_VRR_TRACE_BEGIN("oplus_adfr_handle_qsync_mode_minfps");
+	ADFR_DEBUG("start\n");
 
-	oplus_adfr_qsync_mode_minfps_updated = true;
-	oplus_adfr_qsync_mode_minfps = propval;
-	handled = 1;
+	if (!panel) {
+		ADFR_ERR("invalid panel param\n");
+		return -EINVAL;
+	}
 
-	OPLUS_VRR_TRACE_INT("oplus_adfr_qsync_mode_minfps", oplus_adfr_qsync_mode_minfps);
-	OPLUS_VRR_TRACE_END("oplus_adfr_handle_qsync_mode_minfps");
+#if defined(CONFIG_PXLW_IRIS)
+	if (iris_is_chip_supported() && (!strcmp(panel->type, "secondary"))) {
+		ADFR_INFO("no need to init for iris chip\n");
+		return 0;
+	}
+#endif /* CONFIG_PXLW_IRIS */
 
-	VRR_INFO("qsync mode minfps %u[%d]\n",
-		oplus_adfr_qsync_mode_minfps, oplus_adfr_qsync_mode_minfps_updated);
+
+	p_oplus_adfr_params = oplus_adfr_get_params(panel);
+	if (!p_oplus_adfr_params) {
+		ADFR_ERR("invalid p_oplus_adfr_params param\n");
+		return -EINVAL;
+	}
+
+	utils = &panel->utils;
+	if (!utils) {
+		ADFR_ERR("invalid utils param\n");
+		return -EINVAL;
+	}
+
+	ADFR_INFO("init %s display adfr params\n", panel->type);
+
+	OPLUS_ADFR_TRACE_BEGIN("oplus_adfr_init");
+
+	/* oplus,adfr-config */
+	rc = utils->read_u32(utils->data, "oplus,adfr-config", &value);
+	if (rc) {
+		ADFR_INFO("failed to read oplus,adfr-config, rc=%d\n", rc);
+		/* set default value to 0 */
+		p_oplus_adfr_params->config = 0;
+	} else {
+		p_oplus_adfr_params->config = value;
+	}
+
+	if (oplus_is_factory_boot()) {
+		p_oplus_adfr_params->config = 0;
+		ADFR_INFO("disable adfr in factory mode\n");
+	}
+
+	if (oplus_adfr_is_supported(p_oplus_adfr_params)) {
+		if (oplus_adfr_vsync_switch_is_enabled(p_oplus_adfr_params)
+				&& (oplus_adfr_get_vsync_switch_mode(p_oplus_adfr_params) == OPLUS_ADFR_MUX_VSYNC_SWITCH)) {
+			/* oplus,adfr-mux-vsync-switch-gpio */
+			p_oplus_adfr_params->mux_vsync_switch_gpio = utils->get_named_gpio(utils->data, "oplus,adfr-mux-vsync-switch-gpio", 0);
+			if (!gpio_is_valid(p_oplus_adfr_params->mux_vsync_switch_gpio)) {
+				p_oplus_adfr_params->config &= ~(OPLUS_ADFR_CONFIG_VSYNC_SWITCH);
+				ADFR_ERR("[%s] oplus,adfr-mux-vsync-switch-gpio is not set, disable vsync switch config\n", panel->name);
+			} else {
+				rc = gpio_request(p_oplus_adfr_params->mux_vsync_switch_gpio, "mux_vsync_switch_gpio");
+				if (rc) {
+					p_oplus_adfr_params->config &= ~(OPLUS_ADFR_CONFIG_VSYNC_SWITCH);
+					ADFR_ERR("failed to request mux_vsync_switch_gpio %d, disable vsync switch config, rc=%d\n", p_oplus_adfr_params->mux_vsync_switch_gpio, rc);
+				} else {
+					ADFR_INFO("[%s] oplus,adfr-mux-vsync-switch-gpio is %d\n", panel->name, p_oplus_adfr_params->mux_vsync_switch_gpio);
+				}
+			}
+		}
+
+		/* oplus,adfr-test-te-gpio */
+		p_oplus_adfr_params->test_te.gpio = utils->get_named_gpio(utils->data, "oplus,adfr-test-te-gpio", 0);
+		if (!gpio_is_valid(p_oplus_adfr_params->test_te.gpio)) {
+			ADFR_INFO("[%s] oplus,adfr-test-te-gpio is not set\n", panel->name);
+		} else {
+			ADFR_INFO("[%s] oplus,adfr-test-te-gpio is %d\n", panel->name, p_oplus_adfr_params->test_te.gpio);
+
+			/* test te timer init */
+			hrtimer_init(&p_oplus_adfr_params->test_te.timer, CLOCK_MONOTONIC, HRTIMER_MODE_REL);
+			p_oplus_adfr_params->test_te.timer.function = oplus_adfr_test_te_timer_handler;
+		}
+
+		if (oplus_adfr_oa_bl_mutual_exclusion_is_enabled(p_oplus_adfr_params)) {
+			/* osync mode timer init */
+			hrtimer_init(&p_oplus_adfr_params->osync_mode_timer, CLOCK_MONOTONIC, HRTIMER_MODE_REL);
+			p_oplus_adfr_params->osync_mode_timer.function = oplus_adfr_osync_mode_timer_handler;
+		}
+	}
+
+	ADFR_INFO("oplus_adfr_config:0x%x\n", p_oplus_adfr_params->config);
+	OPLUS_ADFR_TRACE_INT("oplus_adfr_config", p_oplus_adfr_params->config);
+
+	if (!strcmp(panel->type, "secondary")) {
+		/* set default display id to primary display */
+		oplus_adfr_set_display_id(OPLUS_ADFR_PRIMARY_DISPLAY);
+	}
+
+	OPLUS_ADFR_TRACE_END("oplus_adfr_init");
+
+	ADFR_DEBUG("end\n");
+
+	return rc;
+}
+
+bool oplus_adfr_is_supported(void *oplus_adfr_params)
+{
+	struct oplus_adfr_params *p_oplus_adfr_params = oplus_adfr_params;
+
+	if (!p_oplus_adfr_params) {
+		ADFR_ERR("invalid p_oplus_adfr_params param\n");
+		return false;
+	}
+
+	/* global config, support adfr panel */
+	return (bool)(OPLUS_ADFR_GET_GLOBAL_CONFIG(p_oplus_adfr_params->config));
+}
+
+static bool oplus_adfr_fakeframe_is_enabled(void *oplus_adfr_params)
+{
+	struct oplus_adfr_params *p_oplus_adfr_params = oplus_adfr_params;
+
+	if (!p_oplus_adfr_params) {
+		ADFR_ERR("invalid p_oplus_adfr_params param\n");
+		return false;
+	}
+
+	if (!oplus_adfr_is_supported(p_oplus_adfr_params)) {
+		ADFR_DEBUG("adfr is not supported, fakeframe is also not supported\n");
+		return false;
+	}
+
+	return (bool)(OPLUS_ADFR_GET_FAKEFRAME_CONFIG(p_oplus_adfr_params->config));
+}
+
+bool oplus_adfr_vsync_switch_is_enabled(void *oplus_adfr_params)
+{
+	struct oplus_adfr_params *p_oplus_adfr_params = oplus_adfr_params;
+
+	if (!p_oplus_adfr_params) {
+		ADFR_ERR("invalid p_oplus_adfr_params param\n");
+		return false;
+	}
+
+	if (!oplus_adfr_is_supported(p_oplus_adfr_params)) {
+		ADFR_DEBUG("adfr is not supported, vsync switch is also not supported\n");
+		return false;
+	}
+
+	return (bool)(OPLUS_ADFR_GET_VSYNC_SWITCH_CONFIG(p_oplus_adfr_params->config));
+}
+
+enum oplus_adfr_vsync_switch_mode oplus_adfr_get_vsync_switch_mode(void *oplus_adfr_params)
+{
+	struct oplus_adfr_params *p_oplus_adfr_params = oplus_adfr_params;
+
+	if (!p_oplus_adfr_params) {
+		ADFR_ERR("invalid p_oplus_adfr_params param\n");
+		return OPLUS_ADFR_INVALID_VSYNC_SWITCH;
+	}
+
+	if (!oplus_adfr_vsync_switch_is_enabled(p_oplus_adfr_params)) {
+		ADFR_DEBUG("vsync switch is not enabled, vsync switch mode is invalid\n");
+		return OPLUS_ADFR_INVALID_VSYNC_SWITCH;
+	}
+
+	return (enum oplus_adfr_vsync_switch_mode)OPLUS_ADFR_GET_VSYNC_SWITCH_MODE_CONFIG(p_oplus_adfr_params->config);
+}
+
+static bool oplus_adfr_idle_mode_is_enabled(void *oplus_adfr_params)
+{
+	struct oplus_adfr_params *p_oplus_adfr_params = oplus_adfr_params;
+
+	if (!p_oplus_adfr_params) {
+		ADFR_ERR("invalid p_oplus_adfr_params param\n");
+		return false;
+	}
+
+	if (!oplus_adfr_is_supported(p_oplus_adfr_params)) {
+		ADFR_DEBUG("adfr is not supported, idle mode is also not supported\n");
+		return false;
+	}
+
+	return (bool)(OPLUS_ADFR_GET_IDLE_MODE_CONFIG(p_oplus_adfr_params->config));
+}
+
+static bool oplus_adfr_temperature_detection_is_enabled(void *oplus_adfr_params)
+{
+	struct oplus_adfr_params *p_oplus_adfr_params = oplus_adfr_params;
+
+	if (!p_oplus_adfr_params) {
+		ADFR_ERR("invalid p_oplus_adfr_params param\n");
+		return false;
+	}
+
+	if (!oplus_adfr_is_supported(p_oplus_adfr_params)) {
+		ADFR_DEBUG("adfr is not supported, temperature detection is also not supported\n");
+		return false;
+	}
+
+	return (bool)(OPLUS_ADFR_GET_TEMPERATURE_DETECTION_CONFIG(p_oplus_adfr_params->config));
+}
+
+bool oplus_adfr_oa_bl_mutual_exclusion_is_enabled(void *oplus_adfr_params)
+{
+	struct oplus_adfr_params *p_oplus_adfr_params = oplus_adfr_params;
+
+	if (!p_oplus_adfr_params) {
+		ADFR_ERR("invalid p_oplus_adfr_params param\n");
+		return false;
+	}
+
+	if (!oplus_adfr_is_supported(p_oplus_adfr_params)) {
+		ADFR_DEBUG("adfr is not supported, oa bl mutual exclusion is also not supported\n");
+		return false;
+	}
+
+	return (bool)(OPLUS_ADFR_GET_OA_BL_MUTUAL_EXCLUSION_CONFIG(p_oplus_adfr_params->config));
+}
+
+static bool oplus_adfr_sa_mode_restore_is_enabled(void *oplus_adfr_params)
+{
+	struct oplus_adfr_params *p_oplus_adfr_params = oplus_adfr_params;
+
+	if (!p_oplus_adfr_params) {
+		ADFR_ERR("invalid p_oplus_adfr_params param\n");
+		return false;
+	}
+
+	if (!oplus_adfr_is_supported(p_oplus_adfr_params)) {
+		ADFR_DEBUG("adfr is not supported, sa mode restore is also not supported\n");
+		return false;
+	}
+
+	return (bool)(OPLUS_ADFR_GET_SA_MODE_RESTORE_CONFIG(p_oplus_adfr_params->config));
+}
+
+static bool oplus_adfr_dry_run_is_enabled(void *oplus_adfr_params)
+{
+	struct oplus_adfr_params *p_oplus_adfr_params = oplus_adfr_params;
+
+	if (!p_oplus_adfr_params) {
+		ADFR_ERR("invalid p_oplus_adfr_params param\n");
+		return false;
+	}
+
+	if (!oplus_adfr_is_supported(p_oplus_adfr_params)) {
+		ADFR_DEBUG("adfr is not supported, dry run is also not supported\n");
+		return false;
+	}
+
+	return (bool)(OPLUS_ADFR_GET_DRY_RUN_CONFIG(p_oplus_adfr_params->config));
+}
+
+/* -------------------- standard adfr -------------------- */
+int oplus_adfr_parse_dtsi_config(void *dsi_panel, void *dsi_display_mode, void *dsi_parser_utils)
+{
+	int rc = 0;
+	int length = 0;
+	unsigned int i = 0;
+	unsigned int value = 0;
+	struct dsi_panel *panel = dsi_panel;
+	struct dsi_display_mode *mode = dsi_display_mode;
+	struct dsi_parser_utils *utils = dsi_parser_utils;
+	struct dsi_display_mode_priv_info *priv_info = NULL;
+	struct oplus_adfr_params *p_oplus_adfr_params = NULL;
+
+	ADFR_DEBUG("start\n");
+
+	if (!panel) {
+		ADFR_ERR("invalid panel param\n");
+		return -EINVAL;
+	}
+
+#if defined(CONFIG_PXLW_IRIS)
+	if (iris_is_chip_supported() && (!strcmp(panel->type, "secondary"))) {
+		ADFR_INFO("no need to parse dtsi config for iris chip\n");
+		return 0;
+	}
+#endif /* CONFIG_PXLW_IRIS */
+
+	p_oplus_adfr_params = oplus_adfr_get_params(panel);
+	if (!p_oplus_adfr_params) {
+		ADFR_ERR("invalid p_oplus_adfr_params param\n");
+		return -EINVAL;
+	}
+
+	if (!oplus_adfr_is_supported(p_oplus_adfr_params)) {
+		ADFR_DEBUG("adfr is not supported\n");
+		return 0;
+	}
+
+	if (!mode || !mode->priv_info || !utils) {
+		ADFR_ERR("invalid mode or utils params\n");
+		return -EINVAL;
+	}
+
+	OPLUS_ADFR_TRACE_BEGIN("oplus_adfr_parse_dtsi_config");
+
+	priv_info = mode->priv_info;
+
+	ADFR_INFO("mode_idx:%u,h_active:%u,v_active:%u,refresh_rate:%u,h_skew:%u\n",
+				mode->mode_idx, mode->timing.h_active, mode->timing.v_active, mode->timing.refresh_rate, mode->timing.h_skew);
+
+	/* oplus,adfr-fakeframe-config */
+	if (oplus_adfr_fakeframe_is_enabled(p_oplus_adfr_params)) {
+		/* bit(0):indicates whether fakeframe cmds need to be sent or not if fakeframe is enabled */
+		rc = utils->read_u32(utils->data, "oplus,adfr-fakeframe-config", &value);
+		if (rc) {
+			ADFR_DEBUG("failed to read oplus,adfr-fakeframe-config, rc=%d\n", rc);
+			/* set default value to 0 */
+			priv_info->oplus_adfr_fakeframe_config = 0;
+		} else {
+			priv_info->oplus_adfr_fakeframe_config = value;
+		}
+		ADFR_INFO("oplus_adfr_fakeframe_config:%u\n", priv_info->oplus_adfr_fakeframe_config);
+	}
+
+	/* oplus,adfr-idle-off-min-fps */
+	if (oplus_adfr_idle_mode_is_enabled(p_oplus_adfr_params)) {
+		/* the minimum fps setting which can be set in idle off if idle mode is enabled */
+		rc = utils->read_u32(utils->data, "oplus,adfr-idle-off-min-fps", &value);
+		if (rc) {
+			ADFR_DEBUG("failed to read oplus,adfr-idle-off-min-fps, rc=%d\n", rc);
+			/* set default value to 0 */
+			priv_info->oplus_adfr_idle_off_min_fps = 0;
+		} else {
+			priv_info->oplus_adfr_idle_off_min_fps = value;
+		}
+		ADFR_INFO("oplus_adfr_idle_off_min_fps:%u\n", priv_info->oplus_adfr_idle_off_min_fps);
+	}
+
+	/* oplus,adfr-min-fps-mapping-table */
+	length = utils->count_u32_elems(utils->data, "oplus,adfr-min-fps-mapping-table");
+	if (length < 0) {
+		ADFR_ERR("failed to get the count of oplus,adfr-min-fps-mapping-table\n");
+		rc = 0;
+		goto reset;
+	}
+	priv_info->oplus_adfr_min_fps_mapping_table = kzalloc(length * sizeof(unsigned int), GFP_KERNEL);
+	if (!priv_info->oplus_adfr_min_fps_mapping_table) {
+		ADFR_ERR("failed to kzalloc oplus_adfr_min_fps_mapping_table\n");
+		rc = -ENOMEM;
+		goto reset;
+	}
+	/* store the adfr min fps mapping table supported by each timing, represented by a refresh rate (in hz) from high to low */
+	rc = utils->read_u32_array(utils->data, "oplus,adfr-min-fps-mapping-table", priv_info->oplus_adfr_min_fps_mapping_table, length);
+	if (rc) {
+		ADFR_ERR("failed to read oplus,adfr-min-fps-mapping-table\n");
+		rc = 0;
+		goto free_oplus_adfr_min_fps_mapping_table;
+	}
+	ADFR_INFO("property:oplus,adfr-min-fps-mapping-table,length:%u\n", length);
+	for (i = 0; i < length; i++) {
+		ADFR_INFO("oplus_adfr_min_fps_mapping_table[%u]=%u\n", i, priv_info->oplus_adfr_min_fps_mapping_table[i]);
+	}
+	/* can get maximum and minimum adfr min fps by oplus_adfr_min_fps_mapping_table_count */
+	priv_info->oplus_adfr_min_fps_mapping_table_count = length;
+	ADFR_INFO("oplus_adfr_min_fps_mapping_table_count:%u\n", priv_info->oplus_adfr_min_fps_mapping_table_count);
+
+	goto end;
+
+free_oplus_adfr_min_fps_mapping_table:
+	kfree(priv_info->oplus_adfr_min_fps_mapping_table);
+reset:
+	priv_info->oplus_adfr_min_fps_mapping_table = NULL;
+	priv_info->oplus_adfr_min_fps_mapping_table_count = 0;
+end:
+	OPLUS_ADFR_TRACE_END("oplus_adfr_parse_dtsi_config");
+
+	ADFR_DEBUG("end\n");
+
+	return rc;
+}
+
+/* cmd set */
+static int oplus_adfr_panel_cmd_set_nolock(void *dsi_panel, enum dsi_cmd_set_type type)
+{
+	int rc = 0;
+	struct dsi_panel *panel = dsi_panel;
+	struct oplus_adfr_params *p_oplus_adfr_params = NULL;
+
+	ADFR_DEBUG("start\n");
+
+	if (!panel) {
+		ADFR_ERR("invalid panel param\n");
+		return -EINVAL;
+	}
+
+#if defined(CONFIG_PXLW_IRIS)
+	if (iris_is_chip_supported() && (!strcmp(panel->type, "secondary"))) {
+		ADFR_INFO("no need to set panel cmd for iris chip\n");
+		return 0;
+	}
+#endif /* CONFIG_PXLW_IRIS */
+
+	p_oplus_adfr_params = oplus_adfr_get_params(panel);
+	if (!p_oplus_adfr_params) {
+		ADFR_ERR("invalid p_oplus_adfr_params param\n");
+		return -EINVAL;
+	}
+
+	OPLUS_ADFR_TRACE_BEGIN("oplus_adfr_panel_cmd_set_nolock");
+
+	if (!dsi_panel_initialized(panel)) {
+		rc = -EINVAL;
+		ADFR_DEBUG("should not send cmd sets if panel is not initialized\n");
+		goto error;
+	}
+
+	if (!oplus_adfr_dry_run_is_enabled(p_oplus_adfr_params)) {
+		OPLUS_ADFR_TRACE_BEGIN("dsi_panel_tx_cmd_set");
+		rc = dsi_panel_tx_cmd_set(panel, type);
+		OPLUS_ADFR_TRACE_END("dsi_panel_tx_cmd_set");
+		if (rc) {
+			ADFR_ERR("[%s] failed to send %s, rc=%d\n",
+				panel->name, cmd_set_prop_map[type], rc);
+			goto error;
+		}
+	}
+
+	/* after tx cmd set */
+	switch (type) {
+	case DSI_CMD_ADFR_AUTO_ON:
+		OPLUS_ADFR_TRACE_INT("oplus_adfr_auto_mode_cmd", OPLUS_ADFR_AUTO_ON);
+		break;
+
+	case DSI_CMD_ADFR_AUTO_OFF:
+		OPLUS_ADFR_TRACE_INT("oplus_adfr_auto_mode_cmd", OPLUS_ADFR_AUTO_OFF);
+
+		/* after auto off cmd was sent, auto on cmd filter start */
+		p_oplus_adfr_params->need_filter_auto_on_cmd = true;
+		ADFR_DEBUG("oplus_adfr_need_filter_auto_on_cmd:%d\n", p_oplus_adfr_params->need_filter_auto_on_cmd);
+		OPLUS_ADFR_TRACE_INT("oplus_adfr_need_filter_auto_on_cmd", p_oplus_adfr_params->need_filter_auto_on_cmd);
+		break;
+
+	default:
+		break;
+	}
+
+error:
+	OPLUS_ADFR_TRACE_END("oplus_adfr_panel_cmd_set_nolock");
+
+	ADFR_DEBUG("end\n");
+
+	return rc;
+}
+
+static int oplus_adfr_panel_cmd_set(void *dsi_panel, enum dsi_cmd_set_type type)
+{
+	int rc = 0;
+	struct dsi_panel *panel = dsi_panel;
+
+	ADFR_DEBUG("start\n");
+
+	if (!panel) {
+		ADFR_ERR("invalid panel param\n");
+		return -EINVAL;
+	}
+
+#if defined(CONFIG_PXLW_IRIS)
+	if (iris_is_chip_supported() && (!strcmp(panel->type, "secondary"))) {
+		ADFR_INFO("no need to set panel cmd for iris chip\n");
+		return 0;
+	}
+#endif /* CONFIG_PXLW_IRIS */
+
+	OPLUS_ADFR_TRACE_BEGIN("oplus_adfr_panel_cmd_set");
+
+	mutex_lock(&panel->panel_lock);
+
+	if (!dsi_panel_initialized(panel)) {
+		rc = -EINVAL;
+		ADFR_DEBUG("should not send cmd sets if panel is not initialized\n");
+		goto error;
+	}
+
+	rc = oplus_adfr_panel_cmd_set_nolock(panel, type);
+	if (rc) {
+		ADFR_ERR("[%s] failed to send %s, rc=%d\n",
+			panel->name, cmd_set_prop_map[type], rc);
+	}
+
+error:
+	mutex_unlock(&panel->panel_lock);
+
+	OPLUS_ADFR_TRACE_END("oplus_adfr_panel_cmd_set");
+
+	ADFR_DEBUG("end\n");
+
+	return rc;
+}
+
+/* uniform interface for cmd set */
+static int oplus_adfr_display_cmd_set(void *dsi_display, enum dsi_cmd_set_type type)
+{
+	int rc = 0;
+	struct dsi_display *display = dsi_display;
+
+	ADFR_DEBUG("start\n");
+
+	if (!display || !display->panel) {
+		ADFR_ERR("invalid display params\n");
+		return -EINVAL;
+	}
+
+#if defined(CONFIG_PXLW_IRIS)
+	if (iris_is_chip_supported() && (!strcmp(display->display_type, "secondary"))) {
+		ADFR_INFO("no need to set display cmd for iris chip\n");
+		return 0;
+	}
+#endif /* CONFIG_PXLW_IRIS */
+
+	OPLUS_ADFR_TRACE_BEGIN("oplus_adfr_display_cmd_set");
+
+	mutex_lock(&display->display_lock);
+
+	/* enable the clk vote for CMD mode panels */
+	if (display->config.panel_mode == DSI_OP_CMD_MODE) {
+		rc = dsi_display_clk_ctrl(display->dsi_clk_handle,
+			DSI_CORE_CLK, DSI_CLK_ON);
+		if (rc) {
+			ADFR_ERR("[%s] failed to enable DSI clocks, rc=%d\n", display->name, rc);
+			goto error;
+		}
+	}
+
+	rc = oplus_adfr_panel_cmd_set(display->panel, type);
+	if (rc) {
+		ADFR_ERR("[%s] failed to send %s, rc=%d\n",
+			display->name, cmd_set_prop_map[type], rc);
+	}
+
+	/* disable the clk vote for CMD mode panels */
+	if (display->config.panel_mode == DSI_OP_CMD_MODE) {
+		rc = dsi_display_clk_ctrl(display->dsi_clk_handle,
+			DSI_CORE_CLK, DSI_CLK_OFF);
+		if (rc) {
+			ADFR_ERR("[%s] failed to disable DSI clocks, rc=%d\n", display->name, rc);
+		}
+	}
+
+error:
+	mutex_unlock(&display->display_lock);
+
+	OPLUS_ADFR_TRACE_END("oplus_adfr_display_cmd_set");
+
+	ADFR_DEBUG("end\n");
+
+	return rc;
+}
+
+/* distinguish modes by skew for adfr */
+bool oplus_adfr_h_skew_is_different(void *dsi_display, void *dsi_display_mode_0, void *dsi_display_mode_1)
+{
+	bool rc = false;
+	struct dsi_display *display = dsi_display;
+	struct dsi_display_mode *cmp = dsi_display_mode_0;
+	struct dsi_display_mode *m = dsi_display_mode_1;
+	struct oplus_adfr_params *p_oplus_adfr_params = NULL;
+
+	ADFR_DEBUG("start\n");
+
+	if (!display || !display->panel) {
+		ADFR_ERR("invalid display params\n");
+		return false;
+	}
+
+	if (!cmp || !m) {
+		ADFR_ERR("invalid dsi_display_mode params\n");
+		return false;
+	}
+
+	p_oplus_adfr_params = oplus_adfr_get_params(display->panel);
+	if (!p_oplus_adfr_params) {
+		ADFR_ERR("invalid p_oplus_adfr_params param\n");
+		return false;
+	}
+
+	if (!oplus_adfr_is_supported(p_oplus_adfr_params)) {
+		ADFR_DEBUG("adfr is not supported\n");
+		return false;
+	}
+
+	OPLUS_ADFR_TRACE_BEGIN("oplus_adfr_h_skew_is_different");
+
+	if (cmp->timing.h_skew != m->timing.h_skew) {
+		ADFR_DEBUG("h_skew is different\n");
+		rc = true;
+	}
+
+	OPLUS_ADFR_TRACE_END("oplus_adfr_h_skew_is_different");
+
+	ADFR_DEBUG("end\n");
+
+	return rc;
+}
+
+/* handle CONNECTOR_PROP_ADFR_MIN_FPS property value */
+int oplus_adfr_property_update(void *sde_connector, void *sde_connector_state, int prop_id, uint64_t prop_val)
+{
+	unsigned int handled = 0;
+	struct sde_connector *c_conn = sde_connector;
+	struct sde_connector_state *c_state = sde_connector_state;
+	struct dsi_display *display = NULL;
+	struct oplus_adfr_params *p_oplus_adfr_params = NULL;
+
+	ADFR_DEBUG("start\n");
+
+	if (!c_conn || !c_state) {
+		ADFR_ERR("invalid input params\n");
+		return -EINVAL;
+	}
+
+	if (c_conn->connector_type != DRM_MODE_CONNECTOR_DSI) {
+		ADFR_DEBUG("not in dsi mode, should not update adfr properties\n");
+		return 0;
+	}
+
+	display = c_conn->display;
+	if (!display || !display->panel) {
+		ADFR_ERR("invalid display params\n");
+		return -EINVAL;
+	}
+
+#if defined(CONFIG_PXLW_IRIS)
+	if (iris_is_chip_supported() && (!strcmp(display->display_type, "secondary"))) {
+		ADFR_INFO("no need to update properties for iris chip\n");
+		return 0;
+	}
+#endif /* CONFIG_PXLW_IRIS */
+
+	p_oplus_adfr_params = oplus_adfr_get_params(display->panel);
+	if (!p_oplus_adfr_params) {
+		ADFR_ERR("invalid p_oplus_adfr_params param\n");
+		return -EINVAL;
+	}
+
+	if (!oplus_adfr_is_supported(p_oplus_adfr_params)) {
+		ADFR_DEBUG("adfr is not supported\n");
+		return 0;
+	}
+
+	if (!display->panel->cur_mode) {
+		ADFR_ERR("invalid cur_mode param\n");
+		return -EINVAL;
+	}
+
+	OPLUS_ADFR_TRACE_BEGIN("oplus_adfr_property_update");
+
+	switch (prop_id) {
+	case CONNECTOR_PROP_ADFR_MIN_FPS:
+		/* minfps maybe disappear after state change, so handle it early */
+		ADFR_DEBUG("CONNECTOR_PROP_ADFR_MIN_FPS:0x%08x\n", prop_val);
+
+		if (prop_val & OPLUS_ADFR_SA_MAGIC) {
+			handled = BIT(0);
+
+			if (prop_val & OPLUS_ADFR_AUTO_MODE_MAGIC) {
+				if (p_oplus_adfr_params->need_filter_auto_on_cmd
+						&& (OPLUS_ADFR_AUTO_MODE_VALUE(prop_val) == OPLUS_ADFR_AUTO_ON)) {
+					ADFR_INFO("auto off cmds and auto on cmds could not be sent in the same frame, filter it out\n");
+					handled |= BIT(1);
+					goto end;
+				} else if (OPLUS_ADFR_AUTO_MODE_VALUE(prop_val) == OPLUS_ADFR_AUTO_IDLE) {
+					/* min fps value is sw fps if auto idle is set */
+					if (prop_val & OPLUS_ADFR_SA_MIN_FPS_MAGIC) {
+						if (display->panel->cur_mode->timing.refresh_rate == 144) {
+							p_oplus_adfr_params->sw_fps = 144 / (120 / OPLUS_ADFR_SA_MIN_FPS_VALUE(prop_val));
+						} else {
+							p_oplus_adfr_params->sw_fps = OPLUS_ADFR_SA_MIN_FPS_VALUE(prop_val);
+						}
+						/* fakeframe need to be updated */
+						p_oplus_adfr_params->fakeframe_updated = true;
+					} else {
+						ADFR_ERR("failed to update sw fps because of the sa min fps magic error,prop_val=0x%08x\n", prop_val);
+					}
+					handled |= BIT(2);
+					goto end;
+				} else if (OPLUS_ADFR_AUTO_MODE_VALUE(prop_val) != p_oplus_adfr_params->auto_mode) {
+					p_oplus_adfr_params->auto_mode = OPLUS_ADFR_AUTO_MODE_VALUE(prop_val);
+					/* filter repeat auto mode setting */
+					p_oplus_adfr_params->auto_mode_updated = true;
+					/* when auto mode changes, write the corresponding min fps again */
+					p_oplus_adfr_params->sa_min_fps_updated = true;
+					handled |= BIT(3);
+				}
+			}
+
+			if (prop_val & OPLUS_ADFR_FAKEFRAME_MAGIC) {
+				if (OPLUS_ADFR_FAKEFRAME_VALUE(prop_val) != p_oplus_adfr_params->fakeframe) {
+					/* no need to get fakeframe value as fakeframe is control by kerenl driver */
+					handled |= BIT(4);
+				}
+			}
+
+			if (prop_val & OPLUS_ADFR_SA_MIN_FPS_MAGIC) {
+				if (display->panel->cur_mode->timing.refresh_rate == 144) {
+					/*
+					 in 144hz timing, sf is still use 120hz computational formula to calculate minfps value,
+					 and minfps only takes 7 bits so that the max value is 127,
+					 so it should be converted back to 144hz minfps value in kernel
+					*/
+					if ((144 / (120 / OPLUS_ADFR_SA_MIN_FPS_VALUE(prop_val))) != p_oplus_adfr_params->sa_min_fps) {
+						p_oplus_adfr_params->sa_min_fps = 144 / (120 / OPLUS_ADFR_SA_MIN_FPS_VALUE(prop_val));
+						p_oplus_adfr_params->sa_min_fps_updated = true;
+						handled |= BIT(5);
+					}
+				} else {
+					if (OPLUS_ADFR_SA_MIN_FPS_VALUE(prop_val) != p_oplus_adfr_params->sa_min_fps) {
+						p_oplus_adfr_params->sa_min_fps = OPLUS_ADFR_SA_MIN_FPS_VALUE(prop_val);
+						p_oplus_adfr_params->sa_min_fps_updated = true;
+						handled |= BIT(5);
+					}
+				}
+			}
+
+			end:
+			/* latest setting */
+			ADFR_INFO("auto_mode:%u[%d],fakeframe:%u[%d],sa_min_fps:%u[%d],sw_fps:%u,handled:0x%02x\n",
+						p_oplus_adfr_params->auto_mode, p_oplus_adfr_params->auto_mode_updated,
+							p_oplus_adfr_params->fakeframe, p_oplus_adfr_params->fakeframe_updated,
+								p_oplus_adfr_params->sa_min_fps, p_oplus_adfr_params->sa_min_fps_updated,
+									p_oplus_adfr_params->sw_fps, handled);
+			OPLUS_ADFR_TRACE_INT("oplus_adfr_auto_mode", p_oplus_adfr_params->auto_mode);
+			OPLUS_ADFR_TRACE_INT("oplus_adfr_auto_mode_updated", p_oplus_adfr_params->auto_mode_updated);
+			OPLUS_ADFR_TRACE_INT("oplus_adfr_fakeframe", p_oplus_adfr_params->fakeframe);
+			OPLUS_ADFR_TRACE_INT("oplus_adfr_fakeframe_updated", p_oplus_adfr_params->fakeframe_updated);
+			OPLUS_ADFR_TRACE_INT("oplus_adfr_sa_min_fps", p_oplus_adfr_params->sa_min_fps);
+			OPLUS_ADFR_TRACE_INT("oplus_adfr_sa_min_fps_updated", p_oplus_adfr_params->sa_min_fps_updated);
+			OPLUS_ADFR_TRACE_INT("oplus_adfr_sw_fps", p_oplus_adfr_params->sw_fps);
+			OPLUS_ADFR_TRACE_INT("oplus_adfr_handled", handled);
+		}
+
+		msm_property_set_dirty(&c_conn->property_info, &c_state->property_state, prop_id);
+		break;
+
+	default:
+		break;
+	}
+
+	OPLUS_ADFR_TRACE_END("oplus_adfr_property_update");
+
+	ADFR_DEBUG("end\n");
 
 	return handled;
 }
 
-bool oplus_adfr_qsync_mode_minfps_is_updated(void) {
-	bool updated = oplus_adfr_qsync_mode_minfps_updated;
-	oplus_adfr_qsync_mode_minfps_updated = false;
-	return updated;
-}
-
-u32 oplus_adfr_get_qsync_mode_minfps(void) {
-	VRR_INFO("get qsync mode minfps %u\n", oplus_adfr_qsync_mode_minfps);
-	return oplus_adfr_qsync_mode_minfps;
-}
-
-/* qsync mode timer */
-enum hrtimer_restart oplus_adfr_qsync_mode_timer_handler(struct hrtimer *timer)
+/* handle irq function */
+int oplus_adfr_irq_handler(void *sde_encoder_phys, unsigned int irq_type)
 {
-	struct sde_connector *c_conn =
-			from_timer(c_conn, timer, qsync_mode_timer);
+	/* The initial value is 0, but we don't care about the first calculation error */
+	static unsigned long rd_ptr_timestamp_us = 0;
+	static unsigned long wr_ptr_timestamp_us = 0;
+	struct sde_encoder_phys *phys_enc = sde_encoder_phys;
+	struct sde_connector *c_conn = NULL;
+	struct dsi_display *display = NULL;
+	struct oplus_adfr_params *p_oplus_adfr_params = NULL;
 
-	/* qsync status reset */
-	c_conn->qsync_mode_recovery = true;
-	oplus_adfr_qsync_mode_minfps_updated = true;
-	VRR_DEBUG("qsync_mode_timer handler\n");
-
-	return HRTIMER_NORESTART;
-}
-
-void oplus_adfr_qsync_mode_timer_start(void *sde_connector, int deferred_ms)
-{
-	struct sde_connector *c_conn = sde_connector;
-
-	VRR_DEBUG("qsync_mode_timer start\n");
-	hrtimer_start(&c_conn->qsync_mode_timer, ms_to_ktime(deferred_ms), HRTIMER_MODE_REL);
-}
-
-/* --------------- sde_crtc ---------------*/
-
-void sde_crtc_adfr_handle_frame_event(void *crt, void *event)
-{
-	struct drm_crtc *crtc = crt;
-	struct sde_crtc *sde_crtc = to_sde_crtc(crtc);
-	struct sde_crtc_frame_event *fevent = event;
-	struct drm_encoder *encoder;
-
-	/* cancel deferred adfr fakeframe timer */
-	if (oplus_adfr_fakeframe_is_enable() &&
-		(fevent->event & SDE_ENCODER_FRAME_EVENT_SIGNAL_RETIRE_FENCE)) {
-		mutex_lock(&sde_crtc->crtc_lock);
-		list_for_each_entry(encoder, &crtc->dev->mode_config.encoder_list, head) {
-			if (encoder->crtc != crtc)
-				continue;
-
-			sde_encoder_adfr_cancel_fakeframe(encoder);
-		}
-		mutex_unlock(&sde_crtc->crtc_lock);
-	}
-}
-
-
-/* --------------- sde_encoder ---------------*/
-
-static inline struct dsi_display_mode_priv_info *oplus_get_current_mode_priv_info(struct drm_connector * drm_conn)
-{
-	struct msm_drm_private *priv;
-	struct sde_kms *sde_kms;
-	struct dsi_display *dsi_display;
-	struct dsi_panel *panel;
-
-	if (!drm_conn) {
-		VRR_ERR("adfr drm_conn is null\n");
-		return NULL;
-	}
-
-	priv = drm_conn->dev->dev_private;
-	sde_kms = to_sde_kms(priv->kms);
-
-	if (!sde_kms) {
-		VRR_ERR("adfr sde_kms is null\n");
-		return NULL;
-	}
-
-	if (sde_kms->dsi_display_count && sde_kms->dsi_displays) {
-		/* only use primary dsi */
-		dsi_display = sde_kms->dsi_displays[0];
-	} else {
-		VRR_ERR("adfr sde_kms's dsi_display is null\n");
-		return NULL;
-	}
-
-	panel = dsi_display->panel;
-
-	if (!panel || !panel->cur_mode) {
-		VRR_ERR("adfr dsi_display's panel is null\n");
-		return NULL;
-	}
-
-	return panel->cur_mode->priv_info;
-}
-
-void sde_encoder_adfr_prepare_commit(void *crt, void *enc, void *conn) {
-	struct dsi_display_mode_priv_info *priv_info;
-	struct drm_crtc *crtc = crt;
-	struct drm_connector *drm_conn = conn;
-	struct sde_connector *sde_conn = NULL;
-	struct dsi_display *dsi_display = NULL;
-
-	if (!oplus_adfr_fakeframe_is_enable()) {
-		return;
-	}
-
-	/* when power on, disable deferred fakeframe
-	* after power on and before first frame flush
-	* if panel get a fakeframe then refresh itself (with a dirty buffer), tearing happen
-	* so for power on case, set need_deferred_fakeframe false
-	* this can avoid deferred fakeframe tearing issue (eg. AOD)
-	* power off --> sde_encoder_virt_disable set "sde_enc->cur_master = NULL"
-	* power on  --> sde_encoder_virt_enable  set "sde_enc->cur_master = XXX"
-	* prepare_commit need cur_master is not null but it is before than sde_encoder_virt_enable
-	* so use prepare_commit(NULL, NULL, NULL) to imply this commit is first commit after power on
-	*/
-	if (!crt && !enc && !conn) {
-		need_deferred_fakeframe = false;
-		/* OPLUS_VRR_TRACE_INT("need_deferred_fakeframe", need_deferred_fakeframe); */
-		return;
-	}
-
-	if (!crt || !enc || !conn) {
-		VRR_ERR("sde_encoder_adfr_prepare_commit error: %p %p %p",
-			crt, enc, conn);
-		return;
-	}
-
-	sde_conn = to_sde_connector(drm_conn);
-	if (!sde_conn) {
-		VRR_ERR("sde_encoder_adfr_prepare_commit error: %p", sde_conn);
-		return;
-	}
-
-	if (!sde_conn->display) {
-		VRR_ERR("sde_encoder_adfr_prepare_commit error: %p", sde_conn->display);
-		return;
-	}
-	dsi_display = sde_conn->display;
-	if (!dsi_display->panel) {
-		VRR_ERR("sde_encoder_adfr_prepare_commit error: %p", dsi_display->panel);
-		return;
-	}
-	/* after power on, enable deferred fakeframe */
-	/* if (__oplus_get_power_status() == OPLUS_DISPLAY_POWER_ON) { */
-	if (dsi_display->panel->power_mode == SDE_MODE_DPMS_ON) {
-		need_deferred_fakeframe = true;
-	} else {
-		need_deferred_fakeframe = false;
-		/* VRR_DEBUG("display stats: %d , skip fakeframe", dsi_display->panel->power_mode); */
-		return;
-	}
-
-	priv_info = oplus_get_current_mode_priv_info(drm_conn);
-
-	/* check 1st bit */
-	if (!priv_info || !(priv_info->fakeframe_config & 0X00000001)) {
-		return;
-	}
-
-	/* before commit send a fakeframe to triger the panel flush
-	* but if pre-frame is pending, ignore this time
-	* because pre-frame is a real frame, Not Need fakeframe
-	* OPLUS_VRR_TRACE_INT("frame_pending", sde_crtc_frame_pending(sde_enc->crtc));
-	*/
-	if ((sde_crtc_frame_pending(crtc) == 0)) {
-		sde_encoder_adfr_trigger_fakeframe(enc);
-		need_deferred_fakeframe = true;
-	}
-}
-
-void sde_encoder_adfr_kickoff(void *crt, void *enc, void *conn) {
-	struct dsi_display_mode_priv_info *priv_info;
-	struct drm_connector *drm_conn = conn;
-	int deferred_ms = -1;
-
-	if (!oplus_adfr_fakeframe_is_enable()) {
-		return;
-	}
-
-	/* OPLUS_VRR_TRACE_INT("need_deferred_fakeframe", need_deferred_fakeframe); */
-	if (!need_deferred_fakeframe) {
-		/* VRR_ERR("sde_encoder_adfr_kickoff skip, need_deferred_fakeframe is false."); */
-		return;
-	}
-
-	if (!crt || !enc || !conn) {
-		VRR_ERR("sde_encoder_adfr_kickoff error:  %p %p %p",
-			crt, enc, conn);
-		return;
-	}
-
-	priv_info = oplus_get_current_mode_priv_info(drm_conn);
-
-	/* check 2st bit */
-	if (!priv_info || !(priv_info->fakeframe_config & 0X00000002)) {
-		return;
-	}
-	deferred_ms = priv_info->deferred_fakeframe_time;
-
-	oplus_adfr_fakeframe_timer_start(enc, deferred_ms);
-	need_deferred_fakeframe = false;
-}
-
-/* --------------- sde_encoder_phys_cmd ---------------*/
-/* Add for qsync tearing issue */
-/* indicates whether filter backlight cmd is need */
-bool oplus_adfr_backlight_cmd_filter_set(bool enable)
-{
-	oplus_adfr_need_filter_backlight_cmd = enable;
-	return oplus_adfr_need_filter_backlight_cmd;
-}
-
-bool oplus_adfr_backlight_cmd_filter_get(void)
-{
-	return oplus_adfr_need_filter_backlight_cmd;
-}
-
-/* if force_qsync_mode_off is true, close qsync window immediately */
-void oplus_adfr_force_qsync_mode_off(void *drm_connector)
-{
-	struct drm_connector *connector = drm_connector;
-	struct sde_connector *c_conn;
-	struct drm_bridge *temp_bridge;
-	struct dsi_bridge *c_bridge;
-	struct dsi_display *display;
-
-	if (!connector || !connector->encoder)
-		return;
-	if (!drm_bridge_chain_get_first_bridge(connector->encoder))
-		return;
-
-	c_conn = to_sde_connector(connector);
-	temp_bridge = drm_bridge_chain_get_first_bridge(c_conn->encoder);
-	c_bridge = to_dsi_bridge(temp_bridge);
-	display = c_bridge->display;
-
-	if (!display)
-		return;
-
-	if (display->force_qsync_mode_off) {
-		VRR_INFO("force qsync mode update %d -> %d\n",
-				c_conn->qsync_mode, SDE_RM_QSYNC_DISABLED);
-		c_conn->qsync_updated = true;
-		c_conn->qsync_mode = SDE_RM_QSYNC_DISABLED;
-		/* qsync disable need change min fps */
-		c_conn->qsync_curr_dynamic_min_fps = 0;
-		c_conn->qsync_deferred_window_status = SET_WINDOW_IMMEDIATELY;
-		display->force_qsync_mode_off = false;
-	} else if ((c_conn->qsync_mode != SDE_RM_QSYNC_DISABLED) &&
-		(c_conn->qsync_deferred_window_status != DEFERRED_WINDOW_START) && c_conn->oplus_adfr_backlight_updated) {
-		/* if qsync is enable and backlight status update, close qsync immediately */
-		VRR_INFO("force qsync mode update %d -> %d\n",
-				c_conn->qsync_mode, SDE_RM_QSYNC_DISABLED);
-		c_conn->qsync_updated = true;
-		c_conn->qsync_mode = SDE_RM_QSYNC_DISABLED;
-		/* qsync disable need change min fps */
-		c_conn->qsync_curr_dynamic_min_fps = 0;
-		c_conn->qsync_deferred_window_status = SET_WINDOW_IMMEDIATELY;
-
-		/* send qsync off cmd */
-		sde_connector_prepare_commit(connector);
-		/* start timer to delay qsync status recovery */
-		oplus_adfr_qsync_mode_timer_start(c_conn, 1000);
-	} else if (c_conn->qsync_mode != SDE_RM_QSYNC_DISABLED && (c_conn->qsync_deferred_window_status != DEFERRED_WINDOW_START)) {
-		/* if backlight cmd is set after qsync window setting and qsync is enable, filter it
-		otherwise tearing issue happen */
-		oplus_adfr_backlight_cmd_filter_set(true);
-	}
-
-	c_conn->oplus_adfr_backlight_updated = false;
-	return;
-}
-
-int oplus_adfr_adjust_tearcheck_for_dynamic_qsync(void *sde_phys_enc)
-{
-	struct sde_encoder_phys *phys_enc = sde_phys_enc;
-	struct sde_hw_tear_check tc_cfg = {0};
-	struct sde_connector *sde_conn = NULL;
-	int ret = 0;
+	ADFR_DEBUG("start\n");
 
 	if (!phys_enc || !phys_enc->connector) {
-		VRR_ERR("invalid encoder parameters\n");
+		ADFR_ERR("invalid phys_enc params\n");
 		return -EINVAL;
 	}
 
-	sde_conn = to_sde_connector(phys_enc->connector);
-
-	if (sde_connector_get_qsync_mode(phys_enc->connector) == 0 ||
-		sde_connector_get_qsync_dynamic_min_fps(phys_enc->connector) == 0) {
-		/* Fixed qsync window and panel min fps nonsynchronous issue */
-		phys_enc->current_sync_threshold_start = phys_enc->qsync_sync_threshold_start;
-		return ret;
-	}
-
-	OPLUS_VRR_TRACE_BEGIN("adjust_tearcheck_for_qsync");
-	OPLUS_VRR_TRACE_INT("frame_state", atomic_read(&phys_enc->frame_state));
-	VRR_DEBUG("frame_state = %d\n", atomic_read(&phys_enc->frame_state));
-
-	/* this time maybe remain in qsync window, so shrink qsync window */
-	/* to avoid tearing and keep qsync enable for this frame */
-	if (atomic_read(&phys_enc->frame_state) != 0) {
-		/* 300 is a estimated value */
-		tc_cfg.sync_threshold_start = 300;
-	} else {
-		/* remain use original qsync window */
-		tc_cfg.sync_threshold_start = phys_enc->qsync_sync_threshold_start;
-	}
-
-	if(phys_enc->current_sync_threshold_start != tc_cfg.sync_threshold_start) {
-		OPLUS_VRR_TRACE_BEGIN("update_qsync");
-
-		if (phys_enc->has_intf_te &&
-			phys_enc->hw_intf->ops.update_tearcheck)
-			phys_enc->hw_intf->ops.update_tearcheck(
-				phys_enc->hw_intf, &tc_cfg);
-		else if (phys_enc->hw_pp->ops.update_tearcheck)
-			phys_enc->hw_pp->ops.update_tearcheck(
-				phys_enc->hw_pp, &tc_cfg);
-		SDE_EVT32(DRMID(phys_enc->parent), tc_cfg.sync_threshold_start);
-		phys_enc->current_sync_threshold_start = tc_cfg.sync_threshold_start;
-		/* trigger AP update qsync flush */
-		sde_conn->qsync_updated = true;
-
-		OPLUS_VRR_TRACE_END("update_qsync");
-	}
-
-	VRR_DEBUG("threshold_lines %d\n", phys_enc->current_sync_threshold_start);
-	OPLUS_VRR_TRACE_INT("threshold_lines", phys_enc->current_sync_threshold_start);
-	OPLUS_VRR_TRACE_END("adjust_tearcheck_for_qsync");
-
-	return ret;
-}
-
-/* --------------- dsi_connector ---------------*/
-
-/* fake frame */
-int sde_connector_send_fakeframe(void *conn)
-{
-	struct drm_connector *connector = conn;
-	struct sde_connector *c_conn;
-	int rc;
-
-	if (!connector) {
-		VRR_ERR("invalid argument\n");
+	c_conn = to_sde_connector(phys_enc->connector);
+	if (!c_conn) {
+		ADFR_ERR("invalid c_conn param\n");
 		return -EINVAL;
 	}
 
-	c_conn = to_sde_connector(connector);
-	if (!c_conn->display) {
-		VRR_ERR("invalid connector display\n");
-		return -EINVAL;
-	}
-
-	rc = dsi_display_send_fakeframe(c_conn->display);
-
-	SDE_EVT32(connector->base.id, rc);
-	return rc;
-}
-
-/* --------------- dsi_display ---------------*/
-
-/* qsync enhance */
-/* update qsync min fps */
-int dsi_display_qsync_update_min_fps(void *dsi_display, void *dsi_params)
-{
-	struct dsi_display *display = dsi_display;
-	struct msm_display_conn_params *params = dsi_params;
-	int i;
-	int rc = 0;
-
-	if (!params->qsync_update) {
+	if (c_conn->connector_type != DRM_MODE_CONNECTOR_DSI) {
+		ADFR_DEBUG("not in dsi mode, should not handle irq function\n");
 		return 0;
 	}
 
-	/* allow qsync off but update qsync min fps only */
-	OPLUS_VRR_TRACE_BEGIN("dsi_display_qsync_update_min_fps");
-
-	mutex_lock(&display->display_lock);
-
-	display_for_each_ctrl(i, display) {
-		/* send the commands to updaet qsync min fps */
-		rc = dsi_panel_send_qsync_min_fps_dcs(display->panel, i, params->qsync_dynamic_min_fps);
-		if (rc) {
-			VRR_ERR("fail qsync UPDATE cmds rc:%d\n", rc);
-			goto exit;
-		}
-	}
-
-exit:
-	SDE_EVT32(params->qsync_mode, params->qsync_dynamic_min_fps, rc);
-	mutex_unlock(&display->display_lock);
-
-	OPLUS_VRR_TRACE_END("dsi_display_qsync_update_min_fps");
-
-	return rc;
-}
-
-/* save qsync info, then restore qsync status after panel enable*/
-int dsi_display_qsync_restore(void *dsi_display)
-{
-	struct msm_display_conn_params params;
-	struct dsi_display *display = dsi_display;
-	int rc = 0;
-
-	if (display->need_qsync_restore) {
-		display->need_qsync_restore = false;
-	} else {
-		return 0;
-	}
-
-	params.qsync_update = display->current_qsync_mode ||
-						  display->current_qsync_dynamic_min_fps;
-
-	if (!params.qsync_update) {
-		VRR_DEBUG("INFO: qsync status is clean\n");
-		return 0;
-	}
-
-	params.qsync_mode = display->current_qsync_mode;
-	params.qsync_dynamic_min_fps = display->current_qsync_dynamic_min_fps;
-
-	OPLUS_VRR_TRACE_BEGIN("dsi_display_qsync_restore");
-
-	VRR_INFO("qsync restore mode %d minfps %d \n",
-			params.qsync_mode, params.qsync_dynamic_min_fps);
-	rc = dsi_display_pre_commit(display, &params);
-	SDE_EVT32(params.qsync_mode, params.qsync_dynamic_min_fps, rc);
-
-	OPLUS_VRR_TRACE_END("dsi_display_qsync_restore");
-
-	return rc;
-}
-
-/* fake frame */
-int dsi_display_send_fakeframe(void *disp)
-{
-	struct dsi_display *display = (struct dsi_display *)disp;
-	int i, rc = 0;
-
-	if (!display) {
-		VRR_ERR("Invalid params\n");
-		return -EINVAL;
-	}
-
-	OPLUS_VRR_TRACE_BEGIN("dsi_display_send_fakeframe");
-	display_for_each_ctrl(i, display) {
-		/* send the commands to simulate a frame transmission */
-		rc = dsi_panel_send_fakeframe_dcs(display->panel, i);
-		if (rc) {
-			VRR_ERR("fail fake frame cmds rc:%d\n", rc);
-			goto exit;
-		}
-	}
-
-exit:
-	OPLUS_VRR_TRACE_END("dsi_display_send_fakeframe");
-	SDE_EVT32(rc);
-
-	return rc;
-}
-
-void oplus_adfr_set_dynamic_te_config(int config)
-{
-	mutex_lock(&dynamic_te_lock);
-	oplus_adfr_dynamic_te.config = config;
-	mutex_unlock(&dynamic_te_lock);
-}
-
-/* dynamic te timer */
-enum hrtimer_restart oplus_adfr_dynamic_te_timer_handler(struct hrtimer *timer)
-{
-	/* update report rate if enter idle mode */
-	oplus_adfr_dynamic_te.refresh_rate = 120/(oplus_adfr_auto_min_fps + 1);
-	if (oplus_adfr_dynamic_te.config == OPLUS_ADFR_DYNAMIC_TE_ENABLE_WITCH_LOG) {
-		VRR_INFO("dynamic te: enter idle mode, refresh_rate=%d\n", oplus_adfr_dynamic_te.refresh_rate);
-	}
-
-	return HRTIMER_NORESTART;
-}
-
-/* dynamic te detect */
-irqreturn_t oplus_adfr_dynamic_te_handler(int irq, void *data)
-{
-	static int mid_refresh_rate_count = 0;
-	static int high_refresh_rate_count = 0;
-	int temp_refresh_rate = 0;
-	struct dsi_display *display = (struct dsi_display *)data;
-	struct dsi_mode_info timing;
-
-	if (!display)
-		return IRQ_HANDLED;
-
-	if (oplus_adfr_dynamic_te.config != OPLUS_ADFR_DYNAMIC_TE_DISABLE) {
-		timing = display->panel->cur_mode->timing;
-
-		/* check the te interval to calculate framerate */
-		oplus_adfr_dynamic_te.last_te_timestamp = oplus_adfr_dynamic_te.current_te_timestamp;
-		oplus_adfr_dynamic_te.current_te_timestamp = (u64)ktime_to_ms(ktime_get());
-		temp_refresh_rate = 1000/(oplus_adfr_dynamic_te.current_te_timestamp - oplus_adfr_dynamic_te.last_te_timestamp);
-
-		/* filtering algorithm */
-		if (timing.h_skew == SDC_ADFR || timing.h_skew == SDC_MFR) {
-			if (timing.refresh_rate == 90) {
-				mid_refresh_rate_count = 0;
-				high_refresh_rate_count = 0;
-				/* fix frame rate */
-				oplus_adfr_dynamic_te.refresh_rate = 90;
-			} else if (timing.refresh_rate == 120 || timing.refresh_rate == 60) {
-				if (temp_refresh_rate > 55) {
-					mid_refresh_rate_count = 0;
-					high_refresh_rate_count++;
-					if (timing.refresh_rate == 120) {
-						/* update refresh rate if 4 continous temp_refresh_rate are greater than 55 */
-						if (high_refresh_rate_count == 4) {
-							oplus_adfr_dynamic_te.refresh_rate = 120;
-							high_refresh_rate_count--;
-						}
-					} else {
-							/* update refresh rate if 4 continous temp_refresh_rate are greater than 55 */
-							if (high_refresh_rate_count >= 4) {
-								oplus_adfr_dynamic_te.refresh_rate = 60;
-								high_refresh_rate_count = 3;
-							}
-					}
-				} else if (temp_refresh_rate > 16 && temp_refresh_rate <= 55) {
-					mid_refresh_rate_count++;
-					high_refresh_rate_count = 0;
-					/* update refresh rate if 1 continous temp_refresh_rate are greater than 16 and less than or equal to 55 */
-					if (mid_refresh_rate_count == 1) {
-						oplus_adfr_dynamic_te.refresh_rate = 30;
-						mid_refresh_rate_count--;
-					}
-				} else {
-					mid_refresh_rate_count = 0;
-					high_refresh_rate_count = 0;
-					/* update report value if refresh rate is less than or equal to 16 */
-					oplus_adfr_dynamic_te.refresh_rate = temp_refresh_rate;
-				}
-				if (oplus_adfr_idle_mode == OPLUS_ADFR_IDLE_ON) {
-					oplus_adfr_dynamic_te.refresh_rate = 120 / (oplus_adfr_auto_min_fps + 1);
-				}
-			} else {
-					mid_refresh_rate_count = 0;
-					high_refresh_rate_count = 0;
-					oplus_adfr_dynamic_te.refresh_rate = 0;
-			}
-		} else if (timing.h_skew == OPLUS_ADFR || timing.h_skew == OPLUS_MFR) {
-				mid_refresh_rate_count = 0;
-				high_refresh_rate_count = 0;
-				oplus_adfr_dynamic_te.refresh_rate = 120;
-		} else {
-				mid_refresh_rate_count = 0;
-				high_refresh_rate_count = 0;
-				oplus_adfr_dynamic_te.refresh_rate = 0;
-		}
-
-		if (oplus_adfr_dynamic_te.refresh_rate > timing.refresh_rate) {
-			oplus_adfr_dynamic_te.refresh_rate = timing.refresh_rate;
-		}
-
-		if (oplus_adfr_dynamic_te.config == OPLUS_ADFR_DYNAMIC_TE_ENABLE_WITCH_LOG) {
-			VRR_INFO("dynamic te: temp_refresh_rate=%d, refresh_rate=%d\n",
-					temp_refresh_rate,
-					oplus_adfr_dynamic_te.refresh_rate);
-			/* print key information every te interval */
-			VRR_INFO("dynamic te: last_te_timestamp=%lu, current_te_timestamp=%lu\n",
-					oplus_adfr_dynamic_te.last_te_timestamp,
-					oplus_adfr_dynamic_te.current_te_timestamp);
-			VRR_INFO("hactive=%d,vactive=%d,fps=%d,h_skew=%d,auto_mode=%d,auto_minfps=%d,sw_fps=%d,fakeframe=%d,idle_mode=%d,qsync_mode=%d,qsync_minfps=%d\n",
-					timing.h_active,
-					timing.v_active,
-					timing.refresh_rate,
-					timing.h_skew,
-					oplus_adfr_auto_mode,
-					oplus_adfr_auto_min_fps,
-					oplus_adfr_auto_sw_fps,
-					oplus_adfr_auto_fakeframe,
-					oplus_adfr_idle_mode,
-					display->current_qsync_mode,
-					display->current_qsync_dynamic_min_fps);
-		}
-	}
-
-	return IRQ_HANDLED;
-}
-
-void oplus_adfr_register_dynamic_te_irq(void *dsi_display)
-{
-	struct dsi_display *display = dsi_display;
-	int rc = 0;
-	struct platform_device *pdev;
-	struct device *dev;
-	unsigned int dynamic_te_irq;
-
-	pdev = display->pdev;
-	if (!pdev) {
-		VRR_ERR("invalid platform device\n");
-		return;
-	}
-
-	dev = &pdev->dev;
-	if (!dev) {
-		VRR_ERR("invalid device\n");
-		return;
-	}
-
-	if (display->trusted_vm_env) {
-		VRR_INFO("GPIO's are not enabled in trusted VM\n");
-		return;
-	}
-
-	if (!gpio_is_valid(display->panel->dynamic_te_gpio)) {
-		rc = -EINVAL;
-		goto error;
-	}
-
-	dynamic_te_irq = gpio_to_irq(display->panel->dynamic_te_gpio);
-
-	/* Avoid deferred spurious irqs with disable_irq() */
-	irq_set_status_flags(dynamic_te_irq, IRQ_DISABLE_UNLAZY);
-
-	/* detect TE rising edge */
-	rc = devm_request_irq(dev, dynamic_te_irq, oplus_adfr_dynamic_te_handler,
-			IRQF_TRIGGER_RISING | IRQF_ONESHOT,
-			"DYNAMIC_TE_GPIO", display);
-	if (rc) {
-		VRR_ERR("dynamic TE request_irq failed rc:%d\n", rc);
-		irq_clear_status_flags(dynamic_te_irq, IRQ_DISABLE_UNLAZY);
-		goto error;
-	}
-
-	if (display->panel->dynamic_te_gpio != display->disp_te_gpio &&
-			display->panel->dynamic_te_gpio != display->disp_te_gpio_1)
-		disable_irq(dynamic_te_irq);
-
-	VRR_DEBUG("register dynamic te irq successfully\n");
-
-	return;
-
-error:
-	VRR_WARN("Unable to register for dynamic TE IRQ\n");
-}
-
-ssize_t oplus_adfr_get_dynamic_te(struct kobject *obj,
-	struct kobj_attribute *attr, char *buf)
-{
-	struct dsi_display *display = oplus_display_get_current_display();
-	struct dsi_mode_info timing;
-	int refresh_rate;
-
-	if (display == NULL) {
-		VRR_ERR("error: NULL display\n");
-		return -EINVAL;
-	}
-
-	if (display->panel == NULL) {
-		VRR_ERR("error: NULL panel\n");
-		return -EINVAL;
-	}
-
-	if (display->panel->cur_mode == NULL) {
-		VRR_ERR("error: NULL cur_mode\n");
-		return -EINVAL;
-	}
-
-	if (!gpio_is_valid(display->panel->dynamic_te_gpio)) {
-		timing = display->panel->cur_mode->timing;
-		refresh_rate = timing.refresh_rate;
-		return sprintf(buf, "%d\n", refresh_rate);
-	}
-
-	if (!strcmp(display->display_type, "primary")) {
-		refresh_rate = oplus_adfr_dynamic_te.refresh_rate;
-		VRR_INFO("dynamic te refresh rate is %d\n", refresh_rate);
-	}
-	if (!strcmp(display->display_type, "secondary")) {
-		timing = display->panel->cur_mode->timing;
-		refresh_rate = timing.refresh_rate;
-	}
-	return sprintf(buf, "%d\n", refresh_rate);
-}
-
-ssize_t oplus_adfr_set_dynamic_te(struct kobject *obj,
-	struct kobj_attribute *attr, const char *buf, size_t count)
-{
-	struct dsi_display *display = oplus_display_get_current_display();
-	unsigned int dynamic_te_irq;
-	int config = 0;
-
-	if (display == NULL) {
-		VRR_ERR("error: NULL display\n");
-		return -EINVAL;
-	}
-
-	if (display->panel == NULL) {
-		VRR_ERR("error: NULL panel\n");
-		return -EINVAL;
-	}
-
-	if (!gpio_is_valid(display->panel->dynamic_te_gpio)) {
-		VRR_ERR("invalid dynamic te gpio\n");
-		return count;
-	}
-
-	sscanf(buf, "%du", &config);
-	oplus_adfr_set_dynamic_te_config(config);
-
-	dynamic_te_irq = gpio_to_irq(display->panel->dynamic_te_gpio);
-
-	if (oplus_adfr_dynamic_te.config != OPLUS_ADFR_DYNAMIC_TE_DISABLE) {
-		enable_irq(dynamic_te_irq);
-		VRR_INFO("dynamic te detect enable\n");
-	} else {
-		disable_irq(dynamic_te_irq);
-		VRR_INFO("dynamic te detect disable\n");
-	}
-
-	return count;
-}
-
-int oplus_display_set_dynamic_te(void *buf)
-{
-	struct dsi_display *display = oplus_display_get_current_display();
-	unsigned int dynamic_te_irq;
-	uint32_t *buf_temp = buf;
-	uint32_t config = *buf_temp;
-
-	if (display == NULL) {
-		VRR_ERR("error: NULL display\n");
-		return -EINVAL;
-	}
-
-	if (display->panel == NULL) {
-		VRR_ERR("error: NULL panel\n");
-		return -EINVAL;
-	}
-
-	if (!gpio_is_valid(display->panel->dynamic_te_gpio)) {
-		VRR_ERR("invalid dynamic te gpio\n");
-		return -EINVAL;
-	}
-
-	oplus_adfr_set_dynamic_te_config(config);
-
-	dynamic_te_irq = gpio_to_irq(display->panel->dynamic_te_gpio);
-
-	if (oplus_adfr_dynamic_te.config != OPLUS_ADFR_DYNAMIC_TE_DISABLE) {
-		enable_irq(dynamic_te_irq);
-		VRR_INFO("dynamic te detect enable\n");
-	} else {
-		disable_irq(dynamic_te_irq);
-		VRR_INFO("dynamic te detect disable\n");
-	}
-
-	return 0;
-}
-
-int oplus_display_get_dynamic_te(void *buf)
-{
-	struct dsi_display *display = oplus_display_get_current_display();
-	struct dsi_mode_info timing;
-	uint32_t *refresh_rate = buf;
-
-	if (display == NULL) {
-		VRR_ERR("error: NULL display\n");
-		return -EINVAL;
-	}
-
-	if (display->panel == NULL) {
-		VRR_ERR("error: NULL panel\n");
-		return -EINVAL;
-	}
-
-	if (display->panel->cur_mode == NULL) {
-		VRR_ERR("error: NULL cur_mode\n");
-		return -EINVAL;
-	}
-
-	if (!gpio_is_valid(display->panel->dynamic_te_gpio)) {
-		timing = display->panel->cur_mode->timing;
-		*refresh_rate = timing.refresh_rate;
-		return 0;
-	}
-
-	if (!strcmp(display->display_type, "primary")) {
-		*refresh_rate = oplus_adfr_dynamic_te.refresh_rate;
-		VRR_INFO("dynamic te refresh rate is %d\n", *refresh_rate);
-	}
-	if (!strcmp(display->display_type, "secondary")) {
-		timing = display->panel->cur_mode->timing;
-		*refresh_rate = timing.refresh_rate;
-	}
-
-	return 0;
-}
-
-/* --------------- dsi_panel ---------------*/
-
-/* qsync enhance */
-const char *qsync_min_fps_set_map[DSI_CMD_QSYNC_MIN_FPS_COUNTS] = {
-	"qcom,mdss-dsi-qsync-min-fps-0",
-	"qcom,mdss-dsi-qsync-min-fps-1",
-	"qcom,mdss-dsi-qsync-min-fps-2",
-	"qcom,mdss-dsi-qsync-min-fps-3",
-	"qcom,mdss-dsi-qsync-min-fps-4",
-	"qcom,mdss-dsi-qsync-min-fps-5",
-	"qcom,mdss-dsi-qsync-min-fps-6",
-	"qcom,mdss-dsi-qsync-min-fps-7",
-	"qcom,mdss-dsi-qsync-min-fps-8",
-	"qcom,mdss-dsi-qsync-min-fps-9",
-};
-
-static int oplus_adfr_process_minfps_dcs(struct dsi_panel *panel,
-		enum dsi_cmd_set_type cmd_index, u32 extend_frame)
-{
-	int rc = 0;
-	struct dsi_display_mode *mode;
-	struct dsi_cmd_desc *cmds;
-	size_t tx_len;
-	u8 *tx_buf;
-	u32 count;
-	u8 cmd_high = 0;
-	u8 cmd_low = 0;
-	u8 cmd_multiple = 0;
-
-	if (!panel || !panel->cur_mode) {
-		VRR_ERR("invalid params\n");
-		return -EINVAL;
-	}
-
-	if (cmd_index >= DSI_CMD_SET_MAX) {
-		VRR_ERR("Invalid cmd_index=%u\n", cmd_index);
-		return -EINVAL;
-	}
-	mode = panel->cur_mode;
-
-	if (!strcmp(panel->oplus_priv.vendor_name, "S6E3HC4")) {
-		if (strstr(panel->name, "samsung s6e3hc4 amb682cg01 dsc cmd mode panel")) {
-			if (oplus_panel_pwm_turbo_is_enabled(panel))
-				cmd_multiple = 12;
-			else
-				cmd_multiple = 6;
-		} else
-			cmd_multiple = 3;
-		cmd_high = (extend_frame * cmd_multiple) / 256;
-		cmd_low = (extend_frame * cmd_multiple) % 256;
-	} else {
-		cmd_low = extend_frame;
-	}
-	VRR_DEBUG("extend_frame = %u, minfps_cmds:[0x%02X 0x%02X]\n",
-			extend_frame, cmd_high, cmd_low);
-
-	cmds = mode->priv_info->cmd_sets[cmd_index].cmds;
-	count = mode->priv_info->cmd_sets[cmd_index].count;
-
-	/* transform minfps cmd_low */
-	if (count <= SDC_MANUAL_MIN_FPS_CMD_OFFSET) {
-		VRR_ERR("[%s] Invalid minfps cmd_low count: %u\n",
-				panel->oplus_priv.vendor_name, count);
-		return -EFAULT;
-	}
-	tx_len = cmds[SDC_MANUAL_MIN_FPS_CMD_OFFSET].msg.tx_len;
-	tx_buf = (u8 *)cmds[SDC_MANUAL_MIN_FPS_CMD_OFFSET].msg.tx_buf;
-	if (tx_len != SDC_MIN_FPS_CMD_SIZE) {
-		VRR_ERR("[%s] Invalid minfps cmd_low size: %u\n",
-				panel->oplus_priv.vendor_name, tx_len);
-		return -EFAULT;
-	}
-	tx_buf[SDC_MIN_FPS_CMD_SIZE - 1] = cmd_low;
-
-	/* transform minfps cmd_high */
-	if (!strcmp(panel->oplus_priv.vendor_name, "S6E3HC4")) {
-		if (count <= SDC_MANUAL_MIN_FPS_CMD_HIGH_OFFSET) {
-			VRR_ERR("[%s] Invalid minfps cmd_high count: %u\n",
-					panel->oplus_priv.vendor_name, count);
-			return -EFAULT;
-		}
-		tx_len = cmds[SDC_MANUAL_MIN_FPS_CMD_HIGH_OFFSET].msg.tx_len;
-		tx_buf = (u8 *)cmds[SDC_MANUAL_MIN_FPS_CMD_HIGH_OFFSET].msg.tx_buf;
-		if (tx_len != SDC_MIN_FPS_CMD_SIZE) {
-			VRR_ERR("[%s] Invalid minfps cmd_high size: %u\n",
-					panel->oplus_priv.vendor_name, tx_len);
-			return -EFAULT;
-		}
-		tx_buf[SDC_MIN_FPS_CMD_SIZE - 1] = cmd_high;
-	}
-
-	return rc;
-}
-
-/* qsync enhance */
-int dsi_panel_send_qsync_min_fps_dcs(void *dsi_panel,
-		int ctrl_idx, uint32_t min_fps)
-{
-	struct dsi_panel *panel = dsi_panel;
-	struct dsi_display_mode_priv_info *priv_info;
-	int rc = 0;
-	int i = 0;
-	u32 extend_frame = 0;
-
-	if (!panel || !panel->cur_mode) {
-		VRR_ERR("Invalid params\n");
+	display = c_conn->display;
+	if (!display || !display->panel) {
+		ADFR_ERR("invalid display params\n");
 		return -EINVAL;
 	}
 
 #if defined(CONFIG_PXLW_IRIS)
-	if (iris_is_chip_supported()) {
-		if (!strcmp(panel->type, "secondary")) {
-			VRR_INFO("iris secondary disable send qsync minfps\n");
-			return 0;
-		}
+	if (iris_is_chip_supported() && (!strcmp(display->display_type, "secondary"))) {
+		ADFR_INFO("no need to handle irq function for iris chip\n");
+		return 0;
 	}
-#endif
+#endif /* CONFIG_PXLW_IRIS */
 
-	priv_info = panel->cur_mode->priv_info;
-
-	mutex_lock(&panel->panel_lock);
-
-	/* select a best fps to fit min_fps */
-	for(i = priv_info->qsync_min_fps_sets_size - 1; i >= 0; i--) {
-		if(priv_info->qsync_min_fps_sets[i] <= min_fps) {
-			extend_frame = (120 / priv_info->qsync_min_fps_sets[i]) - 1;
-			VRR_DEBUG("ctrl:%d qsync find minfps=%u, extend_frame=%u\n",
-					ctrl_idx, priv_info->qsync_min_fps_sets[i], extend_frame);
-			break;
-		}
-	}
-
-	if(i >= 0 && i < priv_info->qsync_min_fps_sets_size) {
-		VRR_INFO("ctrl:%d qsync minfps target:%u, final:%u\n",
-				ctrl_idx, min_fps, priv_info->qsync_min_fps_sets[i]);
-		OPLUS_VRR_TRACE_INT("oplus_adfr_qsync_mode_minfps_cmd", min_fps);
-
-		if (!strcmp(panel->oplus_priv.vendor_name, "S6E3HC4")) {
-			rc = oplus_adfr_process_minfps_dcs(panel,
-					DSI_CMD_QSYNC_MIN_FPS_0, extend_frame);
-			if (!rc)
-				rc = dsi_panel_tx_cmd_set(panel, DSI_CMD_QSYNC_MIN_FPS_0);
-		} else
-			rc = dsi_panel_tx_cmd_set(panel, DSI_CMD_QSYNC_MIN_FPS_0+i);
-	} else {
-		VRR_ERR("ctrl:%d failed to find qsync minfps:%u, i:%d\n",
-				ctrl_idx, min_fps, i);
-	}
-
-	mutex_unlock(&panel->panel_lock);
-	return rc;
-}
-
-/* fake frame */
-int dsi_panel_send_fakeframe_dcs(void *dsi_panel,
-		int ctrl_idx)
-{
-	struct dsi_panel *panel = dsi_panel;
-	int rc = 0;
-
-	/* SDC's auto, fakeframe and minfps are available only after power on */
-
-	if (!panel) {
-		VRR_ERR("invalid params\n");
+	p_oplus_adfr_params = oplus_adfr_get_params(display->panel);
+	if (!p_oplus_adfr_params) {
+		ADFR_ERR("invalid p_oplus_adfr_params param\n");
 		return -EINVAL;
 	}
 
-	/* if (__oplus_get_power_status() != OPLUS_DISPLAY_POWER_ON) { */
-	if (panel->power_mode != SDE_MODE_DPMS_ON) {
-		VRR_INFO("ignore %s when power is %d\n", __FUNCTION__, panel->power_mode);
+	if (!oplus_adfr_is_supported(p_oplus_adfr_params)) {
+		ADFR_DEBUG("adfr is not supported\n");
 		return 0;
 	}
 
-	if (!oplus_adfr_fakeframe_is_enable()) {
-		VRR_INFO("fakeframe canceled\n");
-		return 0;
-	}
-	mutex_lock(&panel->panel_lock);
+	OPLUS_ADFR_TRACE_BEGIN("oplus_adfr_irq_handler");
 
-	VRR_DEBUG("ctrl:%d fake frame\n", ctrl_idx);
-	if (__oplus_get_power_status() == OPLUS_DISPLAY_POWER_ON) {
-		rc = dsi_panel_tx_cmd_set(panel, DSI_CMD_FAKEFRAME);
-	}
+	if (irq_type == OPLUS_ADFR_RD_PTR) {
+		ADFR_DEBUG("rd_ptr_irq interval:%lu\n", ((unsigned long)ktime_to_us(ktime_get()) - rd_ptr_timestamp_us));
+		rd_ptr_timestamp_us = (unsigned long)ktime_to_us(ktime_get());
 
-	mutex_unlock(&panel->panel_lock);
-	return rc;
-}
-
-
-/* qsync enhance */
-static int dsi_panel_parse_qsync_min_fps(
-		struct dsi_display_mode_priv_info *priv_info,
-		struct dsi_parser_utils *utils)
-{
-	int rc = 0;
-	u32 i;
-
-	if (!priv_info) {
-		VRR_ERR("dsi_panel_parse_qsync_min_fps err: invalid mode priv info\n");
-		return -EINVAL;
-	}
-
-	priv_info->qsync_min_fps_sets_size = 0;
-
-	for (i = 0; i < DSI_CMD_QSYNC_MIN_FPS_COUNTS; i++) {
-		rc = utils->read_u32(utils->data, qsync_min_fps_set_map[i],
-			&priv_info->qsync_min_fps_sets[i]);
-		if (rc) {
-			VRR_DEBUG("failed to parse qsync min fps set %u\n", i);
-			break;
+		/* when the rd_ptr_irq comes there is no need to filter auto on cmds anymore */
+		if (p_oplus_adfr_params->need_filter_auto_on_cmd) {
+			p_oplus_adfr_params->need_filter_auto_on_cmd = false;
+			ADFR_DEBUG("oplus_adfr_need_filter_auto_on_cmd:%d\n", p_oplus_adfr_params->need_filter_auto_on_cmd);
+			OPLUS_ADFR_TRACE_INT("oplus_adfr_need_filter_auto_on_cmd", p_oplus_adfr_params->need_filter_auto_on_cmd);
 		}
-		else {
-			priv_info->qsync_min_fps_sets_size++;
-			VRR_DEBUG("parse qsync min fps set %u = %u\n",
-			priv_info->qsync_min_fps_sets_size - 1, priv_info->qsync_min_fps_sets[i]);
+
+		if (p_oplus_adfr_params->osync_frame_status == OPLUS_ADFR_PP_DONE) {
+			p_oplus_adfr_params->osync_frame_status = OPLUS_ADFR_RD_PTR;
+			ADFR_DEBUG("oplus_adfr_osync_frame_status:%u\n", p_oplus_adfr_params->osync_frame_status);
+			OPLUS_ADFR_TRACE_INT("oplus_adfr_osync_frame_status", p_oplus_adfr_params->osync_frame_status);
 		}
+
+		if (oplus_adfr_oa_bl_mutual_exclusion_is_enabled(p_oplus_adfr_params)) {
+			/* when the rd_ptr_irq comes there is no need to filter osync backlight cmd anymore */
+			if (p_oplus_adfr_params->need_filter_osync_backlight_cmd) {
+				p_oplus_adfr_params->need_filter_osync_backlight_cmd = false;
+				ADFR_DEBUG("oplus_adfr_need_filter_osync_backlight_cmd:%d\n", p_oplus_adfr_params->need_filter_osync_backlight_cmd);
+				OPLUS_ADFR_TRACE_INT("oplus_adfr_need_filter_osync_backlight_cmd", p_oplus_adfr_params->need_filter_osync_backlight_cmd);
+			}
+		}
+	} else if (irq_type == OPLUS_ADFR_WD_PTR) {
+		ADFR_DEBUG("wr_ptr_irq interval:%lu\n", ((unsigned long)ktime_to_us(ktime_get()) - wr_ptr_timestamp_us));
+		wr_ptr_timestamp_us = (unsigned long)ktime_to_us(ktime_get());
+
+		p_oplus_adfr_params->osync_frame_status = OPLUS_ADFR_WD_PTR;
+		ADFR_DEBUG("oplus_adfr_osync_frame_status:%u\n", p_oplus_adfr_params->osync_frame_status);
+		OPLUS_ADFR_TRACE_INT("oplus_adfr_osync_frame_status", p_oplus_adfr_params->osync_frame_status);
+	} else if (irq_type == OPLUS_ADFR_PP_DONE) {
+		p_oplus_adfr_params->osync_frame_status = OPLUS_ADFR_PP_DONE;
+		ADFR_DEBUG("oplus_adfr_osync_frame_status:%u\n", p_oplus_adfr_params->osync_frame_status);
+		OPLUS_ADFR_TRACE_INT("oplus_adfr_osync_frame_status", p_oplus_adfr_params->osync_frame_status);
 	}
 
-	return rc;
-}
+	OPLUS_ADFR_TRACE_END("oplus_adfr_irq_handler");
 
-/* fake frame */
-static int dsi_panel_parse_fakeframe(
-		struct dsi_display_mode_priv_info *priv_info,
-		struct dsi_parser_utils *utils)
-{
-	int rc = 0;
-
-	if (!priv_info) {
-		VRR_ERR("dsi_panel_parse_fakeframe err: invalid mode priv info\n");
-		return -EINVAL;
-	}
-
-	priv_info->fakeframe_config = 0;
-	priv_info->deferred_fakeframe_time = 0;
-
-	rc = utils->read_u32(utils->data, "oplus,adfr-fakeframe-config",
-			&priv_info->fakeframe_config);
-	if (rc) {
-		VRR_DEBUG("failed to parse fakeframe\n");
-	}
-
-	rc = utils->read_u32(utils->data, "oplus,adfr-fakeframe-deferred-time",
-			&priv_info->deferred_fakeframe_time);
-	if (rc) {
-		VRR_DEBUG("failed to parse deferred_fakeframe_time\n");
-	}
-
-	VRR_DEBUG("adfr fakeframe_config: %u, deferred_fakeframe_time: %u \n",
-		priv_info->fakeframe_config, priv_info->deferred_fakeframe_time);
-
-	return rc;
-}
-
-int dsi_panel_parse_adfr(void *dsi_mode, void *dsi_utils)
-{
-	struct dsi_display_mode *mode = dsi_mode;
-	struct dsi_parser_utils *utils = dsi_utils;
-	struct dsi_display_mode_priv_info *priv_info = mode->priv_info;
-
-	/* qsync enhance */
-	if (dsi_panel_parse_qsync_min_fps(priv_info, utils)) {
-		VRR_DEBUG("adfr failed to parse qsyn min fps\n");
-	}
-	/* fake frame */
-	if (dsi_panel_parse_fakeframe(priv_info, utils)) {
-		VRR_DEBUG("adfr failed to parse fakeframe\n");
-	}
+	ADFR_DEBUG("end\n");
 
 	return 0;
+}
+
+static int oplus_adfr_auto_mode_update(void *dsi_display, unsigned int auto_mode)
+{
+	int rc = 0;
+	struct dsi_display *display = dsi_display;
+	struct oplus_adfr_params *p_oplus_adfr_params = NULL;
+
+	ADFR_DEBUG("start\n");
+
+	if (!display || !display->panel) {
+		ADFR_ERR("invalid display params\n");
+		return -EINVAL;
+	}
+
+#if defined(CONFIG_PXLW_IRIS)
+	if (iris_is_chip_supported() && (!strcmp(display->display_type, "secondary"))) {
+		ADFR_INFO("no need to update auto mode for iris chip\n");
+		return 0;
+	}
+#endif /* CONFIG_PXLW_IRIS */
+
+	p_oplus_adfr_params = oplus_adfr_get_params(display->panel);
+	if (!p_oplus_adfr_params) {
+		ADFR_ERR("invalid p_oplus_adfr_params param\n");
+		return -EINVAL;
+	}
+
+	if (!oplus_adfr_is_supported(p_oplus_adfr_params)) {
+		ADFR_DEBUG("adfr is not supported\n");
+		return 0;
+	}
+
+	OPLUS_ADFR_TRACE_BEGIN("oplus_adfr_auto_mode_update");
+
+	if (auto_mode) {
+		/* send the commands to enable auto mode */
+		rc = oplus_adfr_display_cmd_set(display, DSI_CMD_ADFR_AUTO_ON);
+		if (rc) {
+			ADFR_ERR("[%s] failed to send DSI_CMD_ADFR_AUTO_ON cmds, rc=%d\n", display->name, rc);
+		}
+	} else {
+		/* send the commands to disbale auto mode */
+		rc = oplus_adfr_display_cmd_set(display, DSI_CMD_ADFR_AUTO_OFF);
+		if (rc) {
+			ADFR_ERR("[%s] failed to send DSI_CMD_ADFR_AUTO_OFF cmds, rc=%d\n", display->name, rc);
+		}
+	}
+
+	OPLUS_ADFR_TRACE_END("oplus_adfr_auto_mode_update");
+
+	ADFR_DEBUG("end\n");
+
+	return rc;
+}
+
+/* prevent the wrong min fps setting */
+static int oplus_adfr_min_fps_check(void *dsi_panel, unsigned int min_fps)
+{
+	unsigned char min_fps_mapping_table_count = 0;
+	unsigned int refresh_rate = 120;
+	unsigned int h_skew = STANDARD_ADFR;
+	unsigned int idle_off_min_fps = 0;
+	struct dsi_panel *panel = dsi_panel;
+	struct oplus_adfr_params *p_oplus_adfr_params = NULL;
+
+	ADFR_DEBUG("start\n");
+
+	if (!panel) {
+		ADFR_ERR("invalid panel param\n");
+		return -EINVAL;
+	}
+
+#if defined(CONFIG_PXLW_IRIS)
+	if (iris_is_chip_supported() && (!strcmp(panel->type, "secondary"))) {
+		ADFR_INFO("no need to check min fps for iris chip\n");
+		return 0;
+	}
+#endif /* CONFIG_PXLW_IRIS */
+
+	p_oplus_adfr_params = oplus_adfr_get_params(panel);
+	if (!p_oplus_adfr_params) {
+		ADFR_ERR("invalid p_oplus_adfr_params param\n");
+		return -EINVAL;
+	}
+
+	if (!oplus_adfr_is_supported(p_oplus_adfr_params)) {
+		ADFR_DEBUG("adfr is not supported\n");
+		return 0;
+	}
+
+	if (!panel->cur_mode || !panel->cur_mode->priv_info) {
+		ADFR_ERR("invalid cur_mode params\n");
+		return -EINVAL;
+	}
+
+	OPLUS_ADFR_TRACE_BEGIN("oplus_adfr_min_fps_check");
+
+	refresh_rate = panel->cur_mode->timing.refresh_rate;
+	h_skew = panel->cur_mode->timing.h_skew;
+	min_fps_mapping_table_count = panel->cur_mode->priv_info->oplus_adfr_min_fps_mapping_table_count;
+	idle_off_min_fps = panel->cur_mode->priv_info->oplus_adfr_idle_off_min_fps;
+	ADFR_DEBUG("refresh_rate:%u,h_skew:%u,min_fps_mapping_table_count:%u,idle_off_min_fps:%u\n",
+					refresh_rate, h_skew, min_fps_mapping_table_count, idle_off_min_fps);
+
+	if (!min_fps_mapping_table_count) {
+		/* fixed max min fps */
+		min_fps = refresh_rate;
+	} else if ((h_skew == OPLUS_ADFR) && !min_fps) {
+		/* no need to send min fps cmds in oa mode */
+		min_fps = 0;
+	} else if ((min_fps > panel->cur_mode->priv_info->oplus_adfr_min_fps_mapping_table[0])
+					|| (min_fps < panel->cur_mode->priv_info->oplus_adfr_min_fps_mapping_table[min_fps_mapping_table_count - 1])) {
+		/* the highest frame rate is the most stable */
+		min_fps = panel->cur_mode->priv_info->oplus_adfr_min_fps_mapping_table[0];
+	} else if (oplus_adfr_idle_mode_is_enabled(p_oplus_adfr_params)
+					&& idle_off_min_fps
+					&& (p_oplus_adfr_params->auto_mode == OPLUS_ADFR_AUTO_OFF)
+					&& (p_oplus_adfr_params->idle_mode == OPLUS_ADFR_IDLE_OFF)
+					&& (min_fps < idle_off_min_fps)) {
+		/* the refresh rate is reduced step by step. before entering mipi idle, the min fps could not be less than idle_off_min_fps */
+		min_fps = idle_off_min_fps;
+	}
+
+	ADFR_DEBUG("min fps is %u after check\n", min_fps);
+
+	OPLUS_ADFR_TRACE_END("oplus_adfr_min_fps_check");
+
+	ADFR_DEBUG("end\n");
+
+	return min_fps;
+}
+
+static int oplus_adfr_min_fps_update(void *dsi_display, unsigned int min_fps)
+{
+	int rc = 0;
+	unsigned int i = 0;
+	struct dsi_display *display = dsi_display;
+	struct dsi_display_mode_priv_info *priv_info = NULL;
+	struct oplus_adfr_params *p_oplus_adfr_params = NULL;
+
+	ADFR_DEBUG("start\n");
+
+	if (!display || !display->panel) {
+		ADFR_ERR("invalid display params\n");
+		return -EINVAL;
+	}
+
+#if defined(CONFIG_PXLW_IRIS)
+	if (iris_is_chip_supported() && (!strcmp(display->display_type, "secondary"))) {
+		ADFR_INFO("no need to update min fps for iris chip\n");
+		return 0;
+	}
+#endif /* CONFIG_PXLW_IRIS */
+
+	p_oplus_adfr_params = oplus_adfr_get_params(display->panel);
+	if (!p_oplus_adfr_params) {
+		ADFR_ERR("invalid p_oplus_adfr_params param\n");
+		return -EINVAL;
+	}
+
+	if (!oplus_adfr_is_supported(p_oplus_adfr_params)) {
+		ADFR_DEBUG("adfr is not supported\n");
+		return 0;
+	}
+
+	if (!display->panel->cur_mode || !display->panel->cur_mode->priv_info) {
+		ADFR_ERR("invalid panel params\n");
+		return -EINVAL;
+	}
+
+	OPLUS_ADFR_TRACE_BEGIN("oplus_adfr_min_fps_update");
+
+	priv_info = display->panel->cur_mode->priv_info;
+
+	/* check minfps */
+	min_fps = oplus_adfr_min_fps_check(display->panel, min_fps);
+	if (min_fps <= 0) {
+		rc = min_fps;
+		ADFR_ERR("failed to check min fps, rc=%d\n", rc);
+		goto end;
+	}
+
+	/* find the min fps mapping cmd set */
+	if (!priv_info->oplus_adfr_min_fps_mapping_table_count) {
+		ADFR_DEBUG("fixed max min fps setting\n");
+		goto end;
+	} else {
+		for (i = 0; i < priv_info->oplus_adfr_min_fps_mapping_table_count - 1; i++) {
+			if ((min_fps <= priv_info->oplus_adfr_min_fps_mapping_table[i])
+					&& (min_fps > priv_info->oplus_adfr_min_fps_mapping_table[i + 1])) {
+				break;
+			}
+		}
+	}
+
+	/* send the commands to set min fps */
+	if (oplus_panel_pwm_turbo_is_enabled(display->panel)) {
+		rc = oplus_adfr_display_cmd_set(display, DSI_CMD_HPWM_ADFR_MIN_FPS_0 + i);
+		if (rc) {
+			ADFR_ERR("[%s] failed to send DSI_CMD_HPWM_ADFR_MIN_FPS_%d cmds, rc=%d\n", display->name, i, rc);
+		}
+	} else {
+		rc = oplus_adfr_display_cmd_set(display, DSI_CMD_ADFR_MIN_FPS_0 + i);
+		if (rc) {
+			ADFR_ERR("[%s] failed to send DSI_CMD_ADFR_MIN_FPS_%d cmds, rc=%d\n", display->name, i, rc);
+		}
+	}
+
+	ADFR_DEBUG("oplus_adfr_min_fps_cmd:%u\n", min_fps);
+	OPLUS_ADFR_TRACE_INT("oplus_adfr_min_fps_cmd", min_fps);
+
+end:
+	OPLUS_ADFR_TRACE_END("oplus_adfr_min_fps_update");
+
+	ADFR_DEBUG("end\n");
+
+	return rc;
+}
+
+/* some panel should resend sa cmd when finished booting, otherwise sa mode cannot take effect */
+int oplus_adfr_sa_mode_restore(void *dsi_display)
+{
+	static bool primary_panel_restored = false;
+	static bool secondary_panel_retored = false;
+	int rc = 0;
+	unsigned int h_skew = STANDARD_ADFR;
+	unsigned int refresh_rate = 120;
+	struct dsi_display *display = dsi_display;
+	struct oplus_adfr_params *p_oplus_adfr_params = NULL;
+
+	ADFR_DEBUG("start\n");
+
+	if (!display || !display->panel) {
+		ADFR_ERR("invalid display params\n");
+		return -EINVAL;
+	}
+
+#if defined(CONFIG_PXLW_IRIS)
+	if (iris_is_chip_supported() && (!strcmp(display->display_type, "secondary"))) {
+		ADFR_INFO("no need to restore sa mode for iris chip\n");
+		return 0;
+	}
+#endif /* CONFIG_PXLW_IRIS */
+
+	p_oplus_adfr_params = oplus_adfr_get_params(display->panel);
+	if (!p_oplus_adfr_params) {
+		ADFR_ERR("invalid p_oplus_adfr_params param\n");
+		return -EINVAL;
+	}
+
+	if (!oplus_adfr_is_supported(p_oplus_adfr_params) || !oplus_adfr_sa_mode_restore_is_enabled(p_oplus_adfr_params)) {
+		ADFR_DEBUG("sa mode restore is not enabled\n");
+		return 0;
+	}
+
+	if (!display->panel->cur_mode) {
+		ADFR_ERR("invalid panel params\n");
+		return -EINVAL;
+	}
+
+	if (((!strcmp(display->display_type, "primary")) && primary_panel_restored)
+			|| ((!strcmp(display->display_type, "secondary")) && secondary_panel_retored)) {
+		ADFR_DEBUG("already restored sa mode\n");
+		return 0;
+	}
+
+	OPLUS_ADFR_TRACE_BEGIN("oplus_adfr_sa_mode_restore");
+
+	h_skew = display->panel->cur_mode->timing.h_skew;
+	refresh_rate = display->panel->cur_mode->timing.refresh_rate;
+
+	if ((h_skew == STANDARD_ADFR) || (h_skew == STANDARD_MFR)) {
+		rc = oplus_adfr_auto_mode_update(display, OPLUS_ADFR_AUTO_OFF);
+		if (rc) {
+			ADFR_ERR("failed to update auto mode, rc=%d\n", rc);
+		}
+
+		rc = oplus_adfr_min_fps_update(display, refresh_rate);
+		if (rc) {
+			ADFR_ERR("failed to update sa min fps, rc=%d\n", rc);
+		}
+
+		if (!strcmp(display->display_type, "primary")) {
+			primary_panel_restored = true;
+		} else if (!strcmp(display->display_type, "secondary")) {
+			secondary_panel_retored = true;
+		}
+
+		ADFR_INFO("restore sa mode\n");
+	}
+
+	OPLUS_ADFR_TRACE_END("oplus_adfr_sa_mode_restore");
+
+	ADFR_DEBUG("end\n");
+
+	return rc;
+}
+
+int oplus_adfr_sa_handle(void *sde_encoder_virt)
+{
+	int rc = 0;
+	unsigned int h_skew = STANDARD_ADFR;
+	struct sde_encoder_virt *sde_enc = sde_encoder_virt;
+	struct sde_connector *c_conn = NULL;
+	struct dsi_display *display = NULL;
+	struct oplus_adfr_params *p_oplus_adfr_params = NULL;
+
+	ADFR_DEBUG("start\n");
+
+	if (!sde_enc || !sde_enc->cur_master || !sde_enc->cur_master->connector) {
+		ADFR_ERR("invalid sde_enc params\n");
+		return -EINVAL;
+	}
+
+	c_conn = to_sde_connector(sde_enc->cur_master->connector);
+	if (!c_conn) {
+		ADFR_ERR("invalid c_conn param\n");
+		return -EINVAL;
+	}
+
+	if (c_conn->connector_type != DRM_MODE_CONNECTOR_DSI) {
+		ADFR_DEBUG("not in dsi mode, should not handle sa\n");
+		return 0;
+	}
+
+	display = c_conn->display;
+	if (!display || !display->panel) {
+		ADFR_ERR("invalid display params\n");
+		return -EINVAL;
+	}
+
+#if defined(CONFIG_PXLW_IRIS)
+	if (iris_is_chip_supported() && (!strcmp(display->display_type, "secondary"))) {
+		ADFR_INFO("no need to handle sa for iris chip\n");
+		return 0;
+	}
+#endif /* CONFIG_PXLW_IRIS */
+
+	p_oplus_adfr_params = oplus_adfr_get_params(display->panel);
+	if (!p_oplus_adfr_params) {
+		ADFR_ERR("invalid p_oplus_adfr_params param\n");
+		return -EINVAL;
+	}
+
+	if (!oplus_adfr_is_supported(p_oplus_adfr_params)) {
+		ADFR_DEBUG("adfr is not supported\n");
+		return 0;
+	}
+
+	if (!display->panel->cur_mode) {
+		ADFR_ERR("invalid cur_mode param\n");
+		return -EINVAL;
+	}
+
+	/* auto mode, fakeframe and min fps are available only after power on */
+	if (display->panel->power_mode != SDE_MODE_DPMS_ON) {
+		ADFR_DEBUG("should not handle sa when power mode is %u\n", display->panel->power_mode);
+		return 0;
+	}
+
+	h_skew = display->panel->cur_mode->timing.h_skew;
+
+	if ((h_skew != STANDARD_ADFR) && (h_skew != STANDARD_MFR)) {
+		ADFR_DEBUG("should not handle sa in oa mode\n");
+		return 0;
+	}
+
+	OPLUS_ADFR_TRACE_BEGIN("oplus_adfr_sa_handle");
+
+	if (p_oplus_adfr_params->auto_mode_updated) {
+		rc = oplus_adfr_auto_mode_update(display, p_oplus_adfr_params->auto_mode);
+		if (rc) {
+			ADFR_ERR("failed to update auto mode, rc=%d\n", rc);
+		}
+		p_oplus_adfr_params->auto_mode_updated = false;
+		ADFR_DEBUG("oplus_adfr_auto_mode_updated:%d\n", p_oplus_adfr_params->auto_mode_updated);
+		OPLUS_ADFR_TRACE_INT("oplus_adfr_auto_mode_updated", p_oplus_adfr_params->auto_mode_updated);
+	}
+
+	if (p_oplus_adfr_params->fakeframe_updated) {
+		/* update fakeframe status after sa handle */
+		rc = oplus_adfr_fakeframe_status_update(display->panel, false);
+		if (rc) {
+			ADFR_ERR("failed to update fakeframe status, rc=%d\n", rc);
+		}
+		p_oplus_adfr_params->fakeframe_updated = false;
+		ADFR_DEBUG("oplus_adfr_fakeframe_updated:%d\n", p_oplus_adfr_params->fakeframe_updated);
+		OPLUS_ADFR_TRACE_INT("oplus_adfr_fakeframe_updated", p_oplus_adfr_params->fakeframe_updated);
+	}
+
+#ifdef OPLUS_FEATURE_DISPLAY_ONSCREENFINGERPRINT
+	/* fixed max min fps can be set in hbm on, and update it after hbm off */
+	if (oplus_ofp_is_supported() && !oplus_ofp_oled_capacitive_is_enabled()
+			&& !oplus_ofp_local_hbm_is_enabled() && !oplus_ofp_ultrasonic_is_enabled()) {
+		if (p_oplus_adfr_params->sa_min_fps_updated && !oplus_ofp_get_hbm_state()) {
+			if (p_oplus_adfr_params->skip_min_fps_setting) {
+				ADFR_INFO("skip min fps %u setting\n", p_oplus_adfr_params->sa_min_fps);
+			} else {
+				rc = oplus_adfr_min_fps_update(display, p_oplus_adfr_params->sa_min_fps);
+				if (rc) {
+					ADFR_ERR("failed to update sa min fps, rc=%d\n", rc);
+				}
+			}
+			p_oplus_adfr_params->sa_min_fps_updated = false;
+			ADFR_DEBUG("oplus_adfr_sa_min_fps_updated:%d\n", p_oplus_adfr_params->sa_min_fps_updated);
+			OPLUS_ADFR_TRACE_INT("oplus_adfr_sa_min_fps_updated", p_oplus_adfr_params->sa_min_fps_updated);
+		}
+	} else
+#endif /* OPLUS_FEATURE_DISPLAY_ONSCREENFINGERPRINT */
+	 {
+		if (p_oplus_adfr_params->sa_min_fps_updated) {
+			if (p_oplus_adfr_params->skip_min_fps_setting) {
+				ADFR_INFO("skip min fps %u setting\n", p_oplus_adfr_params->sa_min_fps);
+			} else {
+				rc = oplus_adfr_min_fps_update(display, p_oplus_adfr_params->sa_min_fps);
+				if (rc) {
+					ADFR_ERR("failed to update sa min fps, rc=%d\n", rc);
+				}
+			}
+			p_oplus_adfr_params->sa_min_fps_updated = false;
+			ADFR_DEBUG("oplus_adfr_sa_min_fps_updated:%d\n", p_oplus_adfr_params->sa_min_fps_updated);
+			OPLUS_ADFR_TRACE_INT("oplus_adfr_sa_min_fps_updated", p_oplus_adfr_params->sa_min_fps_updated);
+		}
+	}
+
+	OPLUS_ADFR_TRACE_END("oplus_adfr_sa_handle");
+
+	ADFR_DEBUG("end\n");
+
+	return rc;
+}
+
+/* reset adfr status as panel power on or timing switch */
+int oplus_adfr_status_reset(void *dsi_panel)
+{
+	int rc = 0;
+	unsigned int h_skew = STANDARD_ADFR;
+	unsigned int refresh_rate = 120;
+	struct dsi_panel *panel = dsi_panel;
+	struct oplus_adfr_params *p_oplus_adfr_params = NULL;
+
+	ADFR_DEBUG("start\n");
+
+	if (!panel || !panel->cur_mode) {
+		ADFR_ERR("invalid panel params\n");
+		return -EINVAL;
+	}
+
+#if defined(CONFIG_PXLW_IRIS)
+	if (iris_is_chip_supported() && (!strcmp(panel->type, "secondary"))) {
+		ADFR_INFO("no need to reset adfr status for iris chip\n");
+		return 0;
+	}
+#endif /* CONFIG_PXLW_IRIS */
+
+	p_oplus_adfr_params = oplus_adfr_get_params(panel);
+	if (!p_oplus_adfr_params) {
+		ADFR_ERR("invalid p_oplus_adfr_params param\n");
+		return -EINVAL;
+	}
+
+	if (!oplus_adfr_is_supported(p_oplus_adfr_params)) {
+		ADFR_DEBUG("adfr is not supported\n");
+		return 0;
+	}
+
+	OPLUS_ADFR_TRACE_BEGIN("oplus_adfr_status_reset");
+
+	h_skew = panel->cur_mode->timing.h_skew;
+	refresh_rate = panel->cur_mode->timing.refresh_rate;
+
+	if ((h_skew == STANDARD_ADFR) || (h_skew == STANDARD_MFR)) {
+		p_oplus_adfr_params->auto_mode = OPLUS_ADFR_AUTO_OFF;
+		/* after auto off cmd was sent, auto on cmd filter start */
+		p_oplus_adfr_params->need_filter_auto_on_cmd = true;
+		ADFR_DEBUG("oplus_adfr_need_filter_auto_on_cmd:%d\n", p_oplus_adfr_params->need_filter_auto_on_cmd);
+		OPLUS_ADFR_TRACE_INT("oplus_adfr_need_filter_auto_on_cmd", p_oplus_adfr_params->need_filter_auto_on_cmd);
+
+		rc = oplus_adfr_fakeframe_status_update(panel, false);
+		if (rc) {
+			ADFR_ERR("failed to update fakeframe status, rc=%d\n", rc);
+		}
+
+		p_oplus_adfr_params->sa_min_fps = refresh_rate;
+
+		ADFR_INFO("sa status reset: auto_mode:%u,fakeframe:%u,sa_min_fps:%u\n",
+					p_oplus_adfr_params->auto_mode, p_oplus_adfr_params->fakeframe, p_oplus_adfr_params->sa_min_fps);
+
+		OPLUS_ADFR_TRACE_INT("oplus_adfr_auto_mode", p_oplus_adfr_params->auto_mode);
+		OPLUS_ADFR_TRACE_INT("oplus_adfr_fakeframe", p_oplus_adfr_params->fakeframe);
+		OPLUS_ADFR_TRACE_INT("oplus_adfr_sa_min_fps", p_oplus_adfr_params->sa_min_fps);
+
+		OPLUS_ADFR_TRACE_INT("oplus_adfr_auto_mode_cmd", p_oplus_adfr_params->auto_mode);
+	} else {
+		OPLUS_ADFR_TRACE_INT("oplus_adfr_auto_mode_cmd", OPLUS_ADFR_AUTO_OFF);
+	}
+
+	/* update sa and osync para when timing switch or panel enable for debug */
+	OPLUS_ADFR_TRACE_INT("oplus_adfr_osync_mode_cmd", 0);
+	OPLUS_ADFR_TRACE_INT("oplus_adfr_min_fps_cmd", refresh_rate);
+	OPLUS_ADFR_TRACE_INT("oplus_adfr_h_skew", h_skew);
+	ADFR_DEBUG("oplus_adfr_h_skew:%u\n", h_skew);
+
+	OPLUS_ADFR_TRACE_END("oplus_adfr_status_reset");
+
+	ADFR_DEBUG("end\n");
+
+	return rc;
+}
+
+/* -------------------- fakeframe -------------------- */
+int oplus_adfr_fakeframe_check(void *sde_encoder_virt)
+{
+	struct sde_encoder_virt *sde_enc = sde_encoder_virt;
+	struct sde_connector *c_conn = NULL;
+	struct dsi_display *display = NULL;
+	struct oplus_adfr_params *p_oplus_adfr_params = NULL;
+
+	ADFR_DEBUG("start\n");
+
+	if (!sde_enc || !sde_enc->crtc || !sde_enc->cur_master || !sde_enc->cur_master->connector) {
+		ADFR_ERR("invalid sde_enc params\n");
+		return -EINVAL;
+	}
+
+	c_conn = to_sde_connector(sde_enc->cur_master->connector);
+	if (!c_conn) {
+		ADFR_ERR("invalid c_conn param\n");
+		return -EINVAL;
+	}
+
+	if (c_conn->connector_type != DRM_MODE_CONNECTOR_DSI) {
+		ADFR_DEBUG("not in dsi mode, should not check fakeframe\n");
+		return 0;
+	}
+
+	display = c_conn->display;
+	if (!display || !display->panel) {
+		ADFR_ERR("invalid display params\n");
+		return -EINVAL;
+	}
+
+#if defined(CONFIG_PXLW_IRIS)
+	if (iris_is_chip_supported() && (!strcmp(display->display_type, "secondary"))) {
+		ADFR_INFO("no need to check fakeframe for iris chip\n");
+		return 0;
+	}
+#endif /* CONFIG_PXLW_IRIS */
+
+	p_oplus_adfr_params = oplus_adfr_get_params(display->panel);
+	if (!p_oplus_adfr_params) {
+		ADFR_ERR("invalid p_oplus_adfr_params param\n");
+		return -EINVAL;
+	}
+
+	if (!oplus_adfr_is_supported(p_oplus_adfr_params) || !oplus_adfr_fakeframe_is_enabled(p_oplus_adfr_params)) {
+		ADFR_DEBUG("fakeframe is not enabled\n");
+		return 0;
+	}
+
+	if (!display->panel->cur_mode || !display->panel->cur_mode->priv_info) {
+		ADFR_ERR("invalid panel params\n");
+		return -EINVAL;
+	}
+
+	if (!display->panel->cur_mode->priv_info->oplus_adfr_fakeframe_config) {
+		ADFR_DEBUG("fakeframe is not configured\n");
+		return 0;
+	}
+
+	if (!p_oplus_adfr_params->fakeframe) {
+		ADFR_DEBUG("fakeframe is not set\n");
+		return 0;
+	}
+
+	/* fakeframe is available only after power on */
+	if (display->panel->power_mode != SDE_MODE_DPMS_ON) {
+		ADFR_DEBUG("should not check fakeframe when power mode is %u\n", display->panel->power_mode);
+		return -EFAULT;
+	}
+
+	OPLUS_ADFR_TRACE_BEGIN("oplus_adfr_fakeframe_check");
+
+	/*
+	 send fakeframe cmds before commit to triger ddic flush panel next frame
+	 but if pre-frame is pending, ignore this time
+	 because pre-frame is a real frame which include fakeframe cmds
+	*/
+	if (!sde_crtc_frame_pending(sde_enc->crtc)) {
+		p_oplus_adfr_params->need_send_fakeframe_cmd = true;
+		ADFR_DEBUG("oplus_adfr_need_send_fakeframe_cmd:%d\n", p_oplus_adfr_params->need_send_fakeframe_cmd);
+		OPLUS_ADFR_TRACE_INT("oplus_adfr_need_send_fakeframe_cmd", p_oplus_adfr_params->need_send_fakeframe_cmd);
+	}
+
+	OPLUS_ADFR_TRACE_END("oplus_adfr_fakeframe_check");
+
+	ADFR_DEBUG("end\n");
+
+	return 0;
+}
+
+int oplus_adfr_fakeframe_handle(void *sde_encoder_virt)
+{
+	int rc = 0;
+	struct sde_encoder_virt *sde_enc = sde_encoder_virt;
+	struct sde_connector *c_conn = NULL;
+	struct dsi_display *display = NULL;
+	struct oplus_adfr_params *p_oplus_adfr_params = NULL;
+
+	ADFR_DEBUG("start\n");
+
+	if (!sde_enc || !sde_enc->cur_master || !sde_enc->cur_master->connector) {
+		ADFR_ERR("invalid sde_enc params\n");
+		return -EINVAL;
+	}
+
+	c_conn = to_sde_connector(sde_enc->cur_master->connector);
+	if (!c_conn) {
+		ADFR_ERR("invalid c_conn param\n");
+		return -EINVAL;
+	}
+
+	if (c_conn->connector_type != DRM_MODE_CONNECTOR_DSI) {
+		ADFR_DEBUG("not in dsi mode, should not handle fakeframe\n");
+		return 0;
+	}
+
+	display = c_conn->display;
+	if (!display || !display->panel) {
+		ADFR_ERR("invalid display params\n");
+		return -EINVAL;
+	}
+
+#if defined(CONFIG_PXLW_IRIS)
+	if (iris_is_chip_supported() && (!strcmp(display->display_type, "secondary"))) {
+		ADFR_INFO("no need to handle fakeframe for iris chip\n");
+		return 0;
+	}
+#endif /* CONFIG_PXLW_IRIS */
+
+	p_oplus_adfr_params = oplus_adfr_get_params(display->panel);
+	if (!p_oplus_adfr_params) {
+		ADFR_ERR("invalid p_oplus_adfr_params param\n");
+		return -EINVAL;
+	}
+
+	if (!oplus_adfr_is_supported(p_oplus_adfr_params) || !oplus_adfr_fakeframe_is_enabled(p_oplus_adfr_params)) {
+		ADFR_DEBUG("fakeframe is not enabled\n");
+		return 0;
+	}
+
+	if (!display->panel->cur_mode || !display->panel->cur_mode->priv_info) {
+		ADFR_ERR("invalid panel params\n");
+		return -EINVAL;
+	}
+
+	if (!display->panel->cur_mode->priv_info->oplus_adfr_fakeframe_config) {
+		ADFR_DEBUG("fakeframe is not configured\n");
+		return 0;
+	}
+
+	if (!p_oplus_adfr_params->fakeframe) {
+		ADFR_DEBUG("fakeframe is not set\n");
+		return 0;
+	}
+
+	/* fakeframe is available only after power on */
+	if (display->panel->power_mode != SDE_MODE_DPMS_ON) {
+		ADFR_DEBUG("should not handle fakeframe when power mode is %u\n", display->panel->power_mode);
+		return -EFAULT;
+	}
+
+	OPLUS_ADFR_TRACE_BEGIN("oplus_adfr_fakeframe_handle");
+
+	/*
+	 send fakeframe cmds before commit to triger ddic flush panel next frame
+	 but if pre-frame is pending, ignore this time
+	 because pre-frame is a real frame which include fakeframe cmds
+	*/
+	if (p_oplus_adfr_params->need_send_fakeframe_cmd) {
+		/* send the commands to simulate a frame transmission */
+		rc = oplus_adfr_display_cmd_set(display, DSI_CMD_ADFR_FAKEFRAME);
+		if (rc) {
+			ADFR_ERR("[%s] failed to send DSI_CMD_ADFR_FAKEFRAME cmds, rc=%d\n", display->name, rc);
+		}
+
+		ADFR_DEBUG("send DSI_CMD_ADFR_FAKEFRAME cmds\n");
+
+		p_oplus_adfr_params->need_send_fakeframe_cmd = false;
+		ADFR_DEBUG("oplus_adfr_need_send_fakeframe_cmd:%d\n", p_oplus_adfr_params->need_send_fakeframe_cmd);
+		OPLUS_ADFR_TRACE_INT("oplus_adfr_need_send_fakeframe_cmd", p_oplus_adfr_params->need_send_fakeframe_cmd);
+	}
+
+	OPLUS_ADFR_TRACE_END("oplus_adfr_fakeframe_handle");
+
+	ADFR_DEBUG("end\n");
+
+	return rc;
 }
 
 /* update fakeframe status according to different situation */
 int oplus_adfr_fakeframe_status_update(void *dsi_panel, bool force_disable)
 {
+	unsigned int refresh_rate = 120;
+	unsigned int h_skew = STANDARD_ADFR;
+	static unsigned int last_h_active = 1080;
 	struct dsi_panel *panel = dsi_panel;
-	int refresh_rate = 120;
+	struct oplus_adfr_params *p_oplus_adfr_params = NULL;
 
-	if (!panel || !panel->cur_mode) {
-		VRR_ERR("invalid params\n");
+	ADFR_DEBUG("start\n");
+
+	if (!panel) {
+		ADFR_ERR("invalid panel param\n");
 		return -EINVAL;
 	}
 
-	refresh_rate = panel->cur_mode->timing.refresh_rate;
+#if defined(CONFIG_PXLW_IRIS)
+	if (iris_is_chip_supported() && (!strcmp(panel->type, "secondary"))) {
+		ADFR_INFO("no need to update fakeframe status for iris chip\n");
+		return 0;
+	}
+#endif /* CONFIG_PXLW_IRIS */
 
-	if (force_disable == true) {
-		oplus_adfr_auto_fakeframe = OPLUS_ADFR_FAKEFRAME_OFF;
+	p_oplus_adfr_params = oplus_adfr_get_params(panel);
+	if (!p_oplus_adfr_params) {
+		ADFR_ERR("invalid p_oplus_adfr_params param\n");
+		return -EINVAL;
+	}
+
+	if (!oplus_adfr_is_supported(p_oplus_adfr_params) || !oplus_adfr_fakeframe_is_enabled(p_oplus_adfr_params)) {
+		ADFR_DEBUG("fakeframe is not enabled\n");
+		return 0;
+	}
+
+	if (!panel->cur_mode) {
+		ADFR_ERR("invalid cur_mode param\n");
+		return -EINVAL;
+	}
+
+	OPLUS_ADFR_TRACE_BEGIN("oplus_adfr_fakeframe_status_update");
+
+	refresh_rate = panel->cur_mode->timing.refresh_rate;
+	h_skew = panel->cur_mode->timing.h_skew;
+
+	if (force_disable) {
+		p_oplus_adfr_params->fakeframe = OPLUS_ADFR_FAKEFRAME_OFF;
+	} else if ((h_skew == OPLUS_ADFR) || (h_skew == OPLUS_MFR)) {
+		/* no need to enable fakeframe in osync mode */
+		p_oplus_adfr_params->fakeframe = OPLUS_ADFR_FAKEFRAME_OFF;
 	} else {
 		/* if fakeframe is sent after resolution switch, local garbage issue will happen in low probability */
-		if (panel->cur_h_active != panel->cur_mode->timing.h_active) {
-			oplus_adfr_auto_fakeframe = OPLUS_ADFR_FAKEFRAME_OFF;
+		if (last_h_active != panel->cur_mode->timing.h_active) {
+			p_oplus_adfr_params->fakeframe = OPLUS_ADFR_FAKEFRAME_OFF;
+			last_h_active = panel->cur_mode->timing.h_active;
 		} else {
 			if (refresh_rate == 120 || refresh_rate == 90) {
-				if (oplus_adfr_auto_sw_fps == 60) {
-					/* if oplus_adfr_auto_sw_fps is 60hz, no need to send fakeframe */
-					oplus_adfr_auto_fakeframe = OPLUS_ADFR_FAKEFRAME_OFF;
+				if (p_oplus_adfr_params->sw_fps == 60) {
+					p_oplus_adfr_params->fakeframe = OPLUS_ADFR_FAKEFRAME_OFF;
+					ADFR_INFO("sw fps is %u, no need to send fakeframe\n", p_oplus_adfr_params->sw_fps);
 				} else {
-					oplus_adfr_auto_fakeframe = OPLUS_ADFR_FAKEFRAME_ON;
+					p_oplus_adfr_params->fakeframe = OPLUS_ADFR_FAKEFRAME_ON;
 				}
 			} else {
-				oplus_adfr_auto_fakeframe = OPLUS_ADFR_FAKEFRAME_OFF;
+				p_oplus_adfr_params->fakeframe = OPLUS_ADFR_FAKEFRAME_OFF;
 			}
 		}
 	}
-	VRR_INFO("sw_fps %d, fakeframe %d\n", oplus_adfr_auto_sw_fps, oplus_adfr_auto_fakeframe);
-	OPLUS_VRR_TRACE_INT("oplus_adfr_auto_fakeframe", oplus_adfr_auto_fakeframe);
+
+	ADFR_INFO("h_active:%u,refresh_rate:%u,h_skew:%u,sw_fps:%u,fakeframe:%u\n", panel->cur_mode->timing.h_active, refresh_rate,
+				h_skew, p_oplus_adfr_params->sw_fps, p_oplus_adfr_params->fakeframe);
+	OPLUS_ADFR_TRACE_INT("oplus_adfr_fakeframe", p_oplus_adfr_params->fakeframe);
+
+	OPLUS_ADFR_TRACE_END("oplus_adfr_fakeframe_status_update");
+
+	ADFR_DEBUG("end\n");
 
 	return 0;
 }
 
-/* Add for adfr status reset */
-/* reset auto mode status as panel power on and timing switch to SM */
-void dsi_panel_adfr_status_reset(void *dsi_panel)
+/* -------------------- pre switch -------------------- */
+int oplus_adfr_pre_switch_send(void *dsi_panel)
 {
+	int rc = 0;
 	struct dsi_panel *panel = dsi_panel;
-	u32 refresh_rate = 120;
-	u32 h_skew = SDC_ADFR;
-	u32 oplus_adfr_auto_min_fps_cmd = OPLUS_ADFR_AUTO_MIN_FPS_MAX;
+	struct oplus_adfr_params *p_oplus_adfr_params = NULL;
 
-	if ((panel == NULL) || (panel->cur_mode == NULL)) {
-		VRR_ERR("Invalid params\n");
-		return;
+	ADFR_DEBUG("start\n");
+
+	if (!panel) {
+		ADFR_ERR("invalid panel param\n");
+		return -EINVAL;
 	}
+
+#if defined(CONFIG_PXLW_IRIS)
+	if (iris_is_chip_supported() && (!strcmp(panel->type, "secondary"))) {
+		ADFR_INFO("no need to send pre switch for iris chip\n");
+		return 0;
+	}
+#endif /* CONFIG_PXLW_IRIS */
+
+	p_oplus_adfr_params = oplus_adfr_get_params(panel);
+	if (!p_oplus_adfr_params) {
+		ADFR_ERR("invalid p_oplus_adfr_params param\n");
+		return -EINVAL;
+	}
+
+	if (!oplus_adfr_is_supported(p_oplus_adfr_params)) {
+		ADFR_DEBUG("adfr is not supported\n");
+		return 0;
+	}
+
+	OPLUS_ADFR_TRACE_BEGIN("oplus_adfr_pre_switch_send");
+
+	if (panel->cur_mode->timing.refresh_rate == 60) {
+		ADFR_DEBUG("start to delay to second half frame in 60hz timing\n");
+		oplus_need_to_sync_te(panel);
+	}
+
+	/*
+	 some panel should send pre switch cmd to set max min fps before timing switch,
+	 otherwise some flicker issue would occur
+	*/
+	rc = oplus_adfr_panel_cmd_set(panel, DSI_CMD_ADFR_PRE_SWITCH);
+	if (rc) {
+		ADFR_ERR("failed to send DSI_CMD_ADFR_PRE_SWITCH cmds, rc=%d\n", rc);
+	}
+
+	OPLUS_ADFR_TRACE_END("oplus_adfr_pre_switch_send");
+
+	ADFR_DEBUG("end\n");
+
+	return rc;
+}
+
+/* -------------------- vsync switch -------------------- */
+/* ----- te source vsync switch ----- */
+int oplus_adfr_te_source_vsync_switch_mode_fixup(void *dsi_display, void *dsi_display_mode_0, void *dsi_display_mode_1)
+{
+	struct dsi_display *display = dsi_display;
+	struct dsi_display_mode *dsi_mode = dsi_display_mode_0;
+	struct dsi_display_mode *panel_dsi_mode = dsi_display_mode_1;
+	struct oplus_adfr_params *p_oplus_adfr_params = NULL;
+
+	ADFR_DEBUG("start\n");
+
+	if (!display || !display->panel) {
+		ADFR_ERR("invalid display params\n");
+		return -EINVAL;
+	}
+
+	if (!dsi_mode || !panel_dsi_mode) {
+		ADFR_ERR("invalid dsi_display_mode params\n");
+		return -EINVAL;
+	}
+
+#if defined(CONFIG_PXLW_IRIS)
+	if (iris_is_chip_supported() && (!strcmp(display->display_type, "secondary"))) {
+		ADFR_INFO("no need to do te source vsync switch mode fixup for iris chip\n");
+		return 0;
+	}
+#endif /* CONFIG_PXLW_IRIS */
+
+	p_oplus_adfr_params = oplus_adfr_get_params(display->panel);
+	if (!p_oplus_adfr_params) {
+		ADFR_ERR("invalid p_oplus_adfr_params param\n");
+		return -EINVAL;
+	}
+
+	if (!oplus_adfr_is_supported(p_oplus_adfr_params)) {
+		ADFR_DEBUG("adfr is not supported\n");
+		return 0;
+	}
+
+	OPLUS_ADFR_TRACE_BEGIN("oplus_adfr_te_source_vsync_switch_mode_fixup");
+
+	/*
+	 qcom patch for two te source
+	 add vsync source info from panel_dsi_mode to dsi_mode
+	*/
+	dsi_mode->vsync_source = panel_dsi_mode->vsync_source;
+
+	OPLUS_ADFR_TRACE_END("oplus_adfr_te_source_vsync_switch_mode_fixup");
+
+	ADFR_DEBUG("end\n");
+
+	return 0;
+}
+
+int oplus_adfr_te_source_vsync_switch_get_modes_helper(void *dsi_display, void *dsi_display_mode)
+{
+	struct dsi_display *display = dsi_display;
+	struct dsi_display_mode *display_mode = dsi_display_mode;
+	struct oplus_adfr_params *p_oplus_adfr_params = NULL;
+
+	ADFR_DEBUG("start\n");
+
+	if (!display || !display->panel) {
+		ADFR_ERR("invalid display params\n");
+		return -EINVAL;
+	}
+
+	if (!display_mode) {
+		ADFR_ERR("invalid display_mode param\n");
+		return -EINVAL;
+	}
+
+#if defined(CONFIG_PXLW_IRIS)
+	if (iris_is_chip_supported() && (!strcmp(display->display_type, "secondary"))) {
+		ADFR_INFO("no need to do te source vsync switch get modes helper for iris chip\n");
+		return 0;
+	}
+#endif /* CONFIG_PXLW_IRIS */
+
+	p_oplus_adfr_params = oplus_adfr_get_params(display->panel);
+	if (!p_oplus_adfr_params) {
+		ADFR_ERR("invalid p_oplus_adfr_params param\n");
+		return -EINVAL;
+	}
+
+	if (!oplus_adfr_is_supported(p_oplus_adfr_params) || !oplus_adfr_vsync_switch_is_enabled(p_oplus_adfr_params)
+			|| (oplus_adfr_get_vsync_switch_mode(p_oplus_adfr_params) != OPLUS_ADFR_TE_SOURCE_VSYNC_SWITCH)) {
+		ADFR_DEBUG("te source vsync switch is not enabled\n");
+		return 0;
+	}
+
+	OPLUS_ADFR_TRACE_BEGIN("oplus_adfr_te_source_vsync_switch_get_modes_helper");
+
+	/*
+	 qcom patch for two te source
+	 vsync source invalid, use default source
+	*/
+	display_mode->vsync_source = OPLUS_ADFR_TE_SOURCE_TP;
+
+	OPLUS_ADFR_TRACE_END("oplus_adfr_te_source_vsync_switch_get_modes_helper");
+
+	ADFR_DEBUG("end\n");
+
+	return 0;
+}
+
+int oplus_adfr_te_source_vsync_switch_pinctrl_init(void *dsi_panel)
+{
+	int rc = 0;
+	struct dsi_panel *panel = dsi_panel;
+	struct oplus_adfr_params *p_oplus_adfr_params = NULL;
+
+	ADFR_DEBUG("start\n");
+
+	if (!panel) {
+		ADFR_ERR("invalid panel param\n");
+		return -EINVAL;
+	}
+
+#if defined(CONFIG_PXLW_IRIS)
+	if (iris_is_chip_supported() && (!strcmp(panel->type, "secondary"))) {
+		ADFR_INFO("no need to init te source vsync switch pinctrl for iris chip\n");
+		return 0;
+	}
+#endif /* CONFIG_PXLW_IRIS */
+
+	p_oplus_adfr_params = oplus_adfr_get_params(panel);
+	if (!p_oplus_adfr_params) {
+		ADFR_ERR("invalid p_oplus_adfr_params param\n");
+		return -EINVAL;
+	}
+
+	if (!oplus_adfr_is_supported(p_oplus_adfr_params) || !oplus_adfr_vsync_switch_is_enabled(p_oplus_adfr_params)
+			|| (oplus_adfr_get_vsync_switch_mode(p_oplus_adfr_params) != OPLUS_ADFR_TE_SOURCE_VSYNC_SWITCH)) {
+		ADFR_DEBUG("te source vsync switch is not enabled\n");
+		return 0;
+	}
+
+	if (!panel->pinctrl.pinctrl) {
+		ADFR_ERR("invalid pinctrl param\n");
+		return -EINVAL;
+	}
+
+	OPLUS_ADFR_TRACE_BEGIN("oplus_adfr_te_source_vsync_switch_pinctrl_init");
+
+	p_oplus_adfr_params->te1_active = pinctrl_lookup_state(panel->pinctrl.pinctrl, "te1_active");
+	if (IS_ERR_OR_NULL(p_oplus_adfr_params->te1_active)) {
+		rc = PTR_ERR(p_oplus_adfr_params->te1_active);
+		ADFR_ERR("failed to get pinctrl te1 active state, rc=%d\n", rc);
+		goto error;
+	}
+
+	p_oplus_adfr_params->te1_suspend = pinctrl_lookup_state(panel->pinctrl.pinctrl, "te1_suspend");
+	if (IS_ERR_OR_NULL(p_oplus_adfr_params->te1_suspend)) {
+		rc = PTR_ERR(p_oplus_adfr_params->te1_suspend);
+		ADFR_ERR("failed to get pinctrl te1 suspend state, rc=%d\n", rc);
+		goto error;
+	}
+
+	ADFR_INFO("init te source vsync switch pinctrl successfully\n");
+
+error:
+	OPLUS_ADFR_TRACE_END("oplus_adfr_te_source_vsync_switch_pinctrl_init");
+
+	ADFR_DEBUG("end\n");
+
+	return rc;
+}
+
+int oplus_adfr_te_source_vsync_switch_set_pinctrl_state(void *dsi_panel, bool enable)
+{
+	int rc = 0;
+	struct dsi_panel *panel = dsi_panel;
+	struct pinctrl_state *state = NULL;
+	struct oplus_adfr_params *p_oplus_adfr_params = NULL;
+
+	ADFR_DEBUG("start\n");
+
+	if (!panel) {
+		ADFR_ERR("invalid panel param\n");
+		return -EINVAL;
+	}
+
+#if defined(CONFIG_PXLW_IRIS)
+	if (iris_is_chip_supported() && (!strcmp(panel->type, "secondary"))) {
+		ADFR_INFO("no need to set te source vsync switch pinctrl state for iris chip\n");
+		return 0;
+	}
+#endif /* CONFIG_PXLW_IRIS */
+
+	p_oplus_adfr_params = oplus_adfr_get_params(panel);
+	if (!p_oplus_adfr_params) {
+		ADFR_ERR("invalid p_oplus_adfr_params param\n");
+		return -EINVAL;
+	}
+
+	if (!oplus_adfr_is_supported(p_oplus_adfr_params) || !oplus_adfr_vsync_switch_is_enabled(p_oplus_adfr_params)
+			|| (oplus_adfr_get_vsync_switch_mode(p_oplus_adfr_params) != OPLUS_ADFR_TE_SOURCE_VSYNC_SWITCH)) {
+		ADFR_DEBUG("te source vsync switch is not enabled\n");
+		return 0;
+	}
+
+	if (!panel->pinctrl.pinctrl) {
+		ADFR_ERR("invalid pinctrl param\n");
+		return -EINVAL;
+	}
+
+	OPLUS_ADFR_TRACE_BEGIN("oplus_adfr_te_source_vsync_switch_set_pinctrl_state");
+
+	if (enable) {
+		state = p_oplus_adfr_params->te1_active;
+	} else {
+		state = p_oplus_adfr_params->te1_suspend;
+	}
+
+	rc = pinctrl_select_state(panel->pinctrl.pinctrl, state);
+	if (rc) {
+		ADFR_ERR("[%s] failed to set pin state, rc=%d\n", panel->name, rc);
+	} else {
+		ADFR_INFO("set te1 %s pinctrl state\n", (enable ? "active" : "suspend"));
+		OPLUS_ADFR_TRACE_INT("oplus_adfr_te1_pinctrl_state", enable);
+	}
+
+	OPLUS_ADFR_TRACE_END("oplus_adfr_te_source_vsync_switch_set_pinctrl_state");
+
+	ADFR_DEBUG("end\n");
+
+	return rc;
+}
+
+int oplus_adfr_timing_te_source_vsync_switch(void *dsi_panel)
+{
+	int rc = 0;
+	unsigned int te_source = OPLUS_ADFR_TE_SOURCE_TP;
+	unsigned int h_skew = STANDARD_ADFR;
+	static unsigned int last_h_active = 1080;
+	struct dsi_panel *panel = dsi_panel;
+	struct dsi_display *display = NULL;
+	struct drm_encoder *drm_enc = NULL;
+	struct sde_encoder_virt *sde_enc = NULL;
+	struct oplus_adfr_params *p_oplus_adfr_params = NULL;
+
+	ADFR_DEBUG("start\n");
+
+	if (!panel || !panel->cur_mode) {
+		ADFR_ERR("invalid panel params\n");
+		return -EINVAL;
+	}
+
+#if defined(CONFIG_PXLW_IRIS)
+	if (iris_is_chip_supported() && (!strcmp(panel->type, "secondary"))) {
+		ADFR_INFO("no need to switch te source when timing switching for iris chip\n");
+		return 0;
+	}
+#endif /* CONFIG_PXLW_IRIS */
+
+	p_oplus_adfr_params = oplus_adfr_get_params(panel);
+	if (!p_oplus_adfr_params) {
+		ADFR_ERR("invalid p_oplus_adfr_params param\n");
+		return -EINVAL;
+	}
+
+	if (!oplus_adfr_is_supported(p_oplus_adfr_params) || !oplus_adfr_vsync_switch_is_enabled(p_oplus_adfr_params)
+			|| (oplus_adfr_get_vsync_switch_mode(p_oplus_adfr_params) != OPLUS_ADFR_TE_SOURCE_VSYNC_SWITCH)) {
+		ADFR_DEBUG("te source vsync switch is not enabled\n");
+		return 0;
+	}
+
+	if (panel->power_mode == SDE_MODE_DPMS_LP1
+			|| panel->power_mode == SDE_MODE_DPMS_LP2) {
+		ADFR_INFO("should not switch te source in doze/doze suspend power mode\n");
+		return 0;
+	}
+
+	display = to_dsi_display(panel->host);
+	if (!display || !display->bridge) {
+		ADFR_ERR("invalid display params\n");
+		return -EINVAL;
+	}
+
+	drm_enc = display->bridge->base.encoder;
+	if (!drm_enc) {
+		ADFR_ERR("invalid drm_enc param\n");
+		return -EINVAL;
+	}
+
+	sde_enc = to_sde_encoder_virt(drm_enc);
+	if (!sde_enc) {
+		ADFR_ERR("invalid sde_enc param\n");
+		return -EINVAL;
+	}
+
+	OPLUS_ADFR_TRACE_BEGIN("oplus_adfr_timing_te_source_vsync_switch");
 
 	h_skew = panel->cur_mode->timing.h_skew;
-	refresh_rate = panel->cur_mode->timing.refresh_rate;
 
-	if ((h_skew == SDC_ADFR) || (h_skew == SDC_MFR)) {
-		/* after auto off cmd was sent, auto on cmd filter start */
-		oplus_adfr_auto_on_cmd_filter_set(true);
-		oplus_adfr_auto_mode = OPLUS_ADFR_AUTO_OFF;
-
-		oplus_adfr_fakeframe_status_update(panel, false);
-
-		if (refresh_rate == 60) {
-			oplus_adfr_auto_min_fps = OPLUS_ADFR_AUTO_MIN_FPS_60HZ;
-		} else {
-			/* 90hz min fps in auto mode off should be 0x08 which will be corrected before cmd sent */
-			oplus_adfr_auto_min_fps = OPLUS_ADFR_AUTO_MIN_FPS_MAX;
-		}
-
-		if (refresh_rate == 90) {
-			/* should +9 in auto off mode */
-			oplus_adfr_auto_min_fps_cmd = OPLUS_ADFR_AUTO_MIN_FPS_MAX + 9;
-		} else {
-			oplus_adfr_auto_min_fps_cmd = oplus_adfr_auto_min_fps;
-		}
-
-		/* update auto mode and qsync para when timing switch or panel enable for debug */
-		OPLUS_VRR_TRACE_INT("oplus_adfr_auto_mode", oplus_adfr_auto_mode);
-		OPLUS_VRR_TRACE_INT("oplus_adfr_auto_min_fps", oplus_adfr_auto_min_fps);
-		OPLUS_VRR_TRACE_INT("oplus_adfr_auto_mode_cmd", oplus_adfr_auto_mode);
-		OPLUS_VRR_TRACE_INT("oplus_adfr_auto_min_fps_cmd", oplus_adfr_auto_min_fps_cmd);
-		OPLUS_VRR_TRACE_INT("oplus_adfr_qsync_mode_minfps_cmd", 0);
-		VRR_INFO("auto mode reset: auto mode %d, fakeframe %d, min fps %d\n", oplus_adfr_auto_mode,
-			oplus_adfr_auto_fakeframe, oplus_adfr_auto_min_fps);
+	/*
+	 if use tp vsync to do resolution switch, tearing will happen
+	 it seems like ddic does not support mipi offset writes after resolution switching
+	 te is official, so switch to te vsync after timing switch cmds are sent because mipi will be reset after that
+	 if te vysnc is using now, do nothing
+	*/
+	if (last_h_active != panel->cur_mode->timing.h_active) {
+		te_source = OPLUS_ADFR_TE_SOURCE_TE;
+	} else if (h_skew == OPLUS_ADFR || h_skew == OPLUS_MFR) {
+		te_source = OPLUS_ADFR_TE_SOURCE_TE;
 	} else {
-		OPLUS_VRR_TRACE_INT("oplus_adfr_auto_mode_cmd", 0);
-		OPLUS_VRR_TRACE_INT("oplus_adfr_auto_min_fps_cmd", 0);
-		OPLUS_VRR_TRACE_INT("oplus_adfr_qsync_mode_minfps_cmd", refresh_rate);
-		VRR_INFO("oplus_adfr_qsync_mode_minfps_cmd %d\n", refresh_rate);
+		te_source = OPLUS_ADFR_TE_SOURCE_TP;
 	}
-	OPLUS_VRR_TRACE_INT("qsync_mode_cmd", 0);
-	OPLUS_VRR_TRACE_INT("h_skew", h_skew);
 
-#if defined(CONFIG_PXLW_IRIS)
-	iris_current_extend_frame = oplus_adfr_auto_min_fps;
-#endif
-	return;
+	if (sde_enc->te_source != te_source) {
+		sde_enc->te_source = te_source;
+		ADFR_INFO("oplus_adfr_te_source:%u\n", sde_enc->te_source);
+		OPLUS_ADFR_TRACE_INT("oplus_adfr_te_source", sde_enc->te_source);
+
+		rc = sde_encoder_helper_switch_vsync(drm_enc, false);
+		if (rc) {
+			ADFR_ERR("failed to switch te source, rc=%d\n", rc);
+		}
+
+		if (last_h_active != panel->cur_mode->timing.h_active) {
+			/* after one frame commit completed, change back to current mode vsync */
+			p_oplus_adfr_params->need_switch_vsync = true;
+			ADFR_INFO("oplus_adfr_need_switch_vsync:%d\n", p_oplus_adfr_params->need_switch_vsync);
+			OPLUS_ADFR_TRACE_INT("oplus_adfr_need_switch_vsync", p_oplus_adfr_params->need_switch_vsync);
+		}
+	}
+
+	last_h_active = panel->cur_mode->timing.h_active;
+
+	OPLUS_ADFR_TRACE_END("oplus_adfr_timing_te_source_vsync_switch");
+
+	ADFR_DEBUG("end\n");
+
+	return rc;
 }
 
-/* --------------- vsync switch ---------------*/
-
-/* ------------- mux switch ------------ */
-static int oplus_dsi_display_enable_and_waiting_for_next_te_irq(struct dsi_display *display)
+int oplus_adfr_frame_done_te_source_vsync_switch(void *drm_connector)
 {
-	int const switch_te_timeout = msecs_to_jiffies(1100);
+	int rc = 0;
+	struct drm_connector *connector = drm_connector;
+	struct sde_connector *c_conn = NULL;
+	struct dsi_display *display = NULL;
+	struct drm_encoder *drm_enc = NULL;
+	struct sde_encoder_virt *sde_enc = NULL;
+	struct oplus_adfr_params *p_oplus_adfr_params = NULL;
 
-	dsi_display_adfr_change_te_irq_status(display, true);
-	VRR_INFO("Waiting for the next TE to switch\n");
+	ADFR_DEBUG("start\n");
 
-	display->panel->vsync_switch_pending = true;
-	reinit_completion(&display->switch_te_gate);
-
-	if (!wait_for_completion_timeout(&display->switch_te_gate, switch_te_timeout)) {
-		VRR_ERR("vsync switch TE check failed\n");
-		dsi_display_adfr_change_te_irq_status(display, false);
+	if (!connector) {
+		ADFR_ERR("invalid connector param\n");
 		return -EINVAL;
 	}
+
+	c_conn = to_sde_connector(connector);
+	if (!c_conn) {
+		ADFR_ERR("invalid c_conn param\n");
+		return -EINVAL;
+	}
+
+	if (c_conn->connector_type != DRM_MODE_CONNECTOR_DSI) {
+		ADFR_DEBUG("not in dsi mode, should not do the te source vsync switch after frame done\n");
+		return 0;
+	}
+
+	display = c_conn->display;
+	if (!display || !display->panel) {
+		ADFR_ERR("invalid display params\n");
+		return -EINVAL;
+	}
+
+#if defined(CONFIG_PXLW_IRIS)
+	if (iris_is_chip_supported() && (!strcmp(display->display_type, "secondary"))) {
+		ADFR_INFO("no need to do the te source vsync switch after frame done for iris chip\n");
+		return 0;
+	}
+#endif /* CONFIG_PXLW_IRIS */
+
+	p_oplus_adfr_params = oplus_adfr_get_params(display->panel);
+	if (!p_oplus_adfr_params) {
+		ADFR_ERR("invalid p_oplus_adfr_params param\n");
+		return -EINVAL;
+	}
+
+	if (!oplus_adfr_is_supported(p_oplus_adfr_params) || !oplus_adfr_vsync_switch_is_enabled(p_oplus_adfr_params)
+			|| (oplus_adfr_get_vsync_switch_mode(p_oplus_adfr_params) != OPLUS_ADFR_TE_SOURCE_VSYNC_SWITCH)) {
+		ADFR_DEBUG("te source vsync switch is not enabled\n");
+		return 0;
+	}
+
+	drm_enc = c_conn->encoder;
+	if (!drm_enc) {
+		ADFR_ERR("invalid drm_enc param\n");
+		return -EINVAL;
+	}
+
+	sde_enc = to_sde_encoder_virt(drm_enc);
+	if (!sde_enc) {
+		ADFR_ERR("invalid sde_enc param\n");
+		return -EINVAL;
+	}
+
+	OPLUS_ADFR_TRACE_BEGIN("oplus_adfr_frame_done_te_source_vsync_switch");
+
+	if (p_oplus_adfr_params->need_switch_vsync) {
+		/* wait for idle */
+		sde_encoder_wait_for_event(drm_enc, MSM_ENC_TX_COMPLETE);
+
+		/* after resolution switch, change back to tp vsync */
+		sde_enc->te_source = OPLUS_ADFR_TE_SOURCE_TP;
+		ADFR_INFO("oplus_adfr_te_source:%u\n", sde_enc->te_source);
+		OPLUS_ADFR_TRACE_INT("oplus_adfr_te_source", sde_enc->te_source);
+
+		rc = sde_encoder_helper_switch_vsync(drm_enc, false);
+		if (rc) {
+			ADFR_ERR("failed to switch te source, rc=%d\n", rc);
+		}
+
+		/* update fakeframe setting */
+		rc = oplus_adfr_fakeframe_status_update(display->panel, false);
+		if (rc) {
+			ADFR_ERR("failed to update fakeframe status, rc=%d\n", rc);
+		}
+
+		p_oplus_adfr_params->need_switch_vsync = false;
+		ADFR_INFO("oplus_adfr_need_switch_vsync:%d\n", p_oplus_adfr_params->need_switch_vsync);
+		OPLUS_ADFR_TRACE_INT("oplus_adfr_need_switch_vsync", p_oplus_adfr_params->need_switch_vsync);
+	}
+
+	OPLUS_ADFR_TRACE_END("oplus_adfr_frame_done_te_source_vsync_switch");
+
+	ADFR_DEBUG("end\n");
+
+	return rc;
+}
+
+/* te source vsync switch entry and exit */
+int oplus_adfr_aod_fod_te_source_vsync_switch(void *dsi_display, unsigned int te_source)
+{
+	int rc = 0;
+	unsigned int h_skew = STANDARD_ADFR;
+	struct dsi_display *display = dsi_display;
+	struct drm_encoder *drm_enc = NULL;
+	struct sde_encoder_virt *sde_enc = NULL;
+	struct oplus_adfr_params *p_oplus_adfr_params = NULL;
+
+	ADFR_DEBUG("start\n");
+
+	if (!display || !display->panel) {
+		ADFR_ERR("invalid display params\n");
+		return -EINVAL;
+	}
+
+#if defined(CONFIG_PXLW_IRIS)
+	if (iris_is_chip_supported() && (!strcmp(display->display_type, "secondary"))) {
+		ADFR_INFO("no need to switch te source in aod or fod mode for iris chip\n");
+		return 0;
+	}
+#endif /* CONFIG_PXLW_IRIS */
+
+	p_oplus_adfr_params = oplus_adfr_get_params(display->panel);
+	if (!p_oplus_adfr_params) {
+		ADFR_ERR("invalid p_oplus_adfr_params param\n");
+		return -EINVAL;
+	}
+
+	if (!oplus_adfr_is_supported(p_oplus_adfr_params) || !oplus_adfr_vsync_switch_is_enabled(p_oplus_adfr_params)
+			|| (oplus_adfr_get_vsync_switch_mode(p_oplus_adfr_params) != OPLUS_ADFR_TE_SOURCE_VSYNC_SWITCH)) {
+		ADFR_DEBUG("te source vsync switch is not enabled\n");
+		return 0;
+	}
+
+	if (!display->panel->cur_mode) {
+		ADFR_ERR("invalid cur_mode param\n");
+		return -EINVAL;
+	}
+
+	if (!display->bridge) {
+		ADFR_ERR("invalid bridge param\n");
+		return -EINVAL;
+	}
+
+	drm_enc = display->bridge->base.encoder;
+	if (!drm_enc) {
+		ADFR_ERR("invalid drm_enc param\n");
+		return -EINVAL;
+	}
+
+	sde_enc = to_sde_encoder_virt(drm_enc);
+	if (!sde_enc) {
+		ADFR_ERR("invalid sde_enc param\n");
+		return -EINVAL;
+	}
+
+	OPLUS_ADFR_TRACE_BEGIN("oplus_adfr_aod_fod_te_source_vsync_switch");
+
+	h_skew = display->panel->cur_mode->timing.h_skew;
+
+	/* no need to switch te source in osync mode */
+	if (h_skew == OPLUS_ADFR || h_skew == OPLUS_MFR) {
+		te_source = OPLUS_ADFR_TE_SOURCE_TE;
+	}
+
+	/* force to switch te vsync as tp vsync will change to 15hz in aod mode */
+	if (sde_enc->te_source != te_source) {
+		sde_enc->te_source = te_source;
+		ADFR_INFO("oplus_adfr_te_source:%u\n", sde_enc->te_source);
+		OPLUS_ADFR_TRACE_INT("oplus_adfr_te_source", sde_enc->te_source);
+
+		if (display->panel->panel_initialized) {
+			sde_encoder_wait_for_event(drm_enc, MSM_ENC_TX_COMPLETE);
+			ADFR_INFO("wait for MSM_ENC_TX_COMPLETE done\n");
+		}
+
+		rc = sde_encoder_helper_switch_vsync(drm_enc, false);
+		if (rc) {
+			ADFR_ERR("failed to switch te source, rc=%d\n", rc);
+		}
+	}
+
+	OPLUS_ADFR_TRACE_END("oplus_adfr_aod_fod_te_source_vsync_switch");
+
+	ADFR_DEBUG("end\n");
+
+	return rc;
+}
+
+/* ----- mux vsync switch ----- */
+int oplus_adfr_gpio_release(void *dsi_panel)
+{
+	struct dsi_panel *panel = dsi_panel;
+	struct oplus_adfr_params *p_oplus_adfr_params = NULL;
+
+	ADFR_DEBUG("start\n");
+
+	if (!panel) {
+		ADFR_ERR("invalid panel param\n");
+		return -EINVAL;
+	}
+
+#if defined(CONFIG_PXLW_IRIS)
+	if (iris_is_chip_supported() && (!strcmp(panel->type, "secondary"))) {
+		ADFR_INFO("no need to release gpio for iris chip\n");
+		return 0;
+	}
+#endif /* CONFIG_PXLW_IRIS */
+
+	p_oplus_adfr_params = oplus_adfr_get_params(panel);
+	if (!p_oplus_adfr_params) {
+		ADFR_ERR("invalid p_oplus_adfr_params param\n");
+		return -EINVAL;
+	}
+
+	if (!oplus_adfr_is_supported(p_oplus_adfr_params) || !oplus_adfr_vsync_switch_is_enabled(p_oplus_adfr_params)
+			|| (oplus_adfr_get_vsync_switch_mode(p_oplus_adfr_params) != OPLUS_ADFR_MUX_VSYNC_SWITCH)) {
+		ADFR_DEBUG("mux vsync switch is not enabled\n");
+		return 0;
+	}
+
+	OPLUS_ADFR_TRACE_BEGIN("oplus_adfr_gpio_release");
+
+	if (gpio_is_valid(p_oplus_adfr_params->mux_vsync_switch_gpio)) {
+		gpio_free(p_oplus_adfr_params->mux_vsync_switch_gpio);
+	}
+
+	ADFR_INFO("realse adfr gpio\n");
+
+	OPLUS_ADFR_TRACE_END("oplus_adfr_gpio_release");
+
+	ADFR_DEBUG("end\n");
 
 	return 0;
 }
 
-/*GPIO SWITCH: 0-TP Vsync    1-TE Vsync*/
-static int oplus_dsi_display_vsync_switch_check_te(struct dsi_display *display, int level)
+/* wait te and delay some us */
+static int oplus_adfr_vblank_wait(void *dsi_display, unsigned int te_count, unsigned int delay_us)
+{
+	unsigned int i = 0;
+	struct dsi_display *display = dsi_display;
+	struct sde_connector *c_conn = NULL;
+	struct drm_encoder *drm_enc = NULL;
+
+	ADFR_DEBUG("start\n");
+
+	if (!te_count && !delay_us) {
+		ADFR_ERR("invalid input params\n");
+		return 0;
+	}
+
+	if (!display) {
+		ADFR_ERR("invalid display param\n");
+		return -EINVAL;
+	}
+
+	c_conn = to_sde_connector(display->drm_conn);
+	if (!c_conn) {
+		ADFR_ERR("invalid c_conn param\n");
+		return -EINVAL;
+	}
+
+	if (c_conn->connector_type != DRM_MODE_CONNECTOR_DSI) {
+		ADFR_DEBUG("not in dsi mode, should not wait vblank\n");
+		return 0;
+	}
+
+	drm_enc = c_conn->encoder;
+	if (!drm_enc) {
+		ADFR_ERR("invalid drm_enc param\n");
+		return -EINVAL;
+	}
+
+	if (sde_encoder_is_disabled(drm_enc)) {
+		ADFR_ERR("sde encoder is disabled\n");
+		return -EFAULT;
+	}
+
+	OPLUS_ADFR_TRACE_BEGIN("oplus_adfr_vblank_wait");
+
+	if (te_count) {
+		OPLUS_ADFR_TRACE_BEGIN("sde_encoder_wait_for_event");
+		for (i = 0; i < te_count; i++) {
+			sde_encoder_wait_for_event(drm_enc, MSM_ENC_VBLANK);
+			ADFR_INFO("wait for %u vblank event done\n", i + 1);
+		}
+		OPLUS_ADFR_TRACE_END("sde_encoder_wait_for_event");
+	}
+
+	if (delay_us) {
+		OPLUS_ADFR_TRACE_BEGIN("usleep_range");
+		usleep_range(delay_us, (delay_us + 10));
+		ADFR_INFO("usleep_range %u done\n", delay_us);
+		OPLUS_ADFR_TRACE_END("usleep_range");
+	}
+
+	OPLUS_ADFR_TRACE_END("oplus_adfr_vblank_wait");
+
+	ADFR_DEBUG("end\n");
+
+	return 0;
+}
+
+/* mux vsync switch, 0:tp vsync,1:te vsync */
+static int oplus_adfr_set_mux_vsync_switch_gpio(void *dsi_panel, unsigned int level)
 {
 	int rc = 0;
+	struct dsi_panel *panel = dsi_panel;
+	struct oplus_adfr_params *p_oplus_adfr_params = NULL;
 
-	if ((display == NULL) || (display->panel == NULL)) {
-		VRR_ERR("Invalid params\n");
+	ADFR_DEBUG("start\n");
+
+	if (!panel) {
+		ADFR_ERR("invalid panel param\n");
 		return -EINVAL;
 	}
 
-	if (level == display->panel->vsync_switch_gpio_level) {
-		VRR_INFO("vsync_switch_gpio is already %d\n", level);
+#if defined(CONFIG_PXLW_IRIS)
+	if (iris_is_chip_supported() && (!strcmp(panel->type, "secondary"))) {
+		ADFR_INFO("no need to set mux vsync switch gpio for iris chip\n");
 		return 0;
 	}
+#endif /* CONFIG_PXLW_IRIS */
 
-	/* add for Filter out all vsync switch */
-	if (display->panel->force_te_vsync == true) {
-		VRR_INFO("force te vsync, filter other vsync switch\n");
-		return 0;
-	}
-
-	if (!gpio_is_valid(display->panel->vsync_switch_gpio)) {
-		VRR_ERR("vsync_switch_gpio is invalid\n");
+	p_oplus_adfr_params = oplus_adfr_get_params(panel);
+	if (!p_oplus_adfr_params) {
+		ADFR_ERR("invalid p_oplus_adfr_params param\n");
 		return -EINVAL;
 	}
 
-	oplus_dsi_display_enable_and_waiting_for_next_te_irq(display);
+	if (!oplus_adfr_is_supported(p_oplus_adfr_params) || !oplus_adfr_vsync_switch_is_enabled(p_oplus_adfr_params)
+			|| (oplus_adfr_get_vsync_switch_mode(p_oplus_adfr_params) != OPLUS_ADFR_MUX_VSYNC_SWITCH)) {
+		ADFR_DEBUG("mux vsync switch is not enabled\n");
+		return 0;
+	}
 
-	if (oplus_adfr_compatibility_mode == false) {
-		if (level) {
-			rc = gpio_direction_output(display->panel->vsync_switch_gpio, 1);
-			if (rc) {
-				VRR_ERR("unable to set dir for vsync_switch_gpio, rc=%d\n", rc);
-				dsi_display_adfr_change_te_irq_status(display, false);
-				return rc;
-			} else {
-				VRR_INFO("set vsync_switch_gpio to 1\n");
-			}
-		} else {
-			gpio_set_value(display->panel->vsync_switch_gpio, 0);
-			VRR_INFO("set vsync_switch_gpio to 0\n");
+	if (!gpio_is_valid(p_oplus_adfr_params->mux_vsync_switch_gpio)) {
+		ADFR_ERR("mux_vsync_switch_gpio is invalid\n");
+		return -EINVAL;
+	}
+
+	if (p_oplus_adfr_params->mux_vsync_switch_gpio_level == level) {
+		ADFR_INFO("mux_vsync_switch_gpio is already %u\n", level);
+		return 0;
+	}
+
+	OPLUS_ADFR_TRACE_BEGIN("oplus_adfr_set_mux_vsync_switch_gpio");
+
+	if (level == OPLUS_ADFR_MUX_VSYNC_SWITCH_TE) {
+		rc = gpio_direction_output(p_oplus_adfr_params->mux_vsync_switch_gpio, 1);
+		if (rc) {
+			ADFR_ERR("unable to set dir for mux_vsync_switch_gpio, rc=%d\n", rc);
+			goto end;
 		}
+	} else if (level == OPLUS_ADFR_MUX_VSYNC_SWITCH_TP) {
+		gpio_set_value(p_oplus_adfr_params->mux_vsync_switch_gpio, 0);
 	}
 
-	dsi_display_adfr_change_te_irq_status(display, false);
+	p_oplus_adfr_params->mux_vsync_switch_gpio_level = level;
+	ADFR_INFO("oplus_adfr_mux_vsync_switch_gpio_level:%u\n", p_oplus_adfr_params->mux_vsync_switch_gpio_level);
+	OPLUS_ADFR_TRACE_INT("oplus_adfr_mux_vsync_switch_gpio_level", p_oplus_adfr_params->mux_vsync_switch_gpio_level);
 
-	display->panel->vsync_switch_gpio_level = level;
-	OPLUS_VRR_TRACE_INT("vsync_switch_gpio_level", display->panel->vsync_switch_gpio_level);
+end:
+	OPLUS_ADFR_TRACE_END("oplus_adfr_set_mux_vsync_switch_gpio");
+
+	ADFR_DEBUG("end\n");
 
 	return rc;
 }
 
-static int oplus_dsi_display_set_vsync_switch_gpio(struct dsi_display *display, int level)
+int oplus_adfr_timing_mux_vsync_switch(void *dsi_display)
 {
-	struct dsi_panel *panel = NULL;
 	int rc = 0;
+	unsigned int level = OPLUS_ADFR_MUX_VSYNC_SWITCH_TP;
+	unsigned int h_skew = STANDARD_ADFR;
+	struct dsi_display *display = dsi_display;
+	struct oplus_adfr_params *p_oplus_adfr_params = NULL;
 
-	/* only support in mux switch */
-	if (oplus_adfr_get_vsync_mode() != OPLUS_EXTERNAL_TE_TP_VSYNC) {
-		VRR_ERR("is not supported\n");
+	ADFR_DEBUG("start\n");
+
+	if (!display || !display->panel) {
+		ADFR_ERR("invalid display params\n");
 		return -EINVAL;
 	}
 
-	if ((display == NULL) || (display->panel == NULL))
+#if defined(CONFIG_PXLW_IRIS)
+	if (iris_is_chip_supported() && (!strcmp(display->display_type, "secondary"))) {
+		ADFR_INFO("no need to switch mux vsync when timing switching for iris chip\n");
+		return 0;
+	}
+#endif /* CONFIG_PXLW_IRIS */
+
+	p_oplus_adfr_params = oplus_adfr_get_params(display->panel);
+	if (!p_oplus_adfr_params) {
+		ADFR_ERR("invalid p_oplus_adfr_params param\n");
 		return -EINVAL;
+	}
 
-	panel = display->panel;
+	if (!oplus_adfr_is_supported(p_oplus_adfr_params) || !oplus_adfr_vsync_switch_is_enabled(p_oplus_adfr_params)
+			|| (oplus_adfr_get_vsync_switch_mode(p_oplus_adfr_params) != OPLUS_ADFR_MUX_VSYNC_SWITCH)) {
+		ADFR_DEBUG("mux vsync switch is not enabled\n");
+		return 0;
+	}
 
-	mutex_lock(&display->display_lock);
+	/* filter out other mux vsync switch */
+	if (p_oplus_adfr_params->force_te_vsync) {
+		ADFR_INFO("force te vsync, filter out other mux vsync switch\n");
+		return 0;
+	}
 
-	if (!panel->panel_initialized) {
-		if (gpio_is_valid(panel->vsync_switch_gpio)) {
-			if (level) {
-				rc = gpio_direction_output(panel->vsync_switch_gpio, 1);	/*TE Vsync */
-				if (rc) {
-					VRR_ERR("unable to set dir for vsync_switch_gpio gpio rc=%d\n", rc);
-				} else {
-					VRR_INFO("set vsync_switch_gpio to 1\n");
-				}
-			} else {
-				gpio_set_value(panel->vsync_switch_gpio, 0);	/* TP Vsync */
-				VRR_INFO("set vsync_switch_gpio to 0\n");
-			}
-			panel->vsync_switch_gpio_level = level;
-			OPLUS_VRR_TRACE_INT("vsync_switch_gpio_level", panel->vsync_switch_gpio_level);
-		}
+	if (!display->panel->cur_mode) {
+		ADFR_ERR("invalid cur_mode param\n");
+		return -EINVAL;
+	}
+
+	OPLUS_ADFR_TRACE_BEGIN("oplus_adfr_timing_mux_vsync_switch");
+
+	h_skew = display->panel->cur_mode->timing.h_skew;
+
+	if (h_skew == OPLUS_ADFR) {
+		level = OPLUS_ADFR_MUX_VSYNC_SWITCH_TE;
 	} else {
-		oplus_dsi_display_vsync_switch_check_te(display, level);
+		level = OPLUS_ADFR_MUX_VSYNC_SWITCH_TP;
 	}
 
-	mutex_unlock(&display->display_lock);
+	if (p_oplus_adfr_params->mux_vsync_switch_gpio_level != level) {
+		/*
+		need to send pre switch cmds to increase refresh rate when sa/oa switching
+		note:sm is also use tp vysnc for iris chip
+		*/
+		rc = oplus_adfr_panel_cmd_set(display->panel, DSI_CMD_ADFR_PRE_SWITCH);
+		if (rc) {
+			ADFR_ERR("[%s] failed to send DSI_CMD_ADFR_PRE_SWITCH cmds, rc=%d\n", display->name, rc);
+		}
+
+		/*
+		 the wavefroms of tp vysnc and te vsync are different, there have unpredictable waveforms if
+		 switching during the high level porch period, so wait 1 vblank and then switch the mux vsync,
+		 it can get the fix timing sequence waveforms to avoid the unpredictable waveforms
+		 note: switch the mux gpio would cost some time so that the above switching is on low level
+		*/
+		rc = oplus_adfr_vblank_wait(display, 1, 0);
+		if (rc) {
+			ADFR_ERR("failed to wait 1 vblank\n");
+		}
+
+		rc = oplus_adfr_set_mux_vsync_switch_gpio(display->panel, level);
+		if (rc) {
+			ADFR_ERR("failed to set mux_vsync_switch_gpio, rc=%d\n", rc);
+		}
+	}
+
+	OPLUS_ADFR_TRACE_END("oplus_adfr_timing_mux_vsync_switch");
+
+	ADFR_DEBUG("end\n");
+
 	return rc;
-}
-
-static int oplus_dsi_display_get_vsync_switch_gpio(struct dsi_display *display)
-{
-	if ((display == NULL) || (display->panel == NULL))
-		return -EINVAL;
-
-	return display->panel->vsync_switch_gpio_level;
-}
-
-
-/*GPIO SWITCH: 0-TP Vsync    1-TE Vsync*/
-ssize_t oplus_set_vsync_switch(struct kobject *obj,
-	struct kobj_attribute *attr, const char *buf, size_t count)
-{
-	struct dsi_display *display = get_main_display();
-	int ret = 0;
-	int vsync_switch_gpio = 0;
-
-	if (display == NULL) {
-		VRR_ERR("error: NULL display\n");
-		return -EINVAL;
-	}
-
-	sscanf(buf, "%du", &vsync_switch_gpio);
-
-	VRR_INFO("oplus_set_vsync_switch = %d\n", vsync_switch_gpio);
-
-	ret = oplus_dsi_display_set_vsync_switch_gpio(display, vsync_switch_gpio);
-	if (ret)
-		VRR_ERR("oplus_dsi_display_set_vsync_switch_gpio(%d) fail\n", vsync_switch_gpio);
-
-	return count;
-}
-
-ssize_t oplus_get_vsync_switch(struct kobject *obj,
-	struct kobj_attribute *attr, char *buf)
-{
-	struct dsi_display *display = get_main_display();
-	int vsync_switch_gpio = OPLUS_VSYNC_SWITCH_TE;
-
-	if (display == NULL) {
-		VRR_ERR("error: NULL display\n");
-		return -EINVAL;
-	}
-
-	vsync_switch_gpio = oplus_dsi_display_get_vsync_switch_gpio(display);
-
-	return sprintf(buf, "%d\n", vsync_switch_gpio);
-}
-
-void oplus_dsi_display_vsync_switch(void *disp, bool force_te_vsync)
-{
-	struct dsi_display *display = disp;
-	int level = OPLUS_VSYNC_SWITCH_TE;
-	int h_skew = SDC_ADFR;
-	int rc = 0;
-
-	if (!oplus_adfr_vsync_switch_is_enable()) {
-		SDE_EVT32(0);
-		return;
-	}
-
-	if ((display == NULL) || (display->panel == NULL) || (display->panel->cur_mode == NULL)) {
-		VRR_ERR("Invalid params\n");
-		return;
-	}
-
-#if defined(CONFIG_PXLW_IRIS)
-	if (iris_is_chip_supported()) {
-		if (!strcmp(display->display_type, "secondary")) {
-			VRR_INFO("return due to iris secondary panel no need config\n");
-			return;
-		}
-	}
-#endif
-	if (force_te_vsync == true) {
-		if (oplus_adfr_get_vsync_mode() == OPLUS_EXTERNAL_TE_TP_VSYNC) {
-			if (display->panel->vsync_switch_gpio_level == OPLUS_VSYNC_SWITCH_TP) {
-				level = OPLUS_VSYNC_SWITCH_TE;
-				oplus_dsi_display_vsync_switch_check_te(display, level);
-
-				display->panel->force_te_vsync = true;
-			}
-		}
-	} else {
-		/* disable fake frame before vsync switch */
-		oplus_adfr_fakeframe_status_update(display->panel, true);
-
-		if (!strcmp(display->panel->oplus_priv.vendor_name, "AMB670YF07_CS")
-				|| !strcmp(display->panel->oplus_priv.vendor_name, "AMB670YF07_FS")
-				|| !strcmp(display->panel->oplus_priv.vendor_name, "AMB670YF08_CS")
-				|| !strcmp(display->panel->oplus_priv.vendor_name, "AMB670YF08_FS")) {
-			if (display->panel->cur_h_active == display->panel->cur_mode->timing.h_active) {
-				VRR_INFO("the same resolution no need ADFR pre-switch\n");
-			} else {
-				mutex_lock(&display->panel->panel_lock);
-				rc = dsi_panel_tx_cmd_set(display->panel, DSI_CMD_ADFR_PRE_SWITCH);
-				mutex_unlock(&display->panel->panel_lock);
-			}
-		} else {
-			mutex_lock(&display->panel->panel_lock);
-			rc = dsi_panel_tx_cmd_set(display->panel, DSI_CMD_ADFR_PRE_SWITCH);
-			mutex_unlock(&display->panel->panel_lock);
-		}
-
-		if (oplus_adfr_get_vsync_mode() != OPLUS_EXTERNAL_TE_TP_VSYNC) {
-			VRR_DEBUG("OPLUS_EXTERNAL_TE_TP_VSYNC is not supported\n");
-			return;
-		}
-
-		h_skew = display->panel->cur_mode->timing.h_skew;
-
-		if (h_skew == OPLUS_ADFR) {
-			level = OPLUS_VSYNC_SWITCH_TE;
-		} else {
-			level = OPLUS_VSYNC_SWITCH_TP;
-		}
-		oplus_dsi_display_vsync_switch_check_te(display, level);
-	}
-}
-
-/* add for vsync switch in resolution switch and aod scene */
-void sde_encoder_adfr_vsync_switch(void *enc) {
-	struct drm_encoder *drm_enc = enc;
-	struct sde_encoder_virt *sde_enc = to_sde_encoder_virt(drm_enc);
-	struct drm_connector *drm_conn;
-	struct drm_bridge *temp_bridge;
-	struct dsi_bridge *c_bridge;
-	struct dsi_display *display;
-	struct dsi_panel *panel;
-
-	if ((drm_enc == NULL) || (sde_enc->cur_master == NULL) || (sde_enc->cur_master->connector == NULL)) {
-		VRR_DEBUG(": invalid drm encoder parameters\n");
-		return;
-	}
-
-	drm_conn = sde_enc->cur_master->connector;
-	if ((drm_conn == NULL) || (drm_conn->encoder == NULL)) {
-		VRR_ERR(": invalid drm connector parameters\n");
-		return;
-	}
-
-	if (drm_bridge_chain_get_first_bridge(drm_conn->encoder) == NULL) {
-		VRR_ERR(": invalid drm connector parameters\n");
-		return;
-	}
-
-	temp_bridge = drm_bridge_chain_get_first_bridge(drm_conn->encoder);
-	c_bridge = to_dsi_bridge(temp_bridge);
-	display = c_bridge->display;
-
-	if ((display == NULL) || (display->panel == NULL)) {
-		VRR_ERR(": invalid dsi display parameters\n");
-		return;
-	}
-	panel = display->panel;
-
-#if defined(CONFIG_PXLW_IRIS)
-	if (iris_is_chip_supported()) {
-		if (!strcmp(panel->type, "secondary")) {
-			VRR_INFO("iris is secondary panel\n");
-			return;
-		}
-	}
-#endif
-
-	OPLUS_VRR_TRACE_BEGIN("sde_encoder_adfr_vsync_switch");
-
-	if (panel->need_vsync_switch) {
-		/* wait for idle */
-		sde_encoder_wait_for_event(drm_enc, MSM_ENC_TX_COMPLETE);
-		/* after resolution switch and aod off , change back to tp vsync */
-		/* if oplus_adfr_compatibility_mode is true, could not switch to tp vsync because hardware is not supported */
-		if (oplus_adfr_compatibility_mode == false) {
-			if (gpio_is_valid(panel->vsync_switch_gpio)) {
-				gpio_set_value(panel->vsync_switch_gpio, 0);
-				VRR_INFO("set vsync_switch_gpio to 0\n");
-				panel->vsync_switch_gpio_level = OPLUS_VSYNC_SWITCH_TP;
-			}
-		}
-		panel->need_vsync_switch = false;
-		VRR_DEBUG(": vsync switch to %d\n", panel->vsync_switch_gpio_level);
-		OPLUS_VRR_TRACE_INT("vsync_switch_gpio_level", panel->vsync_switch_gpio_level);
-
-		/* update fakeframe setting */
-		oplus_adfr_fakeframe_status_update(panel, false);
-	}
-
-	OPLUS_VRR_TRACE_END("sde_encoder_adfr_vsync_switch");
-}
-
-void sde_kms_adfr_vsync_switch(void *m_kms,
-		void *d_crtc)
-{
-	struct msm_kms *kms = m_kms;
-	struct drm_crtc *crtc = d_crtc;
-	struct drm_encoder *encoder;
-	struct drm_device *dev;
-
-	if (!kms || !crtc || !crtc->state) {
-		VRR_ERR("invalid params\n");
-		return;
-	}
-
-	dev = crtc->dev;
-
-	list_for_each_entry(encoder, &dev->mode_config.encoder_list, head) {
-		if (encoder->crtc != crtc)
-			continue;
-		sde_encoder_adfr_vsync_switch(encoder);
-	}
 }
 
 /*
- if use TP when timing switch (resolution switch), tearing happen
- it seems like DDIC does not support MIPI offset writes after resolution switching
- TE is official, so do the TE switch after timing switch because MIPI will be reset after that
- if current use TE, do nothing
+ if use tp vsync to do resolution switch, tearing will happen
+ it seems like ddic does not support mipi offset writes after resolution switching
+ te is official, so switch to te vsync after timing switch cmds are sent because mipi will be reset after that
+ if te vysnc is using now, do nothing
 */
-void oplus_adfr_resolution_vsync_switch(void *dsi_panel)
+int oplus_adfr_resolution_mux_vsync_switch(void *dsi_panel)
 {
 	int rc = 0;
+	static unsigned int last_h_active = 1080;
 	struct dsi_panel *panel = dsi_panel;
+	struct oplus_adfr_params *p_oplus_adfr_params = NULL;
 
-	if ((panel == NULL) || (panel->cur_mode == NULL)) {
-		VRR_ERR("Invalid params\n");
-		return;
-	}
-
-#if defined(CONFIG_PXLW_IRIS)
-	if (iris_is_chip_supported()) {
-		if (!strcmp(panel->type, "secondary")) {
-			VRR_INFO("iris is secondary panel\n");
-			return;
-		}
-	}
-#endif
-
-	/* just do switch when use tp vsync and resolution change */
-	if ((panel->cur_h_active != panel->cur_mode->timing.h_active) && (panel->vsync_switch_gpio_level == OPLUS_VSYNC_SWITCH_TP)) {
-		if (gpio_is_valid(panel->vsync_switch_gpio)) {
-			rc = gpio_direction_output(panel->vsync_switch_gpio, 1);
-			if (rc) {
-				VRR_ERR("unable to set dir for vsync_switch_gpio gpio rc=%d\n", rc);
-			} else {
-				VRR_INFO("set vsync_switch_gpio to 1\n");
-			}
-			panel->vsync_switch_gpio_level = OPLUS_VSYNC_SWITCH_TE;
-		}
-
-		/* after one frame commit completed, change back to current mode vsync */
-		panel->need_vsync_switch = true;
-		OPLUS_VRR_TRACE_INT("vsync_switch_gpio_level", panel->vsync_switch_gpio_level);
-	}
-	panel->cur_h_active = panel->cur_mode->timing.h_active;
-	panel->cur_refresh_rate = panel->cur_mode->timing.refresh_rate;
-}
-
-/* vsync switch Entry and exit */
-void oplus_adfr_aod_fod_vsync_switch(void *dsi_panel, bool force_te_vsync)
-{
-	struct dsi_panel *panel = dsi_panel;
-	int h_skew = SDC_ADFR;
-	int rc = 0;
-
-	if (!oplus_adfr_vsync_switch_is_enable()) {
-		SDE_EVT32(0);
-		return;
-	}
-
-	if (panel == NULL) {
-		VRR_ERR("Invalid params\n");
-		return;
-	}
-
-#if defined(CONFIG_PXLW_IRIS)
-	if (iris_is_chip_supported()) {
-		if (!strcmp(panel->type, "secondary")) {
-			VRR_INFO("iris is secondary panel\n");
-			return;
-		}
-	}
-#endif
-
-	/* force switch to te vsync as tp vsync will change in aod and fod mode */
-	if (force_te_vsync == true) {
-		if (panel->vsync_switch_gpio_level == OPLUS_VSYNC_SWITCH_TP) {
-			if (gpio_is_valid(panel->vsync_switch_gpio)) {
-				rc = gpio_direction_output(panel->vsync_switch_gpio, 1);
-				if (rc) {
-					VRR_ERR("unable to set dir for vsync_switch_gpio gpio rc=%d\n", rc);
-				} else {
-					VRR_INFO("set vsync_switch_gpio to 1\n");
-				}
-				panel->vsync_switch_gpio_level = OPLUS_VSYNC_SWITCH_TE;
-				panel->force_te_vsync = true;
-				OPLUS_VRR_TRACE_INT("vsync_switch_gpio_level", panel->vsync_switch_gpio_level);
-			}
-		}
-	} else {
-		/* change back to tp vysnc since aod/fod mode is off */
-		if ((panel->force_te_vsync == true) && (panel->vsync_switch_gpio_level == OPLUS_VSYNC_SWITCH_TE)) {
-			h_skew = panel->cur_mode->timing.h_skew;
-			/* maybe change to OA in aod/fod mode */
-			if (h_skew == SDC_ADFR || h_skew == SDC_MFR || h_skew == OPLUS_MFR) {
-				panel->need_vsync_switch = true;
-				VRR_INFO("set need_vsync_switch to true\n");
-			}
-			panel->force_te_vsync = false;
-		}
-	}
-}
-
-/* Add for vsync switch status reset */
-/* switch to tp vsync since panel is no longer in aod mode after power on */
-void oplus_adfr_vsync_switch_reset(void *dsi_panel)
-{
-	struct dsi_panel *panel = dsi_panel;
-	u32 h_skew = SDC_ADFR;
-
-	if ((panel == NULL) || (panel->cur_mode == NULL)) {
-		VRR_ERR("Invalid params\n");
-		return;
-	}
-
-#if defined(CONFIG_PXLW_IRIS)
-	if (iris_is_chip_supported()) {
-		if (!strcmp(panel->type, "secondary")) {
-			VRR_INFO("iris is secondary panel\n");
-			return;
-		}
-	}
-#endif
-
-	h_skew = panel->cur_mode->timing.h_skew;
-
-	if (oplus_adfr_get_vsync_mode() == OPLUS_EXTERNAL_TE_TP_VSYNC) {
-		/* reset to tp vsync after power on */
-		if (panel->panel_initialized == false) {
-			if (panel->force_te_vsync == true) {
-				/* maybe change to OA in aod/fod mode */
-				if (h_skew == SDC_ADFR || h_skew == SDC_MFR || h_skew == OPLUS_MFR) {
-					/* could not change vsync gpio if the machine is incompatible with adfr */
-					if (oplus_adfr_compatibility_mode == false) {
-						if (gpio_is_valid(panel->vsync_switch_gpio)) {
-							gpio_set_value(panel->vsync_switch_gpio, 0);
-							VRR_INFO("set vsync_switch_gpio to 0\n");
-							panel->vsync_switch_gpio_level = OPLUS_VSYNC_SWITCH_TP;
-						}
-					}
-				}
-				panel->force_te_vsync = false;
-				OPLUS_VRR_TRACE_INT("vsync_switch_gpio_level", panel->vsync_switch_gpio_level);
-			}
-		}
-	}
-}
-
-/* ---------- te source switch --------- */
-int oplus_adfr_get_vsync_source(void *dsi_panel) {
-	struct dsi_panel *panel = dsi_panel;
-	u32 h_skew = SDC_ADFR;
+	ADFR_DEBUG("start\n");
 
 	if (!panel) {
-		VRR_ERR("invalid panel params\n");
-		return -EINVAL;
-	}
-
-	h_skew = panel->cur_mode->timing.h_skew;
-	VRR_INFO("h_skew = %d\n", h_skew);
-
-	if (panel->power_mode == SDE_MODE_DPMS_LP1 ||
-			panel->power_mode == SDE_MODE_DPMS_LP2) {
-		return OPLUS_TE_SOURCE_TE;
-	}
-
-	if ((h_skew == OPLUS_ADFR) || (h_skew == OPLUS_MFR)) {
-		return OPLUS_TE_SOURCE_TE;
-	} else if ((h_skew == SDC_ADFR) || (h_skew == SDC_MFR)) {
-		return OPLUS_TE_SOURCE_TP;
-	} else {
-		VRR_ERR("error value");
-		return -1;
-	}
-}
-
-int oplus_adfr_vsync_source_switch(void *dsi_panel, u8 v_source) {
-	struct dsi_panel *panel = dsi_panel;
-	struct dsi_display *d_display = NULL;
-	struct drm_encoder *drm_enc = NULL;
-	struct sde_encoder_virt *sde_enc = NULL;
-
-	if (!panel) {
-		VRR_ERR("invalid panel params\n");
+		ADFR_ERR("invalid panel param\n");
 		return -EINVAL;
 	}
 
 #if defined(CONFIG_PXLW_IRIS)
-	if (iris_is_chip_supported()) {
-		if (!strcmp(panel->type, "secondary")) {
-			VRR_INFO("iris is secondary panel\n");
-			return -EINVAL;
-		}
+	if (iris_is_chip_supported() && (!strcmp(panel->type, "secondary"))) {
+		ADFR_INFO("no need to switch mux vsync when resolution switching for iris chip\n");
+		return 0;
 	}
-#endif
+#endif /* CONFIG_PXLW_IRIS */
 
-	d_display = to_dsi_display(panel->host);
-	if (!d_display) {
-		VRR_ERR("invalid display params\n");
+	p_oplus_adfr_params = oplus_adfr_get_params(panel);
+	if (!p_oplus_adfr_params) {
+		ADFR_ERR("invalid p_oplus_adfr_params param\n");
 		return -EINVAL;
 	}
 
-	drm_enc = d_display->bridge->base.encoder;
-	if (!drm_enc) {
-		VRR_ERR("invalid encoder params\n");
+	if (!oplus_adfr_is_supported(p_oplus_adfr_params) || !oplus_adfr_vsync_switch_is_enabled(p_oplus_adfr_params)
+			|| (oplus_adfr_get_vsync_switch_mode(p_oplus_adfr_params) != OPLUS_ADFR_MUX_VSYNC_SWITCH)) {
+		ADFR_DEBUG("mux vsync switch is not enabled\n");
+		return 0;
+	}
+
+	if (!gpio_is_valid(p_oplus_adfr_params->mux_vsync_switch_gpio)) {
+		ADFR_ERR("mux_vsync_switch_gpio is invalid\n");
 		return -EINVAL;
 	}
 
-	sde_enc = to_sde_encoder_virt(drm_enc);
-	if (sde_enc == NULL) {
-		VRR_ERR("invalid pointer sde_enc");
-		return -EFAULT;
-	}
-
-	if (sde_enc->cur_master == NULL) {
-		VRR_ERR("invalid pointer cur_master, vsync switch failed, need switch again");
-		panel->need_te_source_switch = true;
-		return -EFAULT;
-	}
-
-	OPLUS_VRR_TRACE_BEGIN("oplus_adfr_vsync_source_switch");
-
-	sde_enc->te_source = v_source;
-	sde_encoder_helper_switch_vsync(drm_enc, false);
-	OPLUS_VRR_TRACE_INT("te_source", sde_enc->te_source);
-
-	OPLUS_VRR_TRACE_END("oplus_adfr_vsync_source_switch");
-
-	return 0;
-}
-
-int oplus_adfr_vsync_source_reset(void *enc) {
-	struct drm_encoder *drm_enc = enc;
-	struct sde_encoder_virt *sde_enc = NULL;
-	struct drm_connector *drm_conn;
-	struct sde_connector *sde_conn;
-	struct drm_bridge *temp_bridge;
-	struct dsi_bridge *c_bridge;
-	struct dsi_display *display;
-	struct dsi_panel *panel;
-	u8 v_source;
-
-	if (drm_enc == NULL) {
-		VRR_ERR(": invalid drm encoder parameters\n");
-		return 0;
-	}
-
-	sde_enc = to_sde_encoder_virt(drm_enc);
-	if ((sde_enc->cur_master == NULL) || (sde_enc->cur_master->connector == NULL)) {
-		VRR_ERR(": invalid sde encoder parameters\n");
-		return 0;
-	}
-
-	drm_conn = sde_enc->cur_master->connector;
-	if ((drm_conn == NULL) || (drm_conn->encoder == NULL)) {
-		VRR_ERR(": invalid drm connector parameters\n");
-		return 0;
-	}
-
-	sde_conn = to_sde_connector(drm_conn);
-	if (sde_conn == NULL) {
-		VRR_ERR(": invalid sde connector parameters\n");
-		return 0;
-	}
-	if (sde_conn->connector_type != DRM_MODE_CONNECTOR_DSI) {
-		VRR_DEBUG(": Only reset when display is dsi_display\n");
-		return 0;
-	}
-
-	if (drm_bridge_chain_get_first_bridge(drm_conn->encoder) == NULL) {
-		VRR_ERR(": invalid drm bridge parameters\n");
-		return 0;
-	}
-
-	temp_bridge = drm_bridge_chain_get_first_bridge(drm_conn->encoder);
-	c_bridge = to_dsi_bridge(temp_bridge);
-	display = c_bridge->display;
-
-	if ((display == NULL) || (display->panel == NULL)) {
-		VRR_ERR(": invalid dsi display parameters\n");
-		return 0;
-	}
-	panel = display->panel;
-
-	if (panel->is_switching) {
-		panel->is_switching = false;
-		VRR_INFO("Don't reset TE when timing switch");
-		return 0;
-	}
-
-#if defined(CONFIG_PXLW_IRIS)
-	if (iris_is_chip_supported()) {
-		if (!strcmp(panel->type, "secondary")) {
-			VRR_INFO("iris is secondary panel\n");
-			return 0;
-		}
-	}
-#endif
-
-	if (panel->power_mode == SDE_MODE_DPMS_LP1 ||
-			panel->power_mode == SDE_MODE_DPMS_LP2) {
-		VRR_INFO("Don't reset TE in AOD mode");
-		return 0;
-	}
-
-	OPLUS_VRR_TRACE_BEGIN("oplus_adfr_vsync_source_reset");
-
-	v_source = oplus_adfr_get_vsync_source(panel);
-	VRR_INFO(": vsync source switched to %d when resume\n", v_source);
-	panel->need_te_source_switch = false;
-	oplus_adfr_vsync_source_switch(panel, v_source);
-
-	OPLUS_VRR_TRACE_END("oplus_adfr_vsync_source_reset");
-
-	return 0;
-}
-
-int oplus_adfr_timing_vsync_source_switch(void *dsi_panel) {
-	struct dsi_panel *panel = dsi_panel;
-	struct dsi_display *d_display = NULL;
-	struct drm_encoder *drm_enc = NULL;
-	struct sde_encoder_virt *sde_enc = NULL;
-	u8 v_source;
-
-	if (!panel) {
-		VRR_ERR("invalid panel params\n");
+	if (!panel->cur_mode) {
+		ADFR_ERR("invalid cur_mode param\n");
 		return -EINVAL;
 	}
 
-	d_display = to_dsi_display(panel->host);
-	if (!d_display) {
-		VRR_ERR("invalid display params\n");
-		return -EINVAL;
-	}
-
-	if (panel->power_mode == SDE_MODE_DPMS_LP1 ||
-			panel->power_mode == SDE_MODE_DPMS_LP2) {
-		return 0;
-	}
-
-#if defined(CONFIG_PXLW_IRIS)
-	if (iris_is_chip_supported()) {
-		if (!strcmp(panel->type, "secondary")) {
-			VRR_INFO("iris sencodary\n");
-			return 0;
-		}
-	}
-#endif
-
-	drm_enc = d_display->bridge->base.encoder;
-	if (!drm_enc) {
-		VRR_ERR("invalid encoder params\n");
-		return -EINVAL;
-	}
-
-	sde_enc = to_sde_encoder_virt(drm_enc);
-	if (sde_enc == NULL) {
-		VRR_ERR("invalid pointer sde_enc");
-		return -EFAULT;
-	}
-
-	OPLUS_VRR_TRACE_BEGIN("oplus_adfr_timing_vsync_source_switch");
-
-	if (panel->cur_h_active != panel->cur_mode->timing.h_active) {
-		if (!strcmp(panel->oplus_priv.vendor_name, "S6E3HC4"))
-			goto exit;
-		v_source = OPLUS_TE_SOURCE_TE;
-		VRR_INFO(": vsync source switched to %d before resolution switch\n", v_source);
-		oplus_adfr_vsync_source_switch(panel, v_source);
-		panel->need_te_source_switch = true;
-		VRR_INFO(": need to switch to normal after resolution switch\n");
-	} else {
-		v_source = oplus_adfr_get_vsync_source(panel);
-		if (sde_enc->te_source != v_source) {
-			VRR_INFO(": vsync source switched to %d before game mode switch\n", v_source);
-			oplus_adfr_vsync_source_switch(panel, v_source);
-		}
-	}
-
-exit:
-	OPLUS_VRR_TRACE_END("oplus_adfr_timing_vsync_source_switch");
-	return 0;
-}
-
-void sde_encoder_adfr_vsync_source_switch(void *enc) {
-	struct drm_encoder *drm_enc = enc;
-	struct sde_encoder_virt *sde_enc = to_sde_encoder_virt(drm_enc);
-	struct drm_connector *drm_conn;
-	struct sde_connector *sde_conn;
-	struct drm_bridge *temp_bridge;
-	struct dsi_bridge *c_bridge;
-	struct dsi_display *display;
-	struct dsi_panel *panel;
-	u8 v_source;
-
-	if ((drm_enc == NULL) || (sde_enc->cur_master == NULL) || (sde_enc->cur_master->connector == NULL)) {
-		VRR_INFO(": invalid drm encoder parameters\n");
-		return;
-	}
-
-	drm_conn = sde_enc->cur_master->connector;
-	if ((drm_conn == NULL) || (drm_conn->encoder == NULL)) {
-		VRR_ERR(": invalid drm connector parameters\n");
-		return;
-	}
-
-	sde_conn = to_sde_connector(drm_conn);
-	if (sde_conn == NULL) {
-		VRR_ERR(": invalid sde connector parameters\n");
-		return;
-	}
-	if (sde_conn->connector_type != DRM_MODE_CONNECTOR_DSI) {
-		VRR_DEBUG(": Only switch when display is dsi_display\n");
-		return;
-	}
-
-	if (drm_bridge_chain_get_first_bridge(drm_conn->encoder) == NULL) {
-		VRR_ERR(": invalid drm connector parameters\n");
-		return;
-	}
-
-	temp_bridge = drm_bridge_chain_get_first_bridge(drm_conn->encoder);
-	c_bridge = to_dsi_bridge(temp_bridge);
-	display = c_bridge->display;
-
-	if ((display == NULL) || (display->panel == NULL)) {
-		VRR_ERR(": invalid dsi display parameters\n");
-		return;
-	}
-	panel = display->panel;
-
-#if defined(CONFIG_PXLW_IRIS)
-	if (iris_is_chip_supported()) {
-		if (!strcmp(panel->type, "secondary")) {
-			VRR_INFO("iris is secondary panel\n");
-			return;
-		}
-	}
-#endif
-
-	OPLUS_VRR_TRACE_BEGIN("sde_encoder_adfr_vsync_source_switch");
-
-	if (panel->power_mode == SDE_MODE_DPMS_LP1 ||
-			panel->power_mode == SDE_MODE_DPMS_LP2) {
-		panel->need_te_source_switch = false;
-	}
-
-	if (panel->need_te_source_switch) {
-		/* wait for idle */
-		v_source = oplus_adfr_get_vsync_source(panel);
-		sde_encoder_wait_for_event(drm_enc, MSM_ENC_TX_COMPLETE);
-		VRR_INFO(": vsync source switched to %d when needed\n", v_source);
-		panel->need_te_source_switch = false;
-		oplus_adfr_vsync_source_switch(panel, v_source);
-
-		/* update fakeframe setting after resolution switch */
-		oplus_adfr_fakeframe_status_update(panel, false);
-	}
-
-	OPLUS_VRR_TRACE_INT("te_source", sde_enc->te_source);
-	OPLUS_VRR_TRACE_END("sde_encoder_adfr_vsync_source_switch");
-}
-
-/* double TE */
-void sde_kms_adfr_vsync_source_switch(void *m_kms,
-		void *d_crtc)
-{
-	struct msm_kms *kms = m_kms;
-	struct drm_crtc *crtc = d_crtc;
-	struct drm_encoder *encoder;
-	struct drm_device *dev;
-
-	if (!kms || !crtc || !crtc->state) {
-		VRR_ERR("invalid params\n");
-		return;
-	}
-
-	dev = crtc->dev;
-
-	list_for_each_entry(encoder, &dev->mode_config.encoder_list, head) {
-		if (encoder->crtc != crtc)
-			continue;
-		sde_encoder_adfr_vsync_source_switch(encoder);
-	}
-}
-
-/*return value*/
-/*1: switch to panel TE*/
-/*0: don't need to switch to panel TE*/
-int dsi_panel_aod_need_vsync_source_switch(void *dsi_panel)
-{
-	struct dsi_panel *panel = dsi_panel;
-	u32 h_skew = SDC_ADFR;
-
-	if ((panel == NULL) || (panel->cur_mode == NULL)) {
-		VRR_ERR("Invalid params\n");
-		return 0;
-	}
-
-	h_skew = panel->cur_mode->timing.h_skew;
-	VRR_INFO("h_skew = %d\n", h_skew);
-
-	if ((h_skew == OPLUS_ADFR) || (h_skew == OPLUS_MFR)) {
-		return 0;
-	} else if ((h_skew == SDC_ADFR) || (h_skew == SDC_MFR)) {
-		return 1;
-	} else {
-		VRR_ERR("error value\n");
-		return 0;
-	}
-}
-
-/* te_source:                    */
-/* OPLUS_TE_SOURCE_TP = 0,  TE0  */
-/* OPLUS_TE_SOURCE_TE = 1,  TE1  */
-void sde_encoder_adfr_aod_fod_source_switch(void *dsi_display, int te_source) {
-	struct drm_encoder *drm_enc = NULL;
-	struct sde_encoder_virt *sde_enc = NULL;
-	struct dsi_display *d_display = dsi_display;
-
-	if (!d_display || !d_display->bridge) {
-		VRR_ERR("error: NULL Pointer\n");
-		return;
-	}
-
-#if defined(CONFIG_PXLW_IRIS)
-	if (iris_is_chip_supported()) {
-		if (!strcmp(d_display->display_type, "secondary")) {
-			VRR_INFO("iris is secondary panel\n");
-			return;
-		}
-	}
-#endif
-
-	drm_enc = d_display->bridge->base.encoder;
-	sde_enc = to_sde_encoder_virt(drm_enc);
-	VRR_INFO(": [from %d change to %d] in fod aod scenes\n", sde_enc->te_source, te_source);
-	if(!dsi_panel_aod_need_vsync_source_switch(d_display->panel)) {
-		VRR_INFO(": don't need to change te\n");
-		return;
-	}
-
-	OPLUS_VRR_TRACE_BEGIN("sde_encoder_adfr_aod_fod_source_switch");
-	if (te_source != sde_enc->te_source) {
-		sde_enc->te_source = te_source;
-		if (!d_display->panel->panel_initialized) {
-			/* no need to wait for idle for panel not initialized*/
-			VRR_INFO(": vsync source switched to %d before panel initialized\n", sde_enc->te_source);
-			sde_encoder_helper_switch_vsync(drm_enc, false);
-			OPLUS_VRR_TRACE_INT("aod_te_source", sde_enc->te_source);
-		} else {
-			/* wait for idle */
-			sde_encoder_wait_for_event(drm_enc, MSM_ENC_TX_COMPLETE);
-			VRR_INFO(": vsync source switched to %d after wait for idle\n", sde_enc->te_source);
-			sde_encoder_helper_switch_vsync(drm_enc, false);
-			OPLUS_VRR_TRACE_INT("aod_te_source", sde_enc->te_source);
-		}
-	}
-	OPLUS_VRR_TRACE_END("sde_encoder_adfr_aod_fod_source_switch");
-}
-
-/* --------------- auto mode ---------------*/
-/* Add for auto on cmd filter */
-/* if auto on command is to be sent within the same frame, filter it out */
-bool oplus_adfr_auto_on_cmd_filter_set(bool enable)
-{
-	oplus_adfr_need_filter_auto_on_cmd = enable;
-	return oplus_adfr_need_filter_auto_on_cmd;
-}
-
-bool oplus_adfr_auto_on_cmd_filter_get(void)
-{
-	return oplus_adfr_need_filter_auto_on_cmd;
-}
-
-bool oplus_adfr_has_auto_mode(u32 value)
-{
-	return (value & OPLUS_ADFR_AUTO_MAGIC);
-}
-
-int oplus_adfr_handle_auto_mode(u32 propval)
-{
-	int handled = 0;
-
-	VRR_DEBUG("update auto mode %u 0x%08X \n", propval, propval);
-
-	OPLUS_VRR_TRACE_BEGIN("oplus_adfr_handle_auto_mode");
-
-	if (!(propval & OPLUS_ADFR_AUTO_MAGIC)) {
-		VRR_INFO("update auto mode skip, without auto magic %08X \n", propval);
-		OPLUS_VRR_TRACE_INT("auto_handled", handled);
-		OPLUS_VRR_TRACE_END("oplus_adfr_handle_auto_mode");
-		return handled;
-	}
-
-	handled = 1;
-	oplus_adfr_auto_update_counter += 1;
-	VRR_DEBUG("auto update counter %llu\n", oplus_adfr_auto_update_counter);
-
-	if (propval & OPLUS_ADFR_AUTO_MODE_MAGIC) {
-		/* Add for auto on cmd filter */
-		if (oplus_adfr_auto_on_cmd_filter_get() && (OPLUS_ADFR_AUTO_MODE_VALUE(propval) == OPLUS_ADFR_AUTO_ON)) {
-			VRR_INFO("auto off and auto on cmd are sent on the same frame, filter it\n");
-			handled |= (1<<1);
-			OPLUS_VRR_TRACE_INT("auto_handled", handled);
-			OPLUS_VRR_TRACE_END("oplus_adfr_handle_auto_mode");
-			return handled;
-		} else if (OPLUS_ADFR_AUTO_MODE_VALUE(propval) == OPLUS_ADFR_AUTO_IDLE) {
-			/* if auto mode = 2, min fps is the sw fps */
-			if (propval & OPLUS_ADFR_AUTO_MIN_FPS_MAGIC) {
-				oplus_adfr_auto_sw_fps = OPLUS_ADFR_AUTO_MIN_FPS_VALUE(propval);
-				VRR_DEBUG("sw fps %d\n", oplus_adfr_auto_sw_fps);
-				OPLUS_VRR_TRACE_INT("oplus_adfr_auto_sw_fps", oplus_adfr_auto_sw_fps);
-				/* fakeframe need to be updated */
-				oplus_adfr_auto_fakeframe_updated = true;
-			} else {
-				VRR_ERR("update sw fps skip, without auto min fps magic %08X\n", propval);
-			}
-			handled |= (1<<2);
-			OPLUS_VRR_TRACE_INT("auto_handled", handled);
-			OPLUS_VRR_TRACE_END("oplus_adfr_handle_auto_mode");
-			return handled;
-		} else if (OPLUS_ADFR_AUTO_MODE_VALUE(propval) != oplus_adfr_auto_mode) {
-			oplus_adfr_auto_mode_updated = true;
-			/* filter repeat auto mode setting */
-			/* when auto mode changes, write the corresponding min fps again */
-			oplus_adfr_auto_min_fps_updated = true;
-			oplus_adfr_auto_mode = OPLUS_ADFR_AUTO_MODE_VALUE(propval);
-			handled |= (1<<3);
-		}
-	}
-
-	if (propval & OPLUS_ADFR_AUTO_FAKEFRAME_MAGIC) {
-		if (OPLUS_ADFR_AUTO_FAKEFRAME_VALUE(propval) != oplus_adfr_auto_fakeframe) {
-			/* no need to get fakeframe value
-			oplus_adfr_auto_fakeframe_updated = true;
-			oplus_adfr_auto_fakeframe = OPLUS_ADFR_AUTO_FAKEFRAME_VALUE(propval);
-			*/
-			handled |= (1<<4);
-		}
-	}
-
-	if (propval & OPLUS_ADFR_AUTO_MIN_FPS_MAGIC) {
-		if (OPLUS_ADFR_AUTO_MIN_FPS_VALUE(propval) != oplus_adfr_auto_min_fps) {
-			oplus_adfr_auto_min_fps_updated = true;
-			oplus_adfr_auto_min_fps = OPLUS_ADFR_AUTO_MIN_FPS_VALUE(propval);
-			handled |= (1<<5);
-		}
-	}
-
-	if (handled == 1) {
-		VRR_WARN("update auto mode nothing, unknown or repetitive value %08X\n", propval);
-	}
-
-	OPLUS_VRR_TRACE_INT("auto_handled", handled);
-	OPLUS_VRR_TRACE_INT("oplus_adfr_auto_mode", oplus_adfr_auto_mode);
-	OPLUS_VRR_TRACE_INT("oplus_adfr_auto_fakeframe", oplus_adfr_auto_fakeframe);
-	OPLUS_VRR_TRACE_INT("oplus_adfr_auto_min_fps", oplus_adfr_auto_min_fps);
-	OPLUS_VRR_TRACE_END("oplus_adfr_handle_auto_mode");
-
-	/* latest setting */
-	VRR_INFO("auto mode %d[%d], fakeframe %d[%d], min fps %d[%d], handled 0x%02x\n",
-		oplus_adfr_auto_mode, oplus_adfr_auto_mode_updated,
-		oplus_adfr_auto_fakeframe, oplus_adfr_auto_fakeframe_updated,
-		oplus_adfr_auto_min_fps, oplus_adfr_auto_min_fps_updated, handled);
-
-	return handled;
-}
-
-static int dsi_panel_send_auto_on_dcs(struct dsi_panel *panel,
-		int ctrl_idx)
-{
-	int rc = 0;
-
-	/* SDC's auto, fakeframe and minfps are available only after power on */
-
-	if (!panel) {
-		VRR_ERR("invalid params\n");
-		return -EINVAL;
-	}
-
-#if defined(CONFIG_PXLW_IRIS)
-	if (iris_is_chip_supported()) {
-		if (!strcmp(panel->type, "secondary")) {
-			VRR_INFO("iris is secondary panel\n");
-			return 0;
-		}
-	}
-#endif
-
-	/* if (__oplus_get_power_status() != OPLUS_DISPLAY_POWER_ON) { */
-	if (panel->power_mode != SDE_MODE_DPMS_ON) {
-		VRR_INFO("ignore %s when power is %d\n", __FUNCTION__, panel->power_mode);
-		return 0;
-	}
-
-	mutex_lock(&panel->panel_lock);
-
-	VRR_INFO("ctrl:%d auto on\n", ctrl_idx);
-	OPLUS_VRR_TRACE_INT("oplus_adfr_auto_mode_cmd", OPLUS_ADFR_AUTO_ON);
-	rc = dsi_panel_tx_cmd_set(panel, DSI_CMD_SET_QSYNC_ON);
-
-	mutex_unlock(&panel->panel_lock);
-	return rc;
-}
-
-static int dsi_panel_send_auto_off_dcs(struct dsi_panel *panel,
-		int ctrl_idx)
-{
-	int rc = 0;
-	/* SDC's auto, fakeframe and minfps are available only after power on */
-
-	if (!panel) {
-		VRR_ERR("invalid params\n");
-		return -EINVAL;
-	}
-
-#if defined(CONFIG_PXLW_IRIS)
-	if (iris_is_chip_supported()) {
-		if (!strcmp(panel->type, "secondary")) {
-			VRR_INFO("iris is secondary panel\n");
-			return 0;
-		}
-	}
-#endif
-
-	/* if (__oplus_get_power_status() != OPLUS_DISPLAY_POWER_ON) { */
-	if (panel->power_mode != SDE_MODE_DPMS_ON) {
-		VRR_INFO("ignore %s when power is %d\n", __FUNCTION__, panel->power_mode);
-		return 0;
-	}
-
-	mutex_lock(&panel->panel_lock);
-
-	VRR_INFO("ctrl:%d auto off\n", ctrl_idx);
-	OPLUS_VRR_TRACE_INT("oplus_adfr_auto_mode_cmd", OPLUS_ADFR_AUTO_OFF);
-	rc = dsi_panel_tx_cmd_set(panel, DSI_CMD_SET_QSYNC_OFF);
-	if (!rc) {
-		/* after auto off cmd was sent, auto on cmd filter start */
-		oplus_adfr_auto_on_cmd_filter_set(true);
-	}
-
-	mutex_unlock(&panel->panel_lock);
-	return rc;
-}
-
-static int dsi_display_auto_mode_enable(struct dsi_display *display, bool enable)
-{
-	int i;
-	int rc = 0;
-
-	mutex_lock(&display->display_lock);
-
-	display_for_each_ctrl(i, display) {
-		if (enable) {
-			/* send the commands to enable auto mode */
-			rc = dsi_panel_send_auto_on_dcs(display->panel, i);
-			if (rc) {
-				VRR_ERR("fail auto ON cmds rc:%d\n", rc);
-				goto exit;
-			}
-		} else {
-			/* send the commands to disbale auto mode */
-			rc = dsi_panel_send_auto_off_dcs(display->panel, i);
-			if (rc) {
-				VRR_ERR("fail auto OFF cmds rc:%d\n", rc);
-				goto exit;
-			}
-		}
-	}
-
-exit:
-	SDE_EVT32(enable, rc);
-	mutex_unlock(&display->display_lock);
-	return rc;
-}
-
-/* prevent the wrong min fps setting */
-static int dsi_panel_auto_minfps_check(struct dsi_panel *panel, u32 extend_frame)
-{
-	int h_skew = panel->cur_mode->timing.h_skew;
-	int refresh_rate = panel->cur_mode->timing.refresh_rate;
-
-	if (h_skew == SDC_ADFR) {
-		if (oplus_adfr_auto_mode == OPLUS_ADFR_AUTO_OFF) {
-			if (refresh_rate == 120) {
-				if ((extend_frame < OPLUS_ADFR_AUTO_MIN_FPS_MAX) || (extend_frame > OPLUS_ADFR_AUTO_MIN_FPS_1HZ)) {
-					/* The highest frame rate is the most stable */
-					extend_frame = OPLUS_ADFR_AUTO_MIN_FPS_MAX;
-				} else if ((oplus_adfr_idle_mode == OPLUS_ADFR_IDLE_OFF) && (extend_frame > OPLUS_ADFR_AUTO_MIN_FPS_20HZ)
-					&& (extend_frame <= OPLUS_ADFR_AUTO_MIN_FPS_1HZ)) {
-					/* force to 20hz if the min fps is less than 20hz when auto mode is off and idle mode is also off */
-					extend_frame = OPLUS_ADFR_AUTO_MIN_FPS_20HZ;
-				}
-			} else if (refresh_rate == 90) {
-				/* locked in 90hz */
-				extend_frame = OPLUS_ADFR_AUTO_MIN_FPS_MAX + 9;
-			}
-		} else {
-			if (refresh_rate == 120) {
-				if ((extend_frame < OPLUS_ADFR_AUTO_MIN_FPS_MAX) || (extend_frame > OPLUS_ADFR_AUTO_MIN_FPS_1HZ)) {
-					extend_frame = OPLUS_ADFR_AUTO_MIN_FPS_MAX;
-				}
-			} else if (refresh_rate == 90) {
-				extend_frame = OPLUS_ADFR_AUTO_MIN_FPS_MAX;
-			}
-		}
-	} else if (h_skew == SDC_MFR) {
-		if ((extend_frame < OPLUS_ADFR_AUTO_MIN_FPS_60HZ) || (extend_frame > OPLUS_ADFR_AUTO_MIN_FPS_1HZ)) {
-			extend_frame = OPLUS_ADFR_AUTO_MIN_FPS_60HZ;
-		} else if ((oplus_adfr_idle_mode == OPLUS_ADFR_IDLE_OFF) && (extend_frame > OPLUS_ADFR_AUTO_MIN_FPS_20HZ) && (extend_frame <= OPLUS_ADFR_AUTO_MIN_FPS_1HZ)) {
-			extend_frame = OPLUS_ADFR_AUTO_MIN_FPS_20HZ;
-		}
-	}
-
-	return extend_frame;
-}
-
-static int dsi_panel_send_auto_minfps_dcs(struct dsi_panel *panel,
-		int ctrl_idx, u32 extend_frame)
-{
-	int rc = 0;
-	u32 cmd_index = DSI_CMD_SET_MAX;
-
-	/* SDC's auto, fakeframe and minfps are available only after power on */
-
-	if (!panel || !panel->cur_mode) {
-		VRR_ERR("invalid params\n");
-		return -EINVAL;
-	}
-
-#if defined(CONFIG_PXLW_IRIS)
-	if (iris_is_chip_supported()) {
-		if (!strcmp(panel->type, "secondary")) {
-			VRR_INFO("iris secondary disable send auto minfps\n");
-			return 0;
-		}
-	}
-#endif
-
-	/* if (__oplus_get_power_status() != OPLUS_DISPLAY_POWER_ON) { */
-	if (panel->power_mode != SDE_MODE_DPMS_ON) {
-		VRR_INFO("ignore %s %u when power is %d\n", __FUNCTION__, extend_frame, panel->power_mode);
-		return 0;
-	}
-
-	mutex_lock(&panel->panel_lock);
-
-	/* check minfps */
-	extend_frame = dsi_panel_auto_minfps_check(panel, extend_frame);
-
-	/* pixelworks X7 */
-#if defined(CONFIG_PXLW_IRIS)
-	iris_current_extend_frame = extend_frame;
-#endif
-
-	VRR_DEBUG("ctrl:%d manual min fps\n", ctrl_idx);
-	OPLUS_VRR_TRACE_INT("oplus_adfr_auto_min_fps_cmd", extend_frame);
-
-	if (oplus_adfr_auto_mode == OPLUS_ADFR_AUTO_OFF)
-		cmd_index = DSI_CMD_QSYNC_MIN_FPS_0;
-	else
-		cmd_index = DSI_CMD_QSYNC_MIN_FPS_1;
-
-	rc = oplus_adfr_process_minfps_dcs(panel, cmd_index, extend_frame);
-	if (rc)
-		goto exit;
-	rc = dsi_panel_tx_cmd_set(panel, cmd_index);
-
-exit:
-	SDE_EVT32(extend_frame, rc);
-	mutex_unlock(&panel->panel_lock);
-	return rc;
-}
-
-static int dsi_display_auto_mode_min_fps(struct dsi_display *display, u32 extend_frame)
-{
-	int i;
-	int rc = 0;
-
-	mutex_lock(&display->display_lock);
-
-	display_for_each_ctrl(i, display) {
-		/* send the commands to set auto mode min fps */
-		rc = dsi_panel_send_auto_minfps_dcs(display->panel, i, extend_frame);
+	OPLUS_ADFR_TRACE_BEGIN("oplus_adfr_resolution_mux_vsync_switch");
+
+	/* just do the mux vysnc switch when using tp vsync and resolution changing */
+	if ((last_h_active != panel->cur_mode->timing.h_active)
+			&& (p_oplus_adfr_params->mux_vsync_switch_gpio_level == OPLUS_ADFR_MUX_VSYNC_SWITCH_TP)) {
+		rc = oplus_adfr_set_mux_vsync_switch_gpio(panel, OPLUS_ADFR_MUX_VSYNC_SWITCH_TE);
 		if (rc) {
-			VRR_ERR("fail auto Min Fps cmds rc:%d\n", rc);
-			goto exit;
+			ADFR_ERR("failed to set mux_vsync_switch_gpio, rc=%d\n", rc);
+		} else {
+			/* after one frame commit completed, change back to current mode vsync */
+			p_oplus_adfr_params->need_switch_vsync = true;
+			ADFR_INFO("oplus_adfr_need_switch_vsync:%d\n", p_oplus_adfr_params->need_switch_vsync);
+			OPLUS_ADFR_TRACE_INT("oplus_adfr_need_switch_vsync", p_oplus_adfr_params->need_switch_vsync);
 		}
 	}
 
-exit:
-	SDE_EVT32(extend_frame, rc);
-	mutex_unlock(&display->display_lock);
+	last_h_active = panel->cur_mode->timing.h_active;
+
+	OPLUS_ADFR_TRACE_END("oplus_adfr_resolution_mux_vsync_switch");
+
+	ADFR_DEBUG("end\n");
+
 	return rc;
 }
 
-int dsi_display_auto_mode_update(void *dsi_display)
+int oplus_adfr_frame_done_mux_vsync_switch(void *drm_connector)
 {
-	struct dsi_display *display = dsi_display;
-	int h_skew = SDC_ADFR;
 	int rc = 0;
+	struct drm_connector *connector = drm_connector;
+	struct sde_connector *c_conn = NULL;
+	struct dsi_display *display = NULL;
+	struct oplus_adfr_params *p_oplus_adfr_params = NULL;
 
-	if (!display || !display->panel || !display->panel->cur_mode) {
-		VRR_ERR("dsi_display_auto_mode_update Invalid params\n");
+	ADFR_DEBUG("start\n");
+
+	if (!connector) {
+		ADFR_ERR("invalid connector param\n");
 		return -EINVAL;
 	}
 
-	h_skew = display->panel->cur_mode->timing.h_skew;
-	if ((h_skew != SDC_ADFR) && (h_skew != SDC_MFR)) {
-		/* VRR_ERR("OPLUS ADFR does not support auto mode setting\n"); */
+	c_conn = to_sde_connector(connector);
+	if (!c_conn) {
+		ADFR_ERR("invalid c_conn param\n");
+		return -EINVAL;
+	}
+
+	if (c_conn->connector_type != DRM_MODE_CONNECTOR_DSI) {
+		ADFR_DEBUG("not in dsi mode, should not do the mux vsync switch after frame done\n");
 		return 0;
 	}
 
+	display = c_conn->display;
+	if (!display || !display->panel) {
+		ADFR_ERR("invalid display params\n");
+		return -EINVAL;
+	}
+
 #if defined(CONFIG_PXLW_IRIS)
-	if (iris_is_chip_supported()) {
-		if (!strcmp(display->display_type, "secondary")) {
-			VRR_INFO("iris is secondary panel\n");
-			return 0;
+	if (iris_is_chip_supported() && (!strcmp(display->display_type, "secondary"))) {
+		ADFR_INFO("no need to do the mux vsync switch after frame done for iris chip\n");
+		return 0;
+	}
+#endif /* CONFIG_PXLW_IRIS */
+
+	p_oplus_adfr_params = oplus_adfr_get_params(display->panel);
+	if (!p_oplus_adfr_params) {
+		ADFR_ERR("invalid p_oplus_adfr_params param\n");
+		return -EINVAL;
+	}
+
+	if (!oplus_adfr_is_supported(p_oplus_adfr_params) || !oplus_adfr_vsync_switch_is_enabled(p_oplus_adfr_params)
+			|| (oplus_adfr_get_vsync_switch_mode(p_oplus_adfr_params) != OPLUS_ADFR_MUX_VSYNC_SWITCH)) {
+		ADFR_DEBUG("mux vsync switch is not enabled\n");
+		return 0;
+	}
+
+	if (!c_conn->encoder) {
+		ADFR_ERR("invalid encoder param\n");
+		return -EINVAL;
+	}
+
+	OPLUS_ADFR_TRACE_BEGIN("oplus_adfr_frame_done_mux_vsync_switch");
+
+	if (p_oplus_adfr_params->need_switch_vsync) {
+		/* wait for idle */
+		sde_encoder_wait_for_event(c_conn->encoder, MSM_ENC_TX_COMPLETE);
+
+		/* after resolution switch, change back to tp vsync */
+		rc = oplus_adfr_set_mux_vsync_switch_gpio(display->panel, OPLUS_ADFR_MUX_VSYNC_SWITCH_TP);
+		if (rc) {
+			ADFR_ERR("failed to set mux_vsync_switch_gpio, rc=%d\n", rc);
 		}
-	}
-#endif
 
-	OPLUS_VRR_TRACE_BEGIN("dsi_display_auto_mode_update");
-
-	if (oplus_adfr_auto_mode_updated) {
-		dsi_display_auto_mode_enable(display, oplus_adfr_auto_mode);
-		oplus_adfr_auto_mode_updated = false;
-	}
-
-#ifdef OPLUS_FEATURE_DISPLAY_ONSCREENFINGERPRINT
-	if (oplus_ofp_is_supported() && !oplus_ofp_oled_capacitive_is_enabled()
-			&& !oplus_ofp_local_hbm_is_enabled() && !oplus_ofp_ultrasonic_is_enabled()) {
-		if (oplus_adfr_auto_min_fps_updated && !oplus_ofp_get_hbm_state()) {
-			dsi_display_auto_mode_min_fps(display, oplus_adfr_auto_min_fps);
-			oplus_adfr_auto_min_fps_updated = false;
+		/* update fakeframe setting */
+		rc = oplus_adfr_fakeframe_status_update(display->panel, false);
+		if (rc) {
+			ADFR_ERR("failed to update fakeframe status, rc=%d\n", rc);
 		}
-	} else {
-		if (oplus_adfr_auto_min_fps_updated) {
-			dsi_display_auto_mode_min_fps(display, oplus_adfr_auto_min_fps);
-			oplus_adfr_auto_min_fps_updated = false;
-		}
-	}
-#else /* OPLUS_FEATURE_DISPLAY_ONSCREENFINGERPRINT */
-	if (oplus_adfr_auto_min_fps_updated) {
-		dsi_display_auto_mode_min_fps(display, oplus_adfr_auto_min_fps);
-		oplus_adfr_auto_min_fps_updated = false;
-	}
-#endif /* OPLUS_FEATURE_DISPLAY_ONSCREENFINGERPRINT */
 
-	if (oplus_adfr_auto_fakeframe_updated) {
-		/* update fakeframe status after auto mode handle */
-		oplus_adfr_fakeframe_status_update(display->panel, false);
-		oplus_adfr_auto_fakeframe_updated = false;
+		p_oplus_adfr_params->need_switch_vsync = false;
+		ADFR_INFO("oplus_adfr_need_switch_vsync:%d\n", p_oplus_adfr_params->need_switch_vsync);
+		OPLUS_ADFR_TRACE_INT("oplus_adfr_need_switch_vsync", p_oplus_adfr_params->need_switch_vsync);
 	}
 
-	OPLUS_VRR_TRACE_END("dsi_display_auto_mode_update");
+	OPLUS_ADFR_TRACE_END("oplus_adfr_frame_done_mux_vsync_switch");
+
+	ADFR_DEBUG("end\n");
 
 	return rc;
 }
 
-/* --------------- idle mode ---------------*/
-void oplus_adfr_idle_mode_minfps_delay(void *sde_encoder_phys_cmd)
+/* mux vsync switch entry and exit */
+int oplus_adfr_aod_fod_mux_vsync_switch(void *dsi_panel, bool force_te_vsync)
 {
-	struct sde_encoder_phys_cmd *cmd_enc = sde_encoder_phys_cmd;
-	s64 us_per_frame = 0;
-	struct sde_encoder_phys_cmd_te_timestamp *te_timestamp = NULL;
-	ktime_t last_te_timestamp = 0;
+	int rc = 0;
+	unsigned int h_skew = STANDARD_ADFR;
+	struct dsi_panel *panel = dsi_panel;
+	struct oplus_adfr_params *p_oplus_adfr_params = NULL;
+
+	ADFR_DEBUG("start\n");
+
+	if (!panel) {
+		ADFR_ERR("invalid panel param\n");
+		return -EINVAL;
+	}
+
+#if defined(CONFIG_PXLW_IRIS)
+	if (iris_is_chip_supported() && (!strcmp(panel->type, "secondary"))) {
+		ADFR_INFO("no need to switch mux vsync in aod or fod mode for iris chip\n");
+		return 0;
+	}
+#endif /* CONFIG_PXLW_IRIS */
+
+	p_oplus_adfr_params = oplus_adfr_get_params(panel);
+	if (!p_oplus_adfr_params) {
+		ADFR_ERR("invalid p_oplus_adfr_params param\n");
+		return -EINVAL;
+	}
+
+	if (!oplus_adfr_is_supported(p_oplus_adfr_params) || !oplus_adfr_vsync_switch_is_enabled(p_oplus_adfr_params)
+			|| (oplus_adfr_get_vsync_switch_mode(p_oplus_adfr_params) != OPLUS_ADFR_MUX_VSYNC_SWITCH)) {
+		ADFR_DEBUG("mux vsync switch is not enabled\n");
+		return 0;
+	}
+
+	if (!gpio_is_valid(p_oplus_adfr_params->mux_vsync_switch_gpio)) {
+		ADFR_ERR("mux_vsync_switch_gpio is invalid\n");
+		return -EINVAL;
+	}
+
+	if (!panel->cur_mode) {
+		ADFR_ERR("invalid cur_mode param\n");
+		return -EINVAL;
+	}
+
+	OPLUS_ADFR_TRACE_BEGIN("oplus_adfr_aod_fod_mux_vsync_switch");
+
+	/* force to switch te vsync as tp vsync will change to 15hz in aod mode */
+	if (force_te_vsync) {
+		if (p_oplus_adfr_params->mux_vsync_switch_gpio_level == OPLUS_ADFR_MUX_VSYNC_SWITCH_TP) {
+			rc = oplus_adfr_set_mux_vsync_switch_gpio(panel, OPLUS_ADFR_MUX_VSYNC_SWITCH_TE);
+			if (rc) {
+				ADFR_ERR("failed to set mux_vsync_switch_gpio, rc=%d\n", rc);
+			}
+		}
+
+		p_oplus_adfr_params->force_te_vsync = force_te_vsync;
+		ADFR_INFO("oplus_adfr_force_te_vsync:%d\n", p_oplus_adfr_params->force_te_vsync);
+		OPLUS_ADFR_TRACE_INT("oplus_adfr_force_te_vsync", p_oplus_adfr_params->force_te_vsync);
+	} else {
+		/* change back to tp vysnc since aod or fod mode is off */
+		if (p_oplus_adfr_params->force_te_vsync) {
+			h_skew = panel->cur_mode->timing.h_skew;
+			/* maybe change to oa in aod or fod mode */
+			if ((p_oplus_adfr_params->mux_vsync_switch_gpio_level == OPLUS_ADFR_MUX_VSYNC_SWITCH_TE)
+					&& (h_skew != OPLUS_ADFR)) {
+				rc = oplus_adfr_set_mux_vsync_switch_gpio(panel, OPLUS_ADFR_MUX_VSYNC_SWITCH_TP);
+				if (rc) {
+					ADFR_ERR("failed to set mux_vsync_switch_gpio, rc=%d\n", rc);
+				}
+			}
+
+			p_oplus_adfr_params->force_te_vsync = false;
+			ADFR_INFO("oplus_adfr_force_te_vsync:%d\n", p_oplus_adfr_params->force_te_vsync);
+			OPLUS_ADFR_TRACE_INT("oplus_adfr_force_te_vsync", p_oplus_adfr_params->force_te_vsync);
+		}
+	}
+
+	OPLUS_ADFR_TRACE_END("oplus_adfr_aod_fod_mux_vsync_switch");
+
+	ADFR_DEBUG("end\n");
+
+	return rc;
+}
+
+/* -------------------- idle mode -------------------- */
+static int oplus_adfr_idle_mode_min_fps_delay(void *sde_encoder_phys_cmd)
+{
 	s64 delay = 0;
+	s64 us_per_frame = 0;
+	ktime_t last_te_timestamp = 0;
+	struct sde_encoder_phys_cmd *cmd_enc = sde_encoder_phys_cmd;
+	struct sde_encoder_phys_cmd_te_timestamp *te_timestamp = NULL;
+
+	ADFR_DEBUG("start\n");
 
 	if (!cmd_enc) {
-		VRR_ERR(": invalid sde_encoder_phys_cmd parameters\n");
-		return;
+		ADFR_ERR("invalid cmd_enc param\n");
+		return -EINVAL;
 	}
 
-	OPLUS_VRR_TRACE_BEGIN("oplus_adfr_idle_mode_minfps_delay");
+	OPLUS_ADFR_TRACE_BEGIN("oplus_adfr_idle_mode_min_fps_delay");
 
 	/* for tp vysnc shift issue */
 	us_per_frame = 1000000 / 60;
@@ -2782,244 +2890,2142 @@ void oplus_adfr_idle_mode_minfps_delay(void *sde_encoder_phys_cmd)
 	last_te_timestamp = te_timestamp->timestamp;
 
 	delay = (us_per_frame >> 1) - (ktime_to_us(ktime_sub(ktime_get(), last_te_timestamp)) % us_per_frame);
-	VRR_DEBUG("time interval since the last rd_ptr is %lu\n", ktime_to_us(ktime_sub(ktime_get(), last_te_timestamp)));
+	ADFR_DEBUG("time interval since the last rd_ptr is %lu\n", ktime_to_us(ktime_sub(ktime_get(), last_te_timestamp)));
 
 	if (delay > 0) {
 		/* make sure to send min fps in the next 8.3ms period */
 		delay = delay + 1000;
 		usleep_range(delay, delay + 100);
-		VRR_DEBUG("delay %lu us for idle min fps setting\n", delay);
+		ADFR_DEBUG("delay %lu us for idle min fps setting\n", delay);
 	}
 
-	OPLUS_VRR_TRACE_END("oplus_adfr_idle_mode_minfps_delay");
+	OPLUS_ADFR_TRACE_END("oplus_adfr_idle_mode_min_fps_delay");
 
-	return;
+	ADFR_DEBUG("end\n");
+
+	return 0;
 }
 
-/* if idle mode is on, the min fps will be reduced when entering MIPI idle and increased when leaving MIPI idle, thus saving power more accurately */
-void oplus_adfr_handle_idle_mode(void *sde_enc_v, int enter_idle)
+/* if idle mode is enabled, the min fps will be reduced when entering mipi idle and increased when exiting mipi idle, thus power can be saved more accurately */
+int oplus_adfr_idle_mode_handle(void *sde_encoder_virt, bool enter_idle)
 {
-	struct sde_encoder_virt *sde_enc = (struct sde_encoder_virt *)sde_enc_v;
-	struct sde_encoder_phys *phys = NULL;
+	int rc = 0;
+	unsigned char min_fps_mapping_table_count = 0;
+	unsigned int idle_off_min_fps = 0;
+	unsigned int h_skew = STANDARD_ADFR;
+	unsigned int refresh_rate = 120;
+	struct sde_encoder_virt *sde_enc = sde_encoder_virt;
+	struct sde_encoder_phys_cmd *cmd_enc = NULL;
 	struct sde_connector *c_conn = NULL;
 	struct dsi_display *display = NULL;
-	struct dsi_panel *panel = NULL;
-	struct sde_encoder_phys_cmd *cmd_enc = NULL;
-	u32 h_skew = SDC_ADFR;
-	u32 refresh_rate = 120;
+	struct dsi_display_mode_priv_info *priv_info = NULL;
+	struct oplus_adfr_params *p_oplus_adfr_params = NULL;
+
+	ADFR_DEBUG("start\n");
+
+	if (!sde_enc || !sde_enc->phys_encs[0] || !sde_enc->cur_master || !sde_enc->cur_master->connector) {
+		ADFR_ERR("invalid sde_enc params\n");
+		return -EINVAL;
+	}
+
+	cmd_enc = to_sde_encoder_phys_cmd(sde_enc->phys_encs[0]);
+	if (!cmd_enc) {
+		ADFR_ERR("invalid cmd_enc param\n");
+		return -EINVAL;
+	}
+
+	c_conn = to_sde_connector(sde_enc->cur_master->connector);
+	if (!c_conn) {
+		ADFR_ERR("invalid c_conn param\n");
+		return -EINVAL;
+	}
+
+	if (c_conn->connector_type != DRM_MODE_CONNECTOR_DSI) {
+		ADFR_DEBUG("not in dsi mode, should not handle idle mode\n");
+		return 0;
+	}
+
+	display = c_conn->display;
+	if (!display || !display->panel) {
+		ADFR_ERR("invalid display params\n");
+		return -EINVAL;
+	}
+
+#if defined(CONFIG_PXLW_IRIS)
+	if (iris_is_chip_supported() && (!strcmp(display->display_type, "secondary"))) {
+		ADFR_INFO("no need to handle idle mode for iris chip\n");
+		return 0;
+	}
+#endif /* CONFIG_PXLW_IRIS */
+
+	p_oplus_adfr_params = oplus_adfr_get_params(display->panel);
+	if (!p_oplus_adfr_params) {
+		ADFR_ERR("invalid p_oplus_adfr_params param\n");
+		return -EINVAL;
+	}
+
+	if (!oplus_adfr_is_supported(p_oplus_adfr_params) || !oplus_adfr_idle_mode_is_enabled(p_oplus_adfr_params)) {
+		ADFR_DEBUG("idle mode is not enabled\n");
+		return 0;
+	}
+
+	if (!display->panel->cur_mode || !display->panel->cur_mode->priv_info) {
+		ADFR_ERR("invalid cur_mode params\n");
+		return -EINVAL;
+	}
+
+	priv_info = display->panel->cur_mode->priv_info;
+	if (priv_info->oplus_adfr_min_fps_mapping_table_count) {
+		min_fps_mapping_table_count = priv_info->oplus_adfr_min_fps_mapping_table_count;
+	} else {
+		ADFR_DEBUG("no need to handle idle mode because oplus,adfr-min-fps-mapping-table is not set\n");
+		return 0;
+	}
+	if (priv_info->oplus_adfr_idle_off_min_fps) {
+		idle_off_min_fps = priv_info->oplus_adfr_idle_off_min_fps;
+	} else {
+		ADFR_DEBUG("no need to handle idle mode because oplus,adfr-idle-off-min-fps is not set\n");
+		return 0;
+	}
+
+	if (p_oplus_adfr_params->skip_min_fps_setting) {
+		ADFR_DEBUG("skip min fps setting\n");
+		return 0;
+	}
 
 #ifdef OPLUS_FEATURE_DISPLAY_ONSCREENFINGERPRINT
 	if (oplus_ofp_is_supported() && !oplus_ofp_oled_capacitive_is_enabled()
 			&& !oplus_ofp_local_hbm_is_enabled() && !oplus_ofp_ultrasonic_is_enabled()
-			 && oplus_ofp_get_hbm_state())
-		return;
+			&& oplus_ofp_get_hbm_state()) {
+		ADFR_DEBUG("should not handle idle mode when hbm state is true\n");
+		return 0;
+	}
 #endif /* OPLUS_FEATURE_DISPLAY_ONSCREENFINGERPRINT */
 
-	if (!oplus_adfr_idle_mode_is_enable()) {
-		return;
+	/* idle mode are available only after power on */
+	if (display->panel->power_mode != SDE_MODE_DPMS_ON) {
+		ADFR_DEBUG("should not handle idle mode when power mode is %u\n", display->panel->power_mode);
+		return 0;
 	}
 
-	if (!sde_enc) {
-		VRR_ERR(": invalid sde_encoder_virt parameters\n");
-		return;
-	}
+	OPLUS_ADFR_TRACE_BEGIN("oplus_adfr_idle_mode_handle");
 
-	phys = sde_enc->phys_encs[0];
-
-	if (!phys || !phys->connector) {
-		VRR_ERR(": invalid sde_encoder_phys parameters\n");
-		return;
-	}
-
-	c_conn = to_sde_connector(phys->connector);
-	if (!c_conn) {
-		VRR_ERR(": invalid sde_connector parameters\n");
-		return;
-	}
-
-	if (c_conn->connector_type != DRM_MODE_CONNECTOR_DSI)
-		return;
-
-	display = c_conn->display;
-	if (!display || !display->panel || !display->panel->cur_mode) {
-		VRR_ERR(": invalid dsi_display parameters\n");
-		return;
-	}
-	panel = display->panel;
-
-#if defined(CONFIG_PXLW_IRIS)
-	if (iris_is_chip_supported()) {
-		if (!strcmp(panel->type, "secondary")) {
-			VRR_INFO("iris is secondary panel\n");
-			return;
-		}
-	}
-#endif
-
-	cmd_enc = to_sde_encoder_phys_cmd(phys);
-	if (!cmd_enc) {
-		VRR_ERR(": invalid sde_encoder_phys_cmd parameters\n");
-		return;
-	}
-
-	OPLUS_VRR_TRACE_BEGIN("oplus_adfr_handle_idle_mode");
-
-	h_skew = panel->cur_mode->timing.h_skew;
-	refresh_rate = panel->cur_mode->timing.refresh_rate;
+	h_skew = display->panel->cur_mode->timing.h_skew;
+	refresh_rate = display->panel->cur_mode->timing.refresh_rate;
 
 	if (enter_idle) {
-		if (h_skew == SDC_ADFR || h_skew == SDC_MFR) {
-			if (refresh_rate == 120 || refresh_rate == 60) {
-				/* enter idle mode if auto mode is off and min fps is less than 20hz */
-				if ((oplus_adfr_auto_mode == OPLUS_ADFR_AUTO_OFF) && (oplus_adfr_auto_min_fps > OPLUS_ADFR_AUTO_MIN_FPS_20HZ)
-					&& (oplus_adfr_auto_min_fps <= OPLUS_ADFR_AUTO_MIN_FPS_1HZ)) {
-					oplus_adfr_idle_mode = OPLUS_ADFR_IDLE_ON;
-					VRR_DEBUG("idle mode on");
+		if (h_skew == STANDARD_ADFR || h_skew == STANDARD_MFR) {
+			/* enter idle mode if auto mode is off and min fps is less than idle_off_min_fps */
+			if ((p_oplus_adfr_params->auto_mode == OPLUS_ADFR_AUTO_OFF)
+					&& (p_oplus_adfr_params->sa_min_fps < idle_off_min_fps)
+					&& (p_oplus_adfr_params->sa_min_fps >= priv_info->oplus_adfr_min_fps_mapping_table[min_fps_mapping_table_count - 1])) {
+				p_oplus_adfr_params->idle_mode = OPLUS_ADFR_IDLE_ON;
+				ADFR_DEBUG("oplus_adfr_idle_mode:%u\n", p_oplus_adfr_params->idle_mode);
+				OPLUS_ADFR_TRACE_INT("oplus_adfr_idle_mode", p_oplus_adfr_params->idle_mode);
 
-					/* for tp vysnc shift issue */
-					if (refresh_rate == 60) {
-						oplus_adfr_idle_mode_minfps_delay(cmd_enc);
+				/* for tp vysnc shift issue */
+				if (refresh_rate == 60) {
+					rc = oplus_adfr_idle_mode_min_fps_delay(cmd_enc);
+					if (rc) {
+						ADFR_ERR("failed to delay min fps when entering mipi idle, rc=%d\n", rc);
 					}
+				}
 
-					/* send min fps before enter idle */
-					VRR_DEBUG("enter idle, min fps %d\n", oplus_adfr_auto_min_fps);
-					dsi_display_auto_mode_min_fps(display, oplus_adfr_auto_min_fps);
+				/* send min fps before enter idle */
+				rc = oplus_adfr_min_fps_update(display, p_oplus_adfr_params->sa_min_fps);
+				if (rc) {
+					ADFR_ERR("failed to update sa min fps, rc=%d\n", rc);
+				}
+				ADFR_DEBUG("enter idle, min fps is %u\n", p_oplus_adfr_params->sa_min_fps);
 
-					if (oplus_adfr_dynamic_te.config != OPLUS_ADFR_DYNAMIC_TE_DISABLE) {
-						if (oplus_adfr_auto_min_fps >= OPLUS_ADFR_AUTO_MIN_FPS_10HZ) {
-							/* update report rate if enter idle mode */
-							hrtimer_start(&oplus_adfr_dynamic_te.timer, ms_to_ktime(10), HRTIMER_MODE_REL);
-						}
-					}
+				if (gpio_is_valid(p_oplus_adfr_params->test_te.gpio)
+						&& (p_oplus_adfr_params->test_te.config != OPLUS_ADFR_TEST_TE_DISABLE)
+						&& (p_oplus_adfr_params->sa_min_fps <= 10)) {
+					/* speed up refrsh rate updates if enter idle mode */
+					hrtimer_start(&p_oplus_adfr_params->test_te.timer, ms_to_ktime(10), HRTIMER_MODE_REL);
 				}
 			}
 		}
 	} else {
 		/* exit idle mode */
-		if (oplus_adfr_idle_mode == OPLUS_ADFR_IDLE_ON) {
-			if (oplus_adfr_auto_min_fps >= OPLUS_ADFR_AUTO_MIN_FPS_20HZ) {
+		if (p_oplus_adfr_params->idle_mode == OPLUS_ADFR_IDLE_ON) {
+			if (p_oplus_adfr_params->sa_min_fps < idle_off_min_fps) {
 				/* for tp vysnc shift issue */
 				if (refresh_rate == 60) {
-					oplus_adfr_idle_mode_minfps_delay(cmd_enc);
+					rc = oplus_adfr_idle_mode_min_fps_delay(cmd_enc);
+					if (rc) {
+						ADFR_ERR("failed to delay min fps when exiting mipi idle, rc=%d\n", rc);
+					}
 				}
 
 				/* send min fps after exit idle */
-				VRR_DEBUG("exit idle, min fps %d\n", OPLUS_ADFR_AUTO_MIN_FPS_20HZ);
-				dsi_display_auto_mode_min_fps(display, OPLUS_ADFR_AUTO_MIN_FPS_20HZ);
+				rc = oplus_adfr_min_fps_update(display, idle_off_min_fps);
+				if (rc) {
+					ADFR_ERR("failed to update sa min fps, rc=%d\n", rc);
+				}
+				ADFR_DEBUG("exit idle, min fps is %u\n", idle_off_min_fps);
 			}
 
-			oplus_adfr_idle_mode = OPLUS_ADFR_IDLE_OFF;
-			VRR_DEBUG("idle mode off");
+			p_oplus_adfr_params->idle_mode = OPLUS_ADFR_IDLE_OFF;
+			ADFR_DEBUG("oplus_adfr_idle_mode:%u\n", p_oplus_adfr_params->idle_mode);
+			OPLUS_ADFR_TRACE_INT("oplus_adfr_idle_mode", p_oplus_adfr_params->idle_mode);
 		}
 	}
 
-	OPLUS_VRR_TRACE_INT("oplus_adfr_idle_mode", oplus_adfr_idle_mode);
-	OPLUS_VRR_TRACE_END("oplus_adfr_handle_idle_mode");
+	OPLUS_ADFR_TRACE_END("oplus_adfr_idle_mode_handle");
 
-	return;
+	ADFR_DEBUG("end\n");
+
+	return rc;
 }
 
-int oplus_enable_te_refcount(void *data)
+/* -------------------- temperature detection -------------------- */
+/* the highest min fps setting is required when the temperature meets certain conditions, otherwise recovery it */
+int oplus_adfr_temperature_detection_handle(void *dsi_display, int ntc_temp, int shell_temp)
 {
-	unsigned int *te_enable =  (unsigned int *)data;
-	struct dsi_display *display = NULL;
-	VRR_INFO("te_enable = %d\n", (*te_enable));
+	static bool last_skip_min_fps_setting = false;
+	int rc = 0;
+	unsigned int refresh_rate = 120;
+	unsigned int h_skew = STANDARD_ADFR;
+	struct dsi_display *display = dsi_display;
+	struct oplus_adfr_params *p_oplus_adfr_params = NULL;
 
-	display = get_main_display();
-	if (display == NULL) {
-		VRR_ERR("error: NULL display\n");
-		return -1;
+	ADFR_DEBUG("start\n");
+
+	if (!display || !display->panel) {
+		ADFR_ERR("invalid display params\n");
+		return -EINVAL;
 	}
-
-	if ((*te_enable) == 1) {
-		te_refcount.te_calculate_enable = true;
-		te_refcount.start_timeline = ktime_get();
-		te_refcount.te_refcount = 0;
-	} else if ((*te_enable) == 0) {
-		te_refcount.te_calculate_enable = false;
-		te_refcount.end_timeline = ktime_get();
-	}
-
-	dsi_display_adfr_change_te_irq_status(display, te_refcount.te_calculate_enable);
-
-	return 0;
-}
-
-int oplus_get_te_fps(void *data)
-{
-	unsigned int *te_fps =  (unsigned int *)data;
-
-	unsigned long long end_time, start_time;
-
-	end_time = ktime_to_ms(te_refcount.end_timeline);
-	start_time = ktime_to_ms(te_refcount.start_timeline);
-
-	if (end_time < start_time) {
-		VRR_ERR("error: out of time\n");
-	}
-
-	(*te_fps) = te_refcount.te_refcount*1000 / (end_time - start_time);
-
-	VRR_INFO("te count = %d, end_time = %lld, start_time = %lld, te fps = %d\n",
-		te_refcount.te_refcount, end_time, start_time, (*te_fps));
-
-	return 0;
-}
 
 #if defined(CONFIG_PXLW_IRIS)
-int iris_set_panel_vsync_switch_gpio(struct dsi_panel *panel, int level) {
-	int ret = -1;
-	struct dsi_display *primary_display = get_main_display();
-	struct drm_connector *connector = primary_display->drm_conn;
-	struct sde_connector *c_conn;
+	if (iris_is_chip_supported() && (!strcmp(display->display_type, "secondary"))) {
+		ADFR_INFO("no need to handle temperature detection for iris chip\n");
+		return 0;
+	}
+#endif /* CONFIG_PXLW_IRIS */
 
-	if ((primary_display == NULL) || (primary_display->panel == NULL))
+	p_oplus_adfr_params = oplus_adfr_get_params(display->panel);
+	if (!p_oplus_adfr_params) {
+		ADFR_ERR("invalid p_oplus_adfr_params param\n");
 		return -EINVAL;
+	}
 
-	if (primary_display->panel->vsync_switch_gpio_level == level) {
-		VRR_INFO("current gpio level is (%d) same target and return\n",
-				primary_display->panel->vsync_switch_gpio_level);
+	if (!oplus_adfr_is_supported(p_oplus_adfr_params) || !oplus_adfr_temperature_detection_is_enabled(p_oplus_adfr_params)) {
+		ADFR_DEBUG("temperature detection is not enabled\n");
 		return 0;
 	}
 
-	if (!connector || !connector->encoder)
-		return ret;
+	if (!display->panel->cur_mode) {
+		ADFR_ERR("invalid cur_mode param\n");
+		return -EINVAL;
+	}
 
-	if (!drm_bridge_chain_get_first_bridge(connector->encoder))
-		return ret;
+	OPLUS_ADFR_TRACE_BEGIN("oplus_adfr_temperature_detection_handle");
 
-	c_conn = to_sde_connector(connector);
+	refresh_rate = display->panel->cur_mode->timing.refresh_rate;
+	h_skew = display->panel->cur_mode->timing.h_skew;
 
-	if (level == OPLUS_VSYNC_SWITCH_TE) {
-		if (gpio_is_valid(primary_display->panel->vsync_switch_gpio)) {
-			ret = gpio_direction_output(primary_display->panel->vsync_switch_gpio, 1);
-			if (ret) {
-				VRR_ERR("unable to set dir for vsync_switch_gpio gpio rc=%d\n", ret);
+	if (((h_skew != OPLUS_ADFR) && (h_skew != OPLUS_MFR))
+			&& ((abs(ntc_temp - shell_temp) >= 5)
+				|| (ntc_temp < 0)
+				|| (shell_temp < 0)
+				|| (((ntc_temp > 45) || (shell_temp > 45)) && (refresh_rate == 144))
+				|| (((ntc_temp > 45) || (shell_temp > 45)) && (refresh_rate == 120))
+				|| (((ntc_temp > 40) || (shell_temp > 40)) && (refresh_rate == 90))
+				|| (((ntc_temp > 40) || (shell_temp > 40)) && (refresh_rate == 60)))) {
+		p_oplus_adfr_params->skip_min_fps_setting = true;
+
+		if (!last_skip_min_fps_setting && p_oplus_adfr_params->skip_min_fps_setting) {
+			if (p_oplus_adfr_params->sa_min_fps == refresh_rate) {
+				ADFR_INFO("ntc_temp:%d,shell_temp:%d,refresh_rate:%u,already in min fps %u\n",
+							ntc_temp, shell_temp, refresh_rate, p_oplus_adfr_params->sa_min_fps);
 			} else {
-				VRR_INFO("set vsync_switch_gpio to 1\n");
-				OPLUS_VRR_TRACE_INT("vsync_switch_gpio_level", primary_display->panel->vsync_switch_gpio_level);
+				ADFR_INFO("ntc_temp:%d,shell_temp:%d,refresh_rate:%u,need to set min fps to %u\n",
+							ntc_temp, shell_temp, refresh_rate, refresh_rate);
+				rc = oplus_adfr_min_fps_update(display, refresh_rate);
+				if (rc) {
+					ADFR_ERR("failed to update sa min fps, rc=%d\n", rc);
+				}
 			}
+		}
+	} else {
+		p_oplus_adfr_params->skip_min_fps_setting = false;
 
-			primary_display->panel->vsync_switch_gpio_level = OPLUS_VSYNC_SWITCH_TE;
+		if (((h_skew != OPLUS_ADFR) && (h_skew != OPLUS_MFR))
+				&& (last_skip_min_fps_setting && !p_oplus_adfr_params->skip_min_fps_setting)) {
+			if (p_oplus_adfr_params->sa_min_fps == refresh_rate) {
+				p_oplus_adfr_params->sa_min_fps_updated = false;
+				ADFR_INFO("ntc_temp:%d,shell_temp:%d,refresh_rate:%u,no need to update min fps %u\n",
+							ntc_temp, shell_temp, refresh_rate, p_oplus_adfr_params->sa_min_fps);
+			} else {
+				p_oplus_adfr_params->sa_min_fps_updated = true;
+				ADFR_INFO("ntc_temp:%d,shell_temp:%d,refresh_rate:%u,need to recovery min fps to %u\n",
+							ntc_temp, shell_temp, refresh_rate, p_oplus_adfr_params->sa_min_fps);
+			}
+			ADFR_DEBUG("oplus_adfr_sa_min_fps_updated:%d\n", p_oplus_adfr_params->sa_min_fps_updated);
+			OPLUS_ADFR_TRACE_INT("oplus_adfr_sa_min_fps_updated", p_oplus_adfr_params->sa_min_fps_updated);
 		}
 	}
 
-	if (level == OPLUS_VSYNC_SWITCH_TP) {
-		/* after one frame commit completed, change back to current mode vsync */
-		primary_display->panel->need_vsync_switch = true;
-		VRR_INFO("set need_vsync_switch to true to switch gpio\n");
-		ret = 0;
+	ADFR_DEBUG("oplus_adfr_skip_min_fps_setting:%u\n", p_oplus_adfr_params->skip_min_fps_setting);
+	OPLUS_ADFR_TRACE_INT("oplus_adfr_skip_min_fps_setting", p_oplus_adfr_params->skip_min_fps_setting);
+
+	last_skip_min_fps_setting = p_oplus_adfr_params->skip_min_fps_setting;
+
+	OPLUS_ADFR_TRACE_END("oplus_adfr_temperature_detection_handle");
+
+	ADFR_DEBUG("end\n");
+
+	return rc;
+}
+
+/* -------------------- test te -------------------- */
+/* test te timer */
+enum hrtimer_restart oplus_adfr_test_te_timer_handler(struct hrtimer *timer)
+{
+	struct oplus_adfr_test_te_params *p_oplus_adfr_test_te_params = from_timer(p_oplus_adfr_test_te_params, timer, timer);
+	struct oplus_adfr_params *p_oplus_adfr_params = NULL;
+
+	ADFR_DEBUG("start\n");
+
+	if (!p_oplus_adfr_test_te_params) {
+		ADFR_ERR("invalid p_oplus_adfr_test_te_params param\n");
+		goto end;
 	}
 
-	return ret;
+	p_oplus_adfr_params = container_of(p_oplus_adfr_test_te_params, struct oplus_adfr_params, test_te);
+	if (!p_oplus_adfr_params) {
+		ADFR_ERR("invalid p_oplus_adfr_params param\n");
+		goto end;
+	}
+
+	if (!oplus_adfr_is_supported(p_oplus_adfr_params)) {
+		ADFR_ERR("adfr is not supported\n");
+		goto end;
+	}
+
+	if (!gpio_is_valid(p_oplus_adfr_params->test_te.gpio)) {
+		ADFR_ERR("test te gpio is invalid, no need to handle test te irq\n");
+		goto end;
+	}
+
+	OPLUS_ADFR_TRACE_BEGIN("oplus_adfr_test_te_timer_handler");
+
+	/* speed up refrsh rate updates if enter idle mode */
+	p_oplus_adfr_params->test_te.refresh_rate = p_oplus_adfr_params->sa_min_fps;
+	if (p_oplus_adfr_params->test_te.config == OPLUS_ADFR_TEST_TE_ENABLE_WITCH_LOG) {
+		ADFR_INFO("enter idle mode, update refresh_rate to %u\n", p_oplus_adfr_params->test_te.refresh_rate);
+	}
+	OPLUS_ADFR_TRACE_INT("oplus_adfr_test_te_refresh_rate", p_oplus_adfr_params->test_te.refresh_rate);
+
+	OPLUS_ADFR_TRACE_END("oplus_adfr_test_te_timer_handler");
+
+end:
+	ADFR_DEBUG("end\n");
+
+	return HRTIMER_NORESTART;
 }
-u32 iris_emv_get_current_extend_frame(void) {
-	struct dsi_display *primary_display = get_main_display();
 
-	VRR_INFO("get_extend_frame is %u %u %d rate: %d\n",
-			iris_current_extend_frame, oplus_adfr_auto_min_fps, oplus_adfr_auto_min_fps_updated, primary_display->panel->cur_mode->timing.refresh_rate);
+/* test te detectiton */
+static irqreturn_t oplus_adfr_test_te_irq_handler(int irq, void *data)
+{
+	unsigned int temp_refresh_rate = 0;
+	u64 current_timestamp = 0;
+	struct dsi_display *display = (struct dsi_display *)data;
+	struct dsi_display_mode *mode = NULL;
+	struct sde_connector *c_conn = NULL;
+	struct oplus_adfr_params *p_oplus_adfr_params = NULL;
 
-	return iris_current_extend_frame;
+	ADFR_DEBUG("start\n");
+
+	if (!display || !display->panel) {
+		ADFR_ERR("invalid display params\n");
+		return IRQ_HANDLED;
+	}
+
+#if defined(CONFIG_PXLW_IRIS)
+	if (iris_is_chip_supported() && (!strcmp(display->display_type, "secondary"))) {
+		ADFR_INFO("no need to handle test te irq for iris chip\n");
+		return IRQ_HANDLED;
+	}
+#endif /* CONFIG_PXLW_IRIS */
+
+	p_oplus_adfr_params = oplus_adfr_get_params(display->panel);
+	if (!p_oplus_adfr_params) {
+		ADFR_ERR("invalid p_oplus_adfr_params param\n");
+		return IRQ_HANDLED;
+	}
+
+	if (!oplus_adfr_is_supported(p_oplus_adfr_params)) {
+		ADFR_ERR("adfr is not supported\n");
+		return IRQ_HANDLED;
+	}
+
+	if (!gpio_is_valid(p_oplus_adfr_params->test_te.gpio)) {
+		ADFR_ERR("test te gpio is invalid, no need to handle test te irq\n");
+		return IRQ_HANDLED;
+	}
+
+	mode = display->panel->cur_mode;
+	if (!mode) {
+		ADFR_ERR("invalid mode param\n");
+		return IRQ_HANDLED;
+	}
+
+	c_conn = to_sde_connector(display->drm_conn);
+	if (!c_conn) {
+		ADFR_ERR("invalid c_conn param\n");
+		return IRQ_HANDLED;
+	}
+
+	OPLUS_ADFR_TRACE_BEGIN("oplus_adfr_test_te_irq_handler");
+
+	if (p_oplus_adfr_params->test_te.config != OPLUS_ADFR_TEST_TE_DISABLE) {
+		/* check the test te interval to calculate refresh rate of ddic */
+		current_timestamp = (u64)ktime_to_ms(ktime_get());
+		temp_refresh_rate = 1000 / (current_timestamp - p_oplus_adfr_params->test_te.last_timestamp);
+
+		/* filtering algorithm */
+		if ((mode->timing.h_skew == STANDARD_ADFR) || (mode->timing.h_skew == STANDARD_MFR)) {
+			if (mode->timing.refresh_rate == 144) {
+				p_oplus_adfr_params->test_te.high_refresh_rate_count = 0;
+				if (temp_refresh_rate <= 90) {
+					/* update refresh rate if 1 continous temp_refresh_rate are less than or equal to 90 */
+					p_oplus_adfr_params->test_te.refresh_rate = 72;
+				} else {
+					p_oplus_adfr_params->test_te.refresh_rate = 144;
+				}
+			} else if ((mode->timing.refresh_rate == 120) || (mode->timing.refresh_rate == 60)) {
+				if (temp_refresh_rate > 55) {
+					p_oplus_adfr_params->test_te.high_refresh_rate_count++;
+					/* update refresh rate if 4 continous temp_refresh_rate are greater than 55 */
+					if (p_oplus_adfr_params->test_te.high_refresh_rate_count == 4) {
+						p_oplus_adfr_params->test_te.refresh_rate = mode->timing.refresh_rate;
+						if ((mode->timing.refresh_rate == 120) && (p_oplus_adfr_params->sw_fps == 60) && (p_oplus_adfr_params->sa_min_fps != 120)) {
+							/* show the ddic refresh rate */
+							p_oplus_adfr_params->test_te.refresh_rate = 60;
+						}
+						p_oplus_adfr_params->test_te.high_refresh_rate_count--;
+					}
+				} else if (temp_refresh_rate > 16 && temp_refresh_rate <= 55) {
+					p_oplus_adfr_params->test_te.high_refresh_rate_count = 0;
+					/* update refresh rate if 1 continous temp_refresh_rate are greater than 16 and less than or equal to 55 */
+					p_oplus_adfr_params->test_te.refresh_rate = 30;
+				} else {
+					p_oplus_adfr_params->test_te.high_refresh_rate_count = 0;
+					/* if current refresh rate of ddic is less than or equal to 16, use it directly */
+					p_oplus_adfr_params->test_te.refresh_rate = temp_refresh_rate;
+				}
+
+				if (p_oplus_adfr_params->idle_mode == OPLUS_ADFR_IDLE_ON) {
+					/* use sa min fps directly when enter idle mode */
+					p_oplus_adfr_params->test_te.refresh_rate = p_oplus_adfr_params->sa_min_fps;
+				}
+			} else {
+				p_oplus_adfr_params->test_te.high_refresh_rate_count = 0;
+				/* fix refresh rate */
+				p_oplus_adfr_params->test_te.refresh_rate = mode->timing.refresh_rate;
+			}
+		} else {
+			p_oplus_adfr_params->test_te.high_refresh_rate_count = 0;
+			/* fix refresh rate */
+			p_oplus_adfr_params->test_te.refresh_rate = mode->timing.refresh_rate;
+		}
+
+		if (p_oplus_adfr_params->test_te.refresh_rate > mode->timing.refresh_rate) {
+			p_oplus_adfr_params->test_te.refresh_rate = mode->timing.refresh_rate;
+		}
+
+		ADFR_DEBUG("oplus_adfr_test_te_high_refresh_rate_count:%u\n", p_oplus_adfr_params->test_te.high_refresh_rate_count);
+		OPLUS_ADFR_TRACE_INT("oplus_adfr_test_te_high_refresh_rate_count", p_oplus_adfr_params->test_te.high_refresh_rate_count);
+		OPLUS_ADFR_TRACE_INT("oplus_adfr_temp_refresh_rate", temp_refresh_rate);
+		OPLUS_ADFR_TRACE_INT("oplus_adfr_test_te_refresh_rate", p_oplus_adfr_params->test_te.refresh_rate);
+
+		if (p_oplus_adfr_params->test_te.config == OPLUS_ADFR_TEST_TE_ENABLE_WITCH_LOG) {
+			/* print key information on every test te irq handler */
+			ADFR_INFO("last_timestamp:%lu,current_timestamp:%lu,temp_refresh_rate:%u,refresh_rate:%u\n",
+						p_oplus_adfr_params->test_te.last_timestamp, current_timestamp,
+						temp_refresh_rate, p_oplus_adfr_params->test_te.refresh_rate);
+
+			if ((mode->timing.h_skew == STANDARD_ADFR) || (mode->timing.h_skew == STANDARD_MFR)) {
+				ADFR_INFO("h_active:%u,v_active:%u,fps:%u,h_skew:%u,auto_mode:%u,sa_min_fps:%u,sw_fps:%u,fakeframe:%u,idle_mode:%u\n",
+							mode->timing.h_active,
+							mode->timing.v_active,
+							mode->timing.refresh_rate,
+							mode->timing.h_skew,
+							p_oplus_adfr_params->auto_mode,
+							p_oplus_adfr_params->sa_min_fps,
+							p_oplus_adfr_params->sw_fps,
+							p_oplus_adfr_params->fakeframe,
+							p_oplus_adfr_params->idle_mode);
+			} else {
+				ADFR_INFO("h_active:%u,v_active:%u,fps:%u,h_skew:%u,osync_mode:%u,osync_min_fps:%u,osync_window_min_fps:%u,osync_sync_threshold_start:%u\n",
+							mode->timing.h_active,
+							mode->timing.v_active,
+							mode->timing.refresh_rate,
+							mode->timing.h_skew,
+							c_conn->qsync_mode,
+							p_oplus_adfr_params->osync_min_fps,
+							p_oplus_adfr_params->osync_window_min_fps,
+							p_oplus_adfr_params->osync_sync_threshold_start);
+			}
+		}
+
+		p_oplus_adfr_params->test_te.last_timestamp = current_timestamp;
+	}
+
+	OPLUS_ADFR_TRACE_END("oplus_adfr_test_te_irq_handler");
+
+	ADFR_DEBUG("end\n");
+
+	return IRQ_HANDLED;
 }
-#endif
 
+int oplus_adfr_register_test_te_irq(void *dsi_display)
+{
+	int rc = 0;
+	unsigned int test_te_irq = 0;
+	struct dsi_display *display = dsi_display;
+	struct platform_device *pdev = NULL;
+	struct device *dev = NULL;
+	struct oplus_adfr_params *p_oplus_adfr_params = NULL;
+
+	ADFR_DEBUG("start\n");
+
+	if (!display || !display->panel) {
+		ADFR_ERR("invalid display params\n");
+		return -EINVAL;
+	}
+
+#if defined(CONFIG_PXLW_IRIS)
+	if (iris_is_chip_supported() && (!strcmp(display->display_type, "secondary"))) {
+		ADFR_INFO("no need to register test te irq for iris chip\n");
+		return 0;
+	}
+#endif /* CONFIG_PXLW_IRIS */
+
+	p_oplus_adfr_params = oplus_adfr_get_params(display->panel);
+	if (!p_oplus_adfr_params) {
+		ADFR_ERR("invalid p_oplus_adfr_params param\n");
+		return -EINVAL;
+	}
+
+	if (!oplus_adfr_is_supported(p_oplus_adfr_params)) {
+		ADFR_DEBUG("adfr is not supported\n");
+		return 0;
+	}
+
+	pdev = display->pdev;
+	if (!pdev) {
+		ADFR_ERR("invalid pdev param\n");
+		return -EINVAL;
+	}
+
+	dev = &pdev->dev;
+	if (!dev) {
+		ADFR_ERR("invalid dev param\n");
+		return -EINVAL;
+	}
+
+	if (display->trusted_vm_env) {
+		ADFR_INFO("GPIO's are not enabled in trusted VM\n");
+		return 0;
+	}
+
+	if (!gpio_is_valid(p_oplus_adfr_params->test_te.gpio)) {
+		ADFR_DEBUG("test te gpio is invalid, no need to register test te irq\n");
+		return 0;
+	}
+
+	OPLUS_ADFR_TRACE_BEGIN("oplus_adfr_register_test_te_irq");
+
+	test_te_irq = gpio_to_irq(p_oplus_adfr_params->test_te.gpio);
+
+	/* avoid deferred spurious irqs with disable_irq() */
+	irq_set_status_flags(test_te_irq, IRQ_DISABLE_UNLAZY);
+
+	/* detect test te rising edge */
+	if (!strcmp(display->display_type, "primary")) {
+		rc = devm_request_irq(dev, test_te_irq, oplus_adfr_test_te_irq_handler,
+								IRQF_TRIGGER_RISING | IRQF_ONESHOT, "TEST_TE_GPIO_0", display);
+	} else {
+		rc = devm_request_irq(dev, test_te_irq, oplus_adfr_test_te_irq_handler,
+								IRQF_TRIGGER_RISING | IRQF_ONESHOT, "TEST_TE_GPIO_1", display);
+	}
+
+	if (rc) {
+		ADFR_ERR("test te request_irq failed rc:%d\n", rc);
+		irq_clear_status_flags(test_te_irq, IRQ_DISABLE_UNLAZY);
+	} else {
+		if (p_oplus_adfr_params->test_te.gpio != display->disp_te_gpio) {
+			disable_irq(test_te_irq);
+		}
+		ADFR_INFO("register test te irq successfully\n");
+	}
+
+	OPLUS_ADFR_TRACE_END("oplus_adfr_register_test_te_irq");
+
+	ADFR_DEBUG("end\n");
+
+	return rc;
+}
+
+/* -------------------- osync mode -------------------- */
+int oplus_adfr_set_osync_params(void *sde_connector, unsigned int oplus_adfr_osync_params)
+{
+	unsigned int h_skew = OPLUS_ADFR;
+	uint64_t prop_val = 0;
+	struct sde_connector *c_conn = sde_connector;
+	struct dsi_display *display = NULL;
+	struct oplus_adfr_params *p_oplus_adfr_params = NULL;
+
+	ADFR_DEBUG("start\n");
+
+	if (!c_conn) {
+		ADFR_ERR("invalid c_conn param\n");
+		return -EINVAL;
+	}
+
+	if (c_conn->connector_type != DRM_MODE_CONNECTOR_DSI) {
+		ADFR_DEBUG("not in dsi mode, should not set osync params\n");
+		return 0;
+	}
+
+	display = c_conn->display;
+	if (!display || !display->panel) {
+		ADFR_ERR("invalid display params\n");
+		return -EINVAL;
+	}
+
+#if defined(CONFIG_PXLW_IRIS)
+	if (iris_is_chip_supported() && (!strcmp(display->display_type, "secondary"))) {
+		ADFR_INFO("no need to set osync params for iris chip\n");
+		return 0;
+	}
+#endif /* CONFIG_PXLW_IRIS */
+
+	p_oplus_adfr_params = oplus_adfr_get_params(display->panel);
+	if (!p_oplus_adfr_params) {
+		ADFR_ERR("invalid p_oplus_adfr_params param\n");
+		return -EINVAL;
+	}
+
+	if (!oplus_adfr_is_supported(p_oplus_adfr_params)) {
+		ADFR_DEBUG("adfr is not supported\n");
+		return 0;
+	}
+
+	if (!display->panel->cur_mode) {
+		ADFR_ERR("invalid cur_mode param\n");
+		return -EINVAL;
+	}
+
+	h_skew = display->panel->cur_mode->timing.h_skew;
+
+	if (h_skew != OPLUS_ADFR) {
+		ADFR_DEBUG("not in oa mode, should not set osync params\n");
+		return 0;
+	}
+
+	OPLUS_ADFR_TRACE_BEGIN("oplus_adfr_set_osync_params");
+
+	if (oplus_adfr_osync_params == OPLUS_ADFR_OSYNC_MODE) {
+		if (c_conn->qsync_mode == SDE_RM_QSYNC_DISABLED) {
+			/* change osync min fps and close osync window at once when osync mode is disabled */
+			p_oplus_adfr_params->osync_min_fps = 0;
+			p_oplus_adfr_params->osync_window_setting_status = OPLUS_ADFR_OSYNC_WINDOW_SETTING_AT_ONCE;
+			ADFR_INFO("oplus_adfr_osync_window_setting_status:OPLUS_ADFR_OSYNC_WINDOW_SETTING_AT_ONCE\n");
+		} else {
+			/* reset osync min fps when osync mode is enabled */
+			p_oplus_adfr_params->osync_min_fps = 0;
+			/* no need to change osync window when osync mode is enabled */
+			p_oplus_adfr_params->osync_window_min_fps = 0;
+		}
+		ADFR_INFO("osync_mode:%u,osync_min_fps:%u,osync_window_min_fps:%u\n",
+					c_conn->qsync_mode, p_oplus_adfr_params->osync_min_fps, p_oplus_adfr_params->osync_window_min_fps);
+	} else if (oplus_adfr_osync_params == OPLUS_ADFR_OSYNC_MIN_FPS) {
+		if (c_conn->qsync_mode != SDE_RM_QSYNC_DISABLED) {
+			prop_val = sde_connector_get_property(c_conn->base.state, CONNECTOR_PROP_ADFR_MIN_FPS);
+			if (!(prop_val & OPLUS_ADFR_SA_MAGIC)) {
+				if (prop_val != p_oplus_adfr_params->osync_min_fps) {
+					ADFR_INFO("updated osync min fps %u -> %u\n",
+							p_oplus_adfr_params->osync_min_fps, prop_val);
+					c_conn->qsync_updated = true;
+					p_oplus_adfr_params->osync_min_fps = prop_val;
+					if (!prop_val) {
+						/* close osync window at once when osync min fps is 0 */
+						p_oplus_adfr_params->osync_window_setting_status = OPLUS_ADFR_OSYNC_WINDOW_SETTING_AT_ONCE;
+						ADFR_INFO("oplus_adfr_osync_window_setting_status:OPLUS_ADFR_OSYNC_WINDOW_SETTING_AT_ONCE\n");
+					} else {
+						p_oplus_adfr_params->osync_window_setting_status = OPLUS_ADFR_OSYNC_WINDOW_SETTING_START;
+						ADFR_INFO("oplus_adfr_osync_window_setting_status:OPLUS_ADFR_OSYNC_WINDOW_SETTING_START\n");
+					}
+				}
+			}
+		}
+	}
+
+	OPLUS_ADFR_TRACE_INT("oplus_adfr_osync_min_fps", p_oplus_adfr_params->osync_min_fps);
+	OPLUS_ADFR_TRACE_INT("oplus_adfr_osync_window_min_fps", p_oplus_adfr_params->osync_window_min_fps);
+	OPLUS_ADFR_TRACE_INT("oplus_adfr_osync_window_setting_status", p_oplus_adfr_params->osync_window_setting_status);
+
+	OPLUS_ADFR_TRACE_END("oplus_adfr_set_osync_params");
+
+	ADFR_DEBUG("end\n");
+
+	return 0;
+}
+
+int oplus_adfr_osync_min_fps_update(void *dsi_display)
+{
+	int rc = 0;
+	unsigned int h_skew = OPLUS_ADFR;
+	struct dsi_display *display = dsi_display;
+	struct oplus_adfr_params *p_oplus_adfr_params = NULL;
+
+	ADFR_DEBUG("start\n");
+
+	if (!display || !display->panel) {
+		ADFR_ERR("invalid display params\n");
+		return -EINVAL;
+	}
+
+#if defined(CONFIG_PXLW_IRIS)
+	if (iris_is_chip_supported() && (!strcmp(display->display_type, "secondary"))) {
+		ADFR_INFO("no need to update osync min fps for iris chip\n");
+		return 0;
+	}
+#endif /* CONFIG_PXLW_IRIS */
+
+	p_oplus_adfr_params = oplus_adfr_get_params(display->panel);
+	if (!p_oplus_adfr_params) {
+		ADFR_ERR("invalid p_oplus_adfr_params param\n");
+		return -EINVAL;
+	}
+
+	if (!oplus_adfr_is_supported(p_oplus_adfr_params)) {
+		ADFR_DEBUG("adfr is not supported\n");
+		return 0;
+	}
+
+	if (!display->panel->cur_mode) {
+		ADFR_ERR("invalid cur_mode param\n");
+		return -EINVAL;
+	}
+
+	h_skew = display->panel->cur_mode->timing.h_skew;
+
+	if (h_skew != OPLUS_ADFR) {
+		ADFR_ERR("not in oa mode, should not update osync min fps\n");
+		return -EFAULT;
+	}
+
+	OPLUS_ADFR_TRACE_BEGIN("oplus_adfr_osync_min_fps_update");
+
+	rc = oplus_adfr_min_fps_update(display, p_oplus_adfr_params->osync_min_fps);
+	if (rc) {
+		ADFR_ERR("failed to update osync min fps, rc=%d\n", rc);
+	}
+
+	OPLUS_ADFR_TRACE_END("oplus_adfr_osync_min_fps_update");
+
+	ADFR_DEBUG("end\n");
+
+	return rc;
+}
+
+int oplus_adfr_get_osync_window_min_fps(void *drm_connector)
+{
+	unsigned int h_skew = OPLUS_ADFR;
+	struct drm_connector *connector = drm_connector;
+	struct sde_connector *c_conn = NULL;
+	struct dsi_display *display = NULL;
+	struct oplus_adfr_params *p_oplus_adfr_params = NULL;
+
+	ADFR_DEBUG("start\n");
+
+	if (!connector) {
+		ADFR_ERR("invalid connector param\n");
+		return -EINVAL;
+	}
+
+	c_conn = to_sde_connector(connector);
+	if (!c_conn) {
+		ADFR_ERR("invalid c_conn param\n");
+		return -EINVAL;
+	}
+
+	if (c_conn->connector_type != DRM_MODE_CONNECTOR_DSI) {
+		ADFR_DEBUG("not in dsi mode, should not get osync window min fps\n");
+		return -EINVAL;
+	}
+
+	display = c_conn->display;
+	if (!display || !display->panel) {
+		ADFR_ERR("invalid display params\n");
+		return -EINVAL;
+	}
+
+#if defined(CONFIG_PXLW_IRIS)
+	if (iris_is_chip_supported() && (!strcmp(display->display_type, "secondary"))) {
+		ADFR_INFO("no need to get osync window min fps for iris chip\n");
+		return -EINVAL;
+	}
+#endif /* CONFIG_PXLW_IRIS */
+
+	p_oplus_adfr_params = oplus_adfr_get_params(display->panel);
+	if (!p_oplus_adfr_params) {
+		ADFR_ERR("invalid p_oplus_adfr_params param\n");
+		return -EINVAL;
+	}
+
+	if (!oplus_adfr_is_supported(p_oplus_adfr_params)) {
+		ADFR_DEBUG("adfr is not supported\n");
+		return -EINVAL;
+	}
+
+	if (!display->panel->cur_mode) {
+		ADFR_ERR("invalid cur_mode param\n");
+		return -EINVAL;
+	}
+
+	h_skew = display->panel->cur_mode->timing.h_skew;
+
+	if (h_skew != OPLUS_ADFR) {
+		ADFR_DEBUG("not in oa mode, should not get osync window min fps\n");
+		return 0;
+	}
+
+	OPLUS_ADFR_TRACE_BEGIN("oplus_adfr_get_osync_window_min_fps");
+	ADFR_DEBUG("oplus_adfr_osync_window_min_fps:%d\n", p_oplus_adfr_params->osync_window_min_fps);
+	OPLUS_ADFR_TRACE_END("oplus_adfr_get_osync_window_min_fps");
+
+	ADFR_DEBUG("end\n");
+
+	return p_oplus_adfr_params->osync_window_min_fps;
+}
+
+int oplus_adfr_osync_threshold_lines_update(void *drm_connector, unsigned int *threshold_lines, unsigned int yres)
+{
+	unsigned int h_skew = OPLUS_ADFR;
+	struct drm_connector *connector = drm_connector;
+	struct sde_connector *c_conn = NULL;
+	struct dsi_display *display = NULL;
+	struct oplus_adfr_params *p_oplus_adfr_params = NULL;
+
+	ADFR_DEBUG("start\n");
+
+	if (!connector || !threshold_lines) {
+		ADFR_ERR("invalid input params\n");
+		return -EINVAL;
+	}
+
+	c_conn = to_sde_connector(connector);
+	if (!c_conn) {
+		ADFR_ERR("invalid c_conn param\n");
+		return -EINVAL;
+	}
+
+	if (c_conn->connector_type != DRM_MODE_CONNECTOR_DSI) {
+		ADFR_DEBUG("not in dsi mode, should not update osync threshold lines\n");
+		return 0;
+	}
+
+	display = c_conn->display;
+	if (!display || !display->panel) {
+		ADFR_ERR("invalid display params\n");
+		return -EINVAL;
+	}
+
+#if defined(CONFIG_PXLW_IRIS)
+	if (iris_is_chip_supported() && (!strcmp(display->display_type, "secondary"))) {
+		ADFR_INFO("no need to update osync threshold lines for iris chip\n");
+		return 0;
+	}
+#endif /* CONFIG_PXLW_IRIS */
+
+	p_oplus_adfr_params = oplus_adfr_get_params(display->panel);
+	if (!p_oplus_adfr_params) {
+		ADFR_ERR("invalid p_oplus_adfr_params param\n");
+		return -EINVAL;
+	}
+
+	if (!oplus_adfr_is_supported(p_oplus_adfr_params)) {
+		ADFR_DEBUG("adfr is not supported\n");
+		return 0;
+	}
+
+	if (!display->panel->cur_mode) {
+		ADFR_ERR("invalid cur_mode param\n");
+		return -EINVAL;
+	}
+
+	h_skew = display->panel->cur_mode->timing.h_skew;
+
+	if (h_skew != OPLUS_ADFR) {
+		ADFR_DEBUG("not in oa mode, should not update osync threshold lines\n");
+		return 0;
+	}
+
+	OPLUS_ADFR_TRACE_BEGIN("oplus_adfr_osync_threshold_lines_update");
+
+	/* correct the ap window setting to be less than the ddic window */
+	if (yres > 3216) {
+		*threshold_lines = *threshold_lines - 47 - 58;
+	} else {
+		*threshold_lines = *threshold_lines - 35 - 43;
+	}
+
+	ADFR_DEBUG("threshold_lines=%u\n", *threshold_lines);
+
+	OPLUS_ADFR_TRACE_END("oplus_adfr_osync_threshold_lines_update");
+
+	ADFR_DEBUG("end\n");
+
+	return 0;
+}
+
+int oplus_adfr_osync_tearcheck_update(void *sde_encoder_phys)
+{
+	unsigned int h_skew = OPLUS_ADFR;
+	struct sde_encoder_phys *phys_enc = sde_encoder_phys;
+	struct sde_hw_tear_check tc_cfg = {0};
+	struct sde_connector *c_conn = NULL;
+	struct dsi_display *display = NULL;
+	struct sde_encoder_phys_cmd *cmd_enc = NULL;
+	struct oplus_adfr_params *p_oplus_adfr_params = NULL;
+
+	ADFR_DEBUG("start\n");
+
+	if (!phys_enc || !phys_enc->connector) {
+		ADFR_ERR("invalid phys_enc params\n");
+		return -EINVAL;
+	}
+
+	cmd_enc = to_sde_encoder_phys_cmd(phys_enc);
+	if (!cmd_enc) {
+		ADFR_ERR("invalid cmd_enc param\n");
+		return -EINVAL;
+	}
+
+	c_conn = to_sde_connector(phys_enc->connector);
+	if (!c_conn) {
+		ADFR_ERR("invalid c_conn param\n");
+		return -EINVAL;
+	}
+
+	if (c_conn->connector_type != DRM_MODE_CONNECTOR_DSI) {
+		ADFR_DEBUG("not in dsi mode, should not update osync tearcheck\n");
+		return 0;
+	}
+
+	display = c_conn->display;
+	if (!display || !display->panel) {
+		ADFR_ERR("invalid display params\n");
+		return -EINVAL;
+	}
+
+#if defined(CONFIG_PXLW_IRIS)
+	if (iris_is_chip_supported() && (!strcmp(display->display_type, "secondary"))) {
+		ADFR_INFO("no need to update osync tearcheck for iris chip\n");
+		return 0;
+	}
+#endif /* CONFIG_PXLW_IRIS */
+
+	p_oplus_adfr_params = oplus_adfr_get_params(display->panel);
+	if (!p_oplus_adfr_params) {
+		ADFR_ERR("invalid p_oplus_adfr_params param\n");
+		return -EINVAL;
+	}
+
+	if (!oplus_adfr_is_supported(p_oplus_adfr_params)) {
+		ADFR_DEBUG("adfr is not supported\n");
+		return -ENOTSUPP;
+	}
+
+	if (!display->panel->cur_mode) {
+		ADFR_ERR("invalid cur_mode param\n");
+		return -EINVAL;
+	}
+
+	h_skew = display->panel->cur_mode->timing.h_skew;
+
+	if (h_skew != OPLUS_ADFR) {
+		ADFR_DEBUG("not in oa mode, should not update osync tearcheck\n");
+		return 0;
+	}
+
+	OPLUS_ADFR_TRACE_BEGIN("oplus_adfr_osync_tearcheck_update");
+
+	if (p_oplus_adfr_params->osync_window_setting_status == OPLUS_ADFR_OSYNC_WINDOW_SETTING_START) {
+		/* osync window should be set in the next frame because osync min fps cmds take one frame to take effect */
+		p_oplus_adfr_params->osync_window_setting_status = OPLUS_ADFR_OSYNC_WINDOW_SETTING_NEXT_FRAME;
+		ADFR_INFO("oplus_adfr_osync_window_setting_status:OPLUS_ADFR_OSYNC_WINDOW_SETTING_NEXT_FRAME\n");
+		OPLUS_ADFR_TRACE_INT("oplus_adfr_osync_window_setting_status", p_oplus_adfr_params->osync_window_setting_status);
+	} else if (p_oplus_adfr_params->osync_window_setting_status == OPLUS_ADFR_OSYNC_WINDOW_SETTING_NEXT_FRAME
+				/* close window at once when osync off */
+				|| p_oplus_adfr_params->osync_window_setting_status == OPLUS_ADFR_OSYNC_WINDOW_SETTING_AT_ONCE) {
+		OPLUS_ADFR_TRACE_BEGIN("update_tearcheck");
+
+		p_oplus_adfr_params->osync_window_min_fps = p_oplus_adfr_params->osync_min_fps;
+		ADFR_INFO("oplus_adfr_osync_window_min_fps:%d\n", p_oplus_adfr_params->osync_window_min_fps);
+		OPLUS_ADFR_TRACE_INT("oplus_adfr_osync_window_min_fps", p_oplus_adfr_params->osync_window_min_fps);
+
+		tc_cfg.sync_threshold_start = _get_tearcheck_threshold(phys_enc);
+		cmd_enc->qsync_threshold_lines = tc_cfg.sync_threshold_start;
+		if (phys_enc->has_intf_te && phys_enc->hw_intf->ops.update_tearcheck) {
+			phys_enc->hw_intf->ops.update_tearcheck(phys_enc->hw_intf, &tc_cfg);
+		} else if (phys_enc->hw_pp->ops.update_tearcheck) {
+			phys_enc->hw_pp->ops.update_tearcheck(phys_enc->hw_pp, &tc_cfg);
+		}
+		SDE_EVT32(DRMID(phys_enc->parent), tc_cfg.sync_threshold_start);
+
+		/* trigger ap osync flush */
+		c_conn->qsync_updated = true;
+
+		p_oplus_adfr_params->osync_sync_threshold_start = tc_cfg.sync_threshold_start;
+		ADFR_INFO("oplus_adfr_osync_sync_threshold_start:%u\n", p_oplus_adfr_params->osync_sync_threshold_start);
+		OPLUS_ADFR_TRACE_INT("oplus_adfr_osync_sync_threshold_start", p_oplus_adfr_params->osync_sync_threshold_start);
+
+		p_oplus_adfr_params->osync_window_setting_status = OPLUS_ADFR_OSYNC_WINDOW_SETTING_END;
+		ADFR_INFO("oplus_adfr_osync_window_setting_status:OPLUS_ADFR_OSYNC_WINDOW_SETTING_END\n");
+		OPLUS_ADFR_TRACE_INT("oplus_adfr_osync_window_setting_status", p_oplus_adfr_params->osync_window_setting_status);
+
+		OPLUS_ADFR_TRACE_END("update_tearcheck");
+	}
+
+	OPLUS_ADFR_TRACE_END("oplus_adfr_osync_tearcheck_update");
+
+	ADFR_DEBUG("end\n");
+
+	return 0;
+}
+
+/* adjust osync window still if qsync enable without qsync updated */
+int oplus_adfr_adjust_osync_tearcheck(void *sde_encoder_phys)
+{
+	unsigned int h_skew = OPLUS_ADFR;
+	struct sde_encoder_phys *phys_enc = sde_encoder_phys;
+	struct sde_hw_tear_check tc_cfg = {0};
+	struct sde_connector *c_conn = NULL;
+	struct dsi_display *display = NULL;
+	struct sde_encoder_phys_cmd *cmd_enc = NULL;
+	struct oplus_adfr_params *p_oplus_adfr_params = NULL;
+
+	ADFR_DEBUG("start\n");
+
+	if (!phys_enc || !phys_enc->connector) {
+		ADFR_ERR("invalid phys_enc params\n");
+		return -EINVAL;
+	}
+
+	cmd_enc = to_sde_encoder_phys_cmd(phys_enc);
+	if (!cmd_enc) {
+		ADFR_ERR("invalid cmd_enc param\n");
+		return -EINVAL;
+	}
+
+	c_conn = to_sde_connector(phys_enc->connector);
+	if (!c_conn) {
+		ADFR_ERR("invalid c_conn param\n");
+		return -EINVAL;
+	}
+
+	if (c_conn->connector_type != DRM_MODE_CONNECTOR_DSI) {
+		ADFR_DEBUG("not in dsi mode, should not adjust osync tearcheck\n");
+		return 0;
+	}
+
+	display = c_conn->display;
+	if (!display || !display->panel) {
+		ADFR_ERR("invalid display params\n");
+		return -EINVAL;
+	}
+
+#if defined(CONFIG_PXLW_IRIS)
+	if (iris_is_chip_supported() && (!strcmp(display->display_type, "secondary"))) {
+		ADFR_INFO("no need to adjust osync tearcheck for iris chip\n");
+		return 0;
+	}
+#endif /* CONFIG_PXLW_IRIS */
+
+	p_oplus_adfr_params = oplus_adfr_get_params(display->panel);
+	if (!p_oplus_adfr_params) {
+		ADFR_ERR("invalid p_oplus_adfr_params param\n");
+		return -EINVAL;
+	}
+
+	if (!oplus_adfr_is_supported(p_oplus_adfr_params)) {
+		ADFR_DEBUG("adfr is not supported\n");
+		return 0;
+	}
+
+	if (!display->panel->cur_mode) {
+		ADFR_ERR("invalid cur_mode param\n");
+		return -EINVAL;
+	}
+
+	h_skew = display->panel->cur_mode->timing.h_skew;
+
+	if (h_skew != OPLUS_ADFR) {
+		ADFR_DEBUG("not in oa mode, should not adjust osync tearcheck\n");
+		return 0;
+	}
+
+	OPLUS_ADFR_TRACE_BEGIN("oplus_adfr_adjust_osync_tearcheck");
+
+	/* use original sync_threshold_start by default */
+	tc_cfg.sync_threshold_start = _get_tearcheck_threshold(phys_enc);
+
+	if (!sde_connector_get_qsync_mode(phys_enc->connector)
+			|| !p_oplus_adfr_params->osync_window_min_fps) {
+		p_oplus_adfr_params->osync_sync_threshold_start = tc_cfg.sync_threshold_start;
+		ADFR_DEBUG("oplus_adfr_osync_sync_threshold_start:%u\n", p_oplus_adfr_params->osync_sync_threshold_start);
+		OPLUS_ADFR_TRACE_INT("oplus_adfr_osync_sync_threshold_start", p_oplus_adfr_params->osync_sync_threshold_start);
+		goto end;
+	}
+
+	/*
+	 this is probably still in the last qsync window period even though this is the second frame,
+	 so close osync window to avoid tearing and keep qsync enable for this frame
+	*/
+	if (p_oplus_adfr_params->osync_frame_status != OPLUS_ADFR_RD_PTR) {
+		/* 300 is a estimated value */
+		tc_cfg.sync_threshold_start = 300;
+	}
+
+	if(p_oplus_adfr_params->osync_sync_threshold_start != tc_cfg.sync_threshold_start) {
+		OPLUS_ADFR_TRACE_BEGIN("update_tearcheck");
+
+		cmd_enc->qsync_threshold_lines = tc_cfg.sync_threshold_start;
+		if (phys_enc->has_intf_te && phys_enc->hw_intf->ops.update_tearcheck) {
+			phys_enc->hw_intf->ops.update_tearcheck(phys_enc->hw_intf, &tc_cfg);
+		} else if (phys_enc->hw_pp->ops.update_tearcheck) {
+			phys_enc->hw_pp->ops.update_tearcheck(phys_enc->hw_pp, &tc_cfg);
+		}
+		SDE_EVT32(DRMID(phys_enc->parent), tc_cfg.sync_threshold_start);
+
+		/* trigger ap osync flush */
+		c_conn->qsync_updated = true;
+
+		p_oplus_adfr_params->osync_sync_threshold_start = tc_cfg.sync_threshold_start;
+		ADFR_INFO("oplus_adfr_osync_sync_threshold_start:%u\n", p_oplus_adfr_params->osync_sync_threshold_start);
+		OPLUS_ADFR_TRACE_INT("oplus_adfr_osync_sync_threshold_start", p_oplus_adfr_params->osync_sync_threshold_start);
+
+		OPLUS_ADFR_TRACE_END("update_tearcheck");
+	}
+
+end:
+	OPLUS_ADFR_TRACE_END("oplus_adfr_adjust_osync_tearcheck");
+
+	ADFR_DEBUG("end\n");
+
+	return 0;
+}
+
+/*
+ if backlight cmd is set after osync window setting finished and osync mode is enabled,
+ filter it, otherwise tearing issue happen
+*/
+bool oplus_adfr_osync_backlight_filter(void *dsi_panel, unsigned int bl_level)
+{
+	bool need_filter_osync_backlight_cmd = false;
+	unsigned int h_skew = OPLUS_ADFR;
+	struct dsi_panel *panel = dsi_panel;
+	struct oplus_adfr_params *p_oplus_adfr_params = NULL;
+
+	ADFR_DEBUG("start\n");
+
+	if (!panel) {
+		ADFR_ERR("invalid panel param\n");
+		return false;
+	}
+
+#if defined(CONFIG_PXLW_IRIS)
+	if (iris_is_chip_supported() && (!strcmp(panel->type, "secondary"))) {
+		ADFR_INFO("no need to filter osync backlight for iris chip\n");
+		return false;
+	}
+#endif /* CONFIG_PXLW_IRIS */
+
+	p_oplus_adfr_params = oplus_adfr_get_params(panel);
+	if (!p_oplus_adfr_params) {
+		ADFR_ERR("invalid p_oplus_adfr_params param\n");
+		return false;
+	}
+
+	if (!oplus_adfr_is_supported(p_oplus_adfr_params) || !oplus_adfr_oa_bl_mutual_exclusion_is_enabled(p_oplus_adfr_params)) {
+		ADFR_DEBUG("oa bl mutual exclusion is not enabled\n");
+		return false;
+	}
+
+	if (!panel->cur_mode) {
+		ADFR_ERR("invalid cur_mode param\n");
+		return false;
+	}
+
+	h_skew = panel->cur_mode->timing.h_skew;
+
+	if (h_skew != OPLUS_ADFR) {
+		ADFR_DEBUG("not in oa mode, should not filter osync backlight\n");
+		return false;
+	}
+
+	OPLUS_ADFR_TRACE_BEGIN("oplus_adfr_osync_backlight_filter");
+
+	if (p_oplus_adfr_params->need_filter_osync_backlight_cmd && bl_level) {
+		need_filter_osync_backlight_cmd = true;
+		ADFR_INFO("filter osync backlight cmd\n");
+	}
+
+	OPLUS_ADFR_TRACE_END("oplus_adfr_osync_backlight_filter");
+
+	ADFR_DEBUG("end\n");
+
+	return need_filter_osync_backlight_cmd;
+}
+
+/* get osync backlight update status to avoid tearing issue */
+int oplus_adfr_osync_backlight_updated(void *sde_connector, bool osync_backlight_updated)
+{
+	unsigned int h_skew = OPLUS_ADFR;
+	uint64_t prop_val = 0;
+	struct sde_connector *c_conn = sde_connector;
+	struct dsi_display *display = NULL;
+	struct oplus_adfr_params *p_oplus_adfr_params = NULL;
+
+	ADFR_DEBUG("start\n");
+
+	if (!c_conn) {
+		ADFR_ERR("invalid c_conn param\n");
+		return -EINVAL;
+	}
+
+	if (c_conn->connector_type != DRM_MODE_CONNECTOR_DSI) {
+		ADFR_DEBUG("not in dsi mode, should not update osync backlight status\n");
+		return 0;
+	}
+
+	display = c_conn->display;
+	if (!display || !display->panel) {
+		ADFR_ERR("invalid display params\n");
+		return -EINVAL;
+	}
+
+#if defined(CONFIG_PXLW_IRIS)
+	if (iris_is_chip_supported() && (!strcmp(display->display_type, "secondary"))) {
+		ADFR_INFO("no need to update osync backlight status for iris chip\n");
+		return 0;
+	}
+#endif /* CONFIG_PXLW_IRIS */
+
+	p_oplus_adfr_params = oplus_adfr_get_params(display->panel);
+	if (!p_oplus_adfr_params) {
+		ADFR_ERR("invalid p_oplus_adfr_params param\n");
+		return -EINVAL;
+	}
+
+	if (!oplus_adfr_is_supported(p_oplus_adfr_params) || !oplus_adfr_oa_bl_mutual_exclusion_is_enabled(p_oplus_adfr_params)) {
+		ADFR_DEBUG("oa bl mutual exclusion is not enabled\n");
+		return 0;
+	}
+
+	if (!display->panel->cur_mode) {
+		ADFR_ERR("invalid cur_mode param\n");
+		return -EINVAL;
+	}
+
+	h_skew = display->panel->cur_mode->timing.h_skew;
+
+	if (h_skew != OPLUS_ADFR) {
+		ADFR_DEBUG("not in oa mode, should not update osync backlight status\n");
+		return 0;
+	}
+
+	OPLUS_ADFR_TRACE_BEGIN("oplus_adfr_osync_backlight_updated");
+
+	p_oplus_adfr_params->osync_backlight_updated = osync_backlight_updated;
+	ADFR_DEBUG("oplus_adfr_osync_backlight_updated:%d\n", p_oplus_adfr_params->osync_backlight_updated);
+	OPLUS_ADFR_TRACE_INT("oplus_adfr_osync_backlight_updated", p_oplus_adfr_params->osync_backlight_updated);
+
+	prop_val = sde_connector_get_property(c_conn->base.state, CONNECTOR_PROP_QSYNC_MODE);
+	if (prop_val != SDE_RM_QSYNC_DISABLED) {
+		/* reset the osync mode timer if osync mode is still enabled */
+		hrtimer_start(&p_oplus_adfr_params->osync_mode_timer, ms_to_ktime(1000), HRTIMER_MODE_REL);
+		ADFR_DEBUG("osync_mode_timer start\n");
+	}
+
+	OPLUS_ADFR_TRACE_END("oplus_adfr_osync_backlight_updated");
+
+	ADFR_DEBUG("end\n");
+
+	return 0;
+}
+
+/* restore osync mode after the backlight is no longer updated */
+enum hrtimer_restart oplus_adfr_osync_mode_timer_handler(struct hrtimer *timer)
+{
+	struct oplus_adfr_params *p_oplus_adfr_params = from_timer(p_oplus_adfr_params, timer, osync_mode_timer);
+
+	ADFR_DEBUG("start\n");
+
+	if (!p_oplus_adfr_params) {
+		ADFR_ERR("invalid p_oplus_adfr_params param\n");
+		goto end;
+	}
+
+	if (!oplus_adfr_is_supported(p_oplus_adfr_params) || !oplus_adfr_oa_bl_mutual_exclusion_is_enabled(p_oplus_adfr_params)) {
+		ADFR_DEBUG("oa bl mutual exclusion is not enabled\n");
+		goto end;
+	}
+
+	OPLUS_ADFR_TRACE_BEGIN("oplus_adfr_osync_mode_timer_handler");
+
+	/* restore osync mode */
+	p_oplus_adfr_params->need_restore_osync_mode = true;
+	ADFR_INFO("oplus_adfr_need_restore_osync_mode:%d\n", p_oplus_adfr_params->need_restore_osync_mode);
+	OPLUS_ADFR_TRACE_INT("oplus_adfr_need_restore_osync_mode", p_oplus_adfr_params->need_restore_osync_mode);
+
+	OPLUS_ADFR_TRACE_END("oplus_adfr_osync_mode_timer_handler");
+
+end:
+	ADFR_DEBUG("end\n");
+
+	return HRTIMER_NORESTART;
+}
+
+/* need restore osync mode after backlight settings stop */
+bool oplus_adfr_need_restore_osync_mode(void *sde_connector)
+{
+	bool rc = false;
+	unsigned int h_skew = OPLUS_ADFR;
+	struct sde_connector *c_conn = sde_connector;
+	struct dsi_display *display = NULL;
+	struct oplus_adfr_params *p_oplus_adfr_params = NULL;
+
+	ADFR_DEBUG("start\n");
+
+	if (!c_conn) {
+		ADFR_ERR("invalid c_conn param\n");
+		return false;
+	}
+
+	if (c_conn->connector_type != DRM_MODE_CONNECTOR_DSI) {
+		ADFR_DEBUG("not in dsi mode, no need to restore osync mode\n");
+		return false;
+	}
+
+	display = c_conn->display;
+	if (!display || !display->panel) {
+		ADFR_ERR("invalid display params\n");
+		return false;
+	}
+
+#if defined(CONFIG_PXLW_IRIS)
+	if (iris_is_chip_supported() && (!strcmp(display->display_type, "secondary"))) {
+		ADFR_INFO("no need to restore osync mode for iris chip\n");
+		return false;
+	}
+#endif /* CONFIG_PXLW_IRIS */
+
+	p_oplus_adfr_params = oplus_adfr_get_params(display->panel);
+	if (!p_oplus_adfr_params) {
+		ADFR_ERR("invalid p_oplus_adfr_params param\n");
+		return false;
+	}
+
+	if (!oplus_adfr_is_supported(p_oplus_adfr_params) || !oplus_adfr_oa_bl_mutual_exclusion_is_enabled(p_oplus_adfr_params)) {
+		ADFR_DEBUG("oa bl mutual exclusion is not enabled\n");
+		return false;
+	}
+
+	if (!display->panel->cur_mode) {
+		ADFR_ERR("invalid cur_mode param\n");
+		return false;
+	}
+
+	h_skew = display->panel->cur_mode->timing.h_skew;
+
+	if (h_skew != OPLUS_ADFR) {
+		ADFR_DEBUG("not in oa mode, should not restore osync mode\n");
+		return false;
+	}
+
+	OPLUS_ADFR_TRACE_BEGIN("oplus_adfr_need_restore_osync_mode");
+
+	if (p_oplus_adfr_params->need_restore_osync_mode) {
+		rc = true;
+		ADFR_DEBUG("need_restore_osync_mode is true\n");
+
+		/* reset it once used */
+		p_oplus_adfr_params->need_restore_osync_mode = false;
+		ADFR_INFO("oplus_adfr_need_restore_osync_mode:%d\n", p_oplus_adfr_params->need_restore_osync_mode);
+		OPLUS_ADFR_TRACE_INT("oplus_adfr_need_restore_osync_mode", p_oplus_adfr_params->need_restore_osync_mode);
+	}
+
+	OPLUS_ADFR_TRACE_END("oplus_adfr_need_restore_osync_mode");
+
+	ADFR_DEBUG("end\n");
+
+	return rc;
+}
+
+/* need to force off osync window if osync mode is enabled after panel disable to avoid tearing issue */
+int oplus_adfr_need_force_off_osync_mode(void *dsi_display, bool need_force_off_osync_mode)
+{
+	unsigned int h_skew = OPLUS_ADFR;
+	struct dsi_display *display = dsi_display;
+	struct sde_connector *c_conn = NULL;
+	struct oplus_adfr_params *p_oplus_adfr_params = NULL;
+
+	ADFR_DEBUG("start\n");
+
+	if (!display || !display->panel) {
+		ADFR_ERR("invalid display params\n");
+		return -EINVAL;
+	}
+
+#if defined(CONFIG_PXLW_IRIS)
+	if (iris_is_chip_supported() && (!strcmp(display->display_type, "secondary"))) {
+		ADFR_INFO("no need to force off osync mode for iris chip\n");
+		return 0;
+	}
+#endif /* CONFIG_PXLW_IRIS */
+
+	p_oplus_adfr_params = oplus_adfr_get_params(display->panel);
+	if (!p_oplus_adfr_params) {
+		ADFR_ERR("invalid p_oplus_adfr_params param\n");
+		return -EINVAL;
+	}
+
+	if (!oplus_adfr_is_supported(p_oplus_adfr_params)) {
+		ADFR_DEBUG("adfr is not supported\n");
+		return 0;
+	}
+
+	if (!display->panel->cur_mode) {
+		ADFR_ERR("invalid cur_mode param\n");
+		return -EINVAL;
+	}
+
+	h_skew = display->panel->cur_mode->timing.h_skew;
+
+	if (h_skew != OPLUS_ADFR) {
+		ADFR_DEBUG("not in oa mode, no need to force off osync mode\n");
+		return 0;
+	}
+
+	c_conn = to_sde_connector(display->drm_conn);
+	if (!c_conn) {
+		ADFR_ERR("invalid c_conn param\n");
+		return -EINVAL;
+	}
+
+	OPLUS_ADFR_TRACE_BEGIN("oplus_adfr_need_force_off_osync_mode");
+
+	if (c_conn->qsync_mode != SDE_RM_QSYNC_DISABLED) {
+		p_oplus_adfr_params->need_force_off_osync_mode = need_force_off_osync_mode;
+		ADFR_INFO("oplus_adfr_need_force_off_osync_mode:%d\n", p_oplus_adfr_params->need_force_off_osync_mode);
+		OPLUS_ADFR_TRACE_INT("oplus_adfr_need_force_off_osync_mode", p_oplus_adfr_params->need_force_off_osync_mode);
+	}
+
+	OPLUS_ADFR_TRACE_END("oplus_adfr_need_force_off_osync_mode");
+
+	ADFR_DEBUG("end\n");
+
+	return 0;
+}
+
+int oplus_adfr_force_off_osync_mode(void *sde_encoder_phys)
+{
+	int rc = 0;
+	unsigned int h_skew = OPLUS_ADFR;
+	struct sde_encoder_phys *phys_enc = sde_encoder_phys;
+	struct sde_connector *c_conn = NULL;
+	struct dsi_display *display = NULL;
+	struct oplus_adfr_params *p_oplus_adfr_params = NULL;
+
+	ADFR_DEBUG("start\n");
+
+	if (!phys_enc || !phys_enc->connector) {
+		ADFR_ERR("invalid phys_enc params\n");
+		return -EINVAL;
+	}
+
+	c_conn = to_sde_connector(phys_enc->connector);
+	if (!c_conn) {
+		ADFR_ERR("invalid c_conn param\n");
+		return -EINVAL;
+	}
+
+	if (c_conn->connector_type != DRM_MODE_CONNECTOR_DSI) {
+		ADFR_DEBUG("not in dsi mode, should not force off osync mode\n");
+		return 0;
+	}
+
+	display = c_conn->display;
+	if (!display || !display->panel) {
+		ADFR_ERR("invalid display params\n");
+		return -EINVAL;
+	}
+
+#if defined(CONFIG_PXLW_IRIS)
+	if (iris_is_chip_supported() && (!strcmp(display->display_type, "secondary"))) {
+		ADFR_INFO("no need to force off osync mode for iris chip\n");
+		return 0;
+	}
+#endif /* CONFIG_PXLW_IRIS */
+
+	p_oplus_adfr_params = oplus_adfr_get_params(display->panel);
+	if (!p_oplus_adfr_params) {
+		ADFR_ERR("invalid p_oplus_adfr_params param\n");
+		return -EINVAL;
+	}
+
+	if (!oplus_adfr_is_supported(p_oplus_adfr_params)) {
+		ADFR_DEBUG("adfr is not supported\n");
+		return 0;
+	}
+
+	if (!display->panel->cur_mode) {
+		ADFR_ERR("invalid cur_mode param\n");
+		return -EINVAL;
+	}
+
+	h_skew = display->panel->cur_mode->timing.h_skew;
+
+	if (h_skew != OPLUS_ADFR) {
+		ADFR_DEBUG("not in oa mode, should not force off osync mode\n");
+		return 0;
+	}
+
+	OPLUS_ADFR_TRACE_BEGIN("oplus_adfr_force_off_osync_mode");
+
+	if (p_oplus_adfr_params->need_force_off_osync_mode) {
+		/* if need_force_off_osync_mode is true, close osync window immediately */
+		ADFR_INFO("force off osync mode %d -> %d\n",
+				c_conn->qsync_mode, SDE_RM_QSYNC_DISABLED);
+		c_conn->qsync_updated = true;
+		c_conn->qsync_mode = SDE_RM_QSYNC_DISABLED;
+		OPLUS_ADFR_TRACE_INT("oplus_adfr_osync_mode", c_conn->qsync_mode);
+
+		/* change osync min fps and close osync window at once when osync mode is disabled */
+		p_oplus_adfr_params->osync_min_fps = 0;
+		ADFR_INFO("oplus_adfr_osync_min_fps:%u\n", p_oplus_adfr_params->osync_min_fps);
+		OPLUS_ADFR_TRACE_INT("oplus_adfr_osync_min_fps", p_oplus_adfr_params->osync_min_fps);
+
+		p_oplus_adfr_params->osync_window_setting_status = OPLUS_ADFR_OSYNC_WINDOW_SETTING_AT_ONCE;
+		ADFR_INFO("oplus_adfr_osync_window_setting_status:OPLUS_ADFR_OSYNC_WINDOW_SETTING_AT_ONCE\n");
+		OPLUS_ADFR_TRACE_INT("oplus_adfr_osync_window_setting_status", p_oplus_adfr_params->osync_window_setting_status);
+
+		p_oplus_adfr_params->need_force_off_osync_mode = false;
+		ADFR_INFO("oplus_adfr_need_force_off_osync_mode:%d\n", p_oplus_adfr_params->need_force_off_osync_mode);
+		OPLUS_ADFR_TRACE_INT("oplus_adfr_need_force_off_osync_mode", p_oplus_adfr_params->need_force_off_osync_mode);
+	} else if (oplus_adfr_oa_bl_mutual_exclusion_is_enabled(p_oplus_adfr_params)) {
+		if ((c_conn->qsync_mode != SDE_RM_QSYNC_DISABLED)
+				&& (p_oplus_adfr_params->osync_window_setting_status != OPLUS_ADFR_OSYNC_WINDOW_SETTING_START)
+				&& p_oplus_adfr_params->osync_backlight_updated) {
+			/*
+			 because refresh rate of ddic will be increased to maximum fps as backlight is updated,
+			 and ap osync window does not match the ddic window, tearing issue will happen
+			 so close osync mode immediately if ap osync window is set and backlight is updated to avoid tearing issue
+			*/
+			ADFR_INFO("force off osync mode %d -> %d\n",
+					c_conn->qsync_mode, SDE_RM_QSYNC_DISABLED);
+			c_conn->qsync_updated = true;
+			c_conn->qsync_mode = SDE_RM_QSYNC_DISABLED;
+			OPLUS_ADFR_TRACE_INT("oplus_adfr_osync_mode", c_conn->qsync_mode);
+
+			/* change osync min fps and close osync window at once when osync mode is disabled */
+			p_oplus_adfr_params->osync_min_fps = 0;
+			ADFR_INFO("oplus_adfr_osync_min_fps:%u\n", p_oplus_adfr_params->osync_min_fps);
+			OPLUS_ADFR_TRACE_INT("oplus_adfr_osync_min_fps", p_oplus_adfr_params->osync_min_fps);
+
+			p_oplus_adfr_params->osync_window_setting_status = OPLUS_ADFR_OSYNC_WINDOW_SETTING_AT_ONCE;
+			ADFR_INFO("oplus_adfr_osync_window_setting_status:OPLUS_ADFR_OSYNC_WINDOW_SETTING_AT_ONCE\n");
+			OPLUS_ADFR_TRACE_INT("oplus_adfr_osync_window_setting_status", p_oplus_adfr_params->osync_window_setting_status);
+
+			/* send osync off cmds */
+			rc = sde_connector_prepare_commit(phys_enc->connector);
+			if (rc) {
+				ADFR_ERR("failed to prepare commit, rc=%d\n", rc);
+			}
+
+			/* to avoid frequent osync mode changing when backlight changing, restore osync mode after 1000ms */
+			hrtimer_start(&p_oplus_adfr_params->osync_mode_timer, ms_to_ktime(1000), HRTIMER_MODE_REL);
+			ADFR_DEBUG("osync_mode_timer start\n");
+		} else if ((c_conn->qsync_mode != SDE_RM_QSYNC_DISABLED)
+						&& (p_oplus_adfr_params->osync_window_setting_status != OPLUS_ADFR_OSYNC_WINDOW_SETTING_START)) {
+			/*
+			 if backlight cmd is set after osync window setting finished and osync mode is enabled,
+			 filter it, otherwise tearing issue happen
+			*/
+			p_oplus_adfr_params->need_filter_osync_backlight_cmd = true;
+			ADFR_DEBUG("oplus_adfr_need_filter_osync_backlight_cmd:%d\n", p_oplus_adfr_params->need_filter_osync_backlight_cmd);
+			OPLUS_ADFR_TRACE_INT("oplus_adfr_need_filter_osync_backlight_cmd", p_oplus_adfr_params->need_filter_osync_backlight_cmd);
+		}
+	}
+
+	p_oplus_adfr_params->osync_backlight_updated = false;
+	ADFR_DEBUG("oplus_adfr_osync_backlight_updated:%d\n", p_oplus_adfr_params->osync_backlight_updated);
+	OPLUS_ADFR_TRACE_INT("oplus_adfr_osync_backlight_updated", p_oplus_adfr_params->osync_backlight_updated);
+
+	OPLUS_ADFR_TRACE_END("oplus_adfr_force_off_osync_mode");
+
+	ADFR_DEBUG("end\n");
+
+	return rc;
+}
+
+/* need to resend osync cmds if osync mode is enabled after panel enable */
+int oplus_adfr_need_resend_osync_cmd(void *dsi_display, bool need_resend_osync_cmd)
+{
+	unsigned int h_skew = OPLUS_ADFR;
+	struct dsi_display *display = dsi_display;
+	struct oplus_adfr_params *p_oplus_adfr_params = NULL;
+
+	ADFR_DEBUG("start\n");
+
+	if (!display || !display->panel) {
+		ADFR_ERR("invalid display params\n");
+		return -EINVAL;
+	}
+
+#if defined(CONFIG_PXLW_IRIS)
+	if (iris_is_chip_supported() && (!strcmp(display->display_type, "secondary"))) {
+		ADFR_INFO("no need to resend osync cmds for iris chip\n");
+		return 0;
+	}
+#endif /* CONFIG_PXLW_IRIS */
+
+	p_oplus_adfr_params = oplus_adfr_get_params(display->panel);
+	if (!p_oplus_adfr_params) {
+		ADFR_ERR("invalid p_oplus_adfr_params param\n");
+		return -EINVAL;
+	}
+
+	if (!oplus_adfr_is_supported(p_oplus_adfr_params)) {
+		ADFR_DEBUG("adfr is not supported\n");
+		return 0;
+	}
+
+	if (!display->panel->cur_mode) {
+		ADFR_ERR("invalid cur_mode param\n");
+		return -EINVAL;
+	}
+
+	h_skew = display->panel->cur_mode->timing.h_skew;
+
+	if (h_skew != OPLUS_ADFR) {
+		ADFR_DEBUG("not in oa mode, no need to resend osync cmds\n");
+		return 0;
+	}
+
+	OPLUS_ADFR_TRACE_BEGIN("oplus_adfr_need_resend_osync_cmd");
+
+	p_oplus_adfr_params->need_resend_osync_cmd = need_resend_osync_cmd;
+	ADFR_DEBUG("oplus_adfr_need_resend_osync_cmd:%d\n", p_oplus_adfr_params->need_resend_osync_cmd);
+	OPLUS_ADFR_TRACE_INT("oplus_adfr_need_resend_osync_cmd", p_oplus_adfr_params->need_resend_osync_cmd);
+
+	OPLUS_ADFR_TRACE_END("oplus_adfr_need_resend_osync_cmd");
+
+	ADFR_DEBUG("end\n");
+
+	return 0;
+}
+
+/* resend osync cmds after display_lock unlock */
+int oplus_adfr_resend_osync_cmd(void *dsi_display)
+{
+	int rc = 0;
+	unsigned int h_skew = OPLUS_ADFR;
+	struct dsi_display *display = dsi_display;
+	struct sde_connector *c_conn = NULL;
+	struct msm_display_conn_params params;
+	struct oplus_adfr_params *p_oplus_adfr_params = NULL;
+
+	ADFR_DEBUG("start\n");
+
+	if (!display || !display->panel) {
+		ADFR_ERR("invalid display params\n");
+		return -EINVAL;
+	}
+
+#if defined(CONFIG_PXLW_IRIS)
+	if (iris_is_chip_supported() && (!strcmp(display->display_type, "secondary"))) {
+		ADFR_INFO("no need to resend osync cmds for iris chip\n");
+		return 0;
+	}
+#endif /* CONFIG_PXLW_IRIS */
+
+	p_oplus_adfr_params = oplus_adfr_get_params(display->panel);
+	if (!p_oplus_adfr_params) {
+		ADFR_ERR("invalid p_oplus_adfr_params param\n");
+		return -EINVAL;
+	}
+
+	if (!oplus_adfr_is_supported(p_oplus_adfr_params)) {
+		ADFR_DEBUG("adfr is not supported\n");
+		return 0;
+	}
+
+	if (!display->panel->cur_mode) {
+		ADFR_ERR("invalid cur_mode param\n");
+		return -EINVAL;
+	}
+
+	h_skew = display->panel->cur_mode->timing.h_skew;
+
+	if (h_skew != OPLUS_ADFR) {
+		ADFR_DEBUG("not in oa mode, should not resend osync cmds\n");
+		return 0;
+	}
+
+	c_conn = to_sde_connector(display->drm_conn);
+	if (!c_conn) {
+		ADFR_ERR("invalid c_conn param\n");
+		return -EINVAL;
+	}
+
+	OPLUS_ADFR_TRACE_BEGIN("oplus_adfr_resend_osync_cmd");
+
+	if (p_oplus_adfr_params->need_resend_osync_cmd) {
+		if (c_conn->qsync_mode != SDE_RM_QSYNC_DISABLED) {
+			params.qsync_mode = c_conn->qsync_mode;
+			params.qsync_update = true;
+			rc = dsi_display_pre_commit(display, &params);
+			if (rc) {
+				ADFR_ERR("failed to resend osync cmds, rc=%d\n", rc);
+			} else {
+				ADFR_INFO("resend osync cmds,osync_mode:%u,osync_min_fps:%u\n", params.qsync_mode, p_oplus_adfr_params->osync_min_fps);
+			}
+		}
+
+		p_oplus_adfr_params->need_resend_osync_cmd = false;
+		ADFR_DEBUG("oplus_adfr_need_resend_osync_cmd:%d\n", p_oplus_adfr_params->need_resend_osync_cmd);
+		OPLUS_ADFR_TRACE_INT("oplus_adfr_need_resend_osync_cmd", p_oplus_adfr_params->need_resend_osync_cmd);
+	}
+
+	OPLUS_ADFR_TRACE_END("oplus_adfr_resend_osync_cmd");
+
+	ADFR_DEBUG("end\n");
+
+	return rc;
+}
+
+/* -------------------- node -------------------- */
+/* adfr_config */
+ssize_t oplus_adfr_set_config_attr(struct kobject *obj,
+	struct kobj_attribute *attr, const char *buf, size_t count)
+{
+	unsigned int config = 0;
+	struct dsi_display *display = oplus_display_get_current_display();
+	struct oplus_adfr_params *p_oplus_adfr_params = NULL;
+
+	ADFR_DEBUG("start\n");
+
+	if (!buf || !display || !display->panel) {
+		ADFR_ERR("invalid buf or display params\n");
+		return count;
+	}
+
+#if defined(CONFIG_PXLW_IRIS)
+	if (iris_is_chip_supported() && (!strcmp(display->display_type, "secondary"))) {
+		ADFR_ERR("can not set config for iris chip\n");
+		return count;
+	}
+#endif /* CONFIG_PXLW_IRIS */
+
+	p_oplus_adfr_params = oplus_adfr_get_params(display->panel);
+	if (!p_oplus_adfr_params) {
+		ADFR_ERR("invalid p_oplus_adfr_params param\n");
+		return count;
+	}
+
+	OPLUS_ADFR_TRACE_BEGIN("oplus_adfr_set_adfr_config_attr");
+
+	sscanf(buf, "%x", &config);
+
+	p_oplus_adfr_params->config = config;
+	ADFR_INFO("oplus_adfr_config:0x%x\n", p_oplus_adfr_params->config);
+	OPLUS_ADFR_TRACE_INT("oplus_adfr_config", p_oplus_adfr_params->config);
+
+	OPLUS_ADFR_TRACE_END("oplus_adfr_set_adfr_config_attr");
+
+	ADFR_DEBUG("end\n");
+
+	return count;
+}
+
+ssize_t oplus_adfr_get_config_attr(struct kobject *obj,
+	struct kobj_attribute *attr, char *buf)
+{
+	struct dsi_display *display = oplus_display_get_current_display();
+	struct oplus_adfr_params *p_oplus_adfr_params = NULL;
+
+	ADFR_DEBUG("start\n");
+
+	if (!buf || !display || !display->panel) {
+		ADFR_ERR("invalid buf or display params\n");
+		return -EINVAL;
+	}
+
+#if defined(CONFIG_PXLW_IRIS)
+	if (iris_is_chip_supported() && (!strcmp(display->display_type, "secondary"))) {
+		ADFR_ERR("can not get config for iris chip\n");
+		return -EFAULT;
+	}
+#endif /* CONFIG_PXLW_IRIS */
+
+	p_oplus_adfr_params = oplus_adfr_get_params(display->panel);
+	if (!p_oplus_adfr_params) {
+		ADFR_ERR("invalid p_oplus_adfr_params param\n");
+		return -EINVAL;
+	}
+
+	OPLUS_ADFR_TRACE_BEGIN("oplus_adfr_get_config_attr");
+
+	OFP_INFO("oplus_adfr_config:0x%x\n", p_oplus_adfr_params->config);
+
+	OPLUS_ADFR_TRACE_END("oplus_adfr_get_config_attr");
+
+	ADFR_DEBUG("end\n");
+
+	return sprintf(buf, "0x%x\n", p_oplus_adfr_params->config);
+}
+
+/* mux_vsync_switch */
+ssize_t oplus_adfr_set_mux_vsync_switch_attr(struct kobject *obj,
+	struct kobj_attribute *attr, const char *buf, size_t count)
+{
+	int rc = 0;
+	unsigned int mux_vsync_switch_gpio_level = 0;
+	struct dsi_display *display = oplus_display_get_current_display();
+	struct oplus_adfr_params *p_oplus_adfr_params = NULL;
+
+	ADFR_DEBUG("start\n");
+
+	if (!buf || !display || !display->panel) {
+		ADFR_ERR("invalid buf or display params\n");
+		return count;
+	}
+
+#if defined(CONFIG_PXLW_IRIS)
+	if (iris_is_chip_supported() && (!strcmp(display->display_type, "secondary"))) {
+		ADFR_ERR("can not set mux_vsync_switch_gpio for iris chip\n");
+		return count;
+	}
+#endif /* CONFIG_PXLW_IRIS */
+
+	p_oplus_adfr_params = oplus_adfr_get_params(display->panel);
+	if (!p_oplus_adfr_params) {
+		ADFR_ERR("invalid p_oplus_adfr_params param\n");
+		return count;
+	}
+
+	if (!oplus_adfr_is_supported(p_oplus_adfr_params) || !oplus_adfr_vsync_switch_is_enabled(p_oplus_adfr_params)
+			|| (oplus_adfr_get_vsync_switch_mode(p_oplus_adfr_params) != OPLUS_ADFR_MUX_VSYNC_SWITCH)) {
+		ADFR_ERR("mux vsync switch is not enabled\n");
+		return count;
+	}
+
+	if (!gpio_is_valid(p_oplus_adfr_params->mux_vsync_switch_gpio)) {
+		ADFR_ERR("mux_vsync_switch_gpio is invalid, should not set mux_vsync_switch_gpio\n");
+		return count;
+	}
+
+	OPLUS_ADFR_TRACE_BEGIN("oplus_adfr_set_mux_vsync_switch_attr");
+
+	sscanf(buf, "%u", &mux_vsync_switch_gpio_level);
+	ADFR_INFO("set mux_vsync_switch_gpio to %u\n", mux_vsync_switch_gpio_level);
+
+	rc = oplus_adfr_set_mux_vsync_switch_gpio(display->panel, mux_vsync_switch_gpio_level);
+	if (rc) {
+		ADFR_ERR("failed to set mux_vsync_switch_gpio, rc=%d\n", rc);
+	}
+
+	OPLUS_ADFR_TRACE_END("oplus_adfr_set_mux_vsync_switch_attr");
+
+	ADFR_DEBUG("end\n");
+
+	return count;
+}
+
+ssize_t oplus_adfr_get_mux_vsync_switch_attr(struct kobject *obj,
+	struct kobj_attribute *attr, char *buf)
+{
+	struct dsi_display *display = oplus_display_get_current_display();
+	struct oplus_adfr_params *p_oplus_adfr_params = NULL;
+
+	ADFR_DEBUG("start\n");
+
+	if (!buf || !display || !display->panel) {
+		ADFR_ERR("invalid buf or display params\n");
+		return -EINVAL;
+	}
+
+#if defined(CONFIG_PXLW_IRIS)
+	if (iris_is_chip_supported() && (!strcmp(display->display_type, "secondary"))) {
+		ADFR_ERR("can not get mux_vsync_switch_gpio_level for iris chip\n");
+		return -EFAULT;
+	}
+#endif /* CONFIG_PXLW_IRIS */
+
+	p_oplus_adfr_params = oplus_adfr_get_params(display->panel);
+	if (!p_oplus_adfr_params) {
+		ADFR_ERR("invalid p_oplus_adfr_params param\n");
+		return -EINVAL;
+	}
+
+	if (!oplus_adfr_is_supported(p_oplus_adfr_params) || !oplus_adfr_vsync_switch_is_enabled(p_oplus_adfr_params)
+			|| (oplus_adfr_get_vsync_switch_mode(p_oplus_adfr_params) != OPLUS_ADFR_MUX_VSYNC_SWITCH)) {
+		ADFR_ERR("mux vsync switch is not enabled\n");
+		return -EINVAL;
+	}
+
+	if (!gpio_is_valid(p_oplus_adfr_params->mux_vsync_switch_gpio)) {
+		ADFR_ERR("mux_vsync_switch_gpio is invalid, can not get mux_vsync_switch_gpio_level\n");
+		return -EINVAL;
+	}
+
+	OPLUS_ADFR_TRACE_BEGIN("oplus_adfr_get_mux_vsync_switch_attr");
+
+	ADFR_INFO("oplus_adfr_mux_vsync_switch_gpio_level:%u\n", p_oplus_adfr_params->mux_vsync_switch_gpio_level);
+
+	OPLUS_ADFR_TRACE_END("oplus_adfr_get_mux_vsync_switch_attr");
+
+	ADFR_DEBUG("end\n");
+
+	return sprintf(buf, "%u\n", p_oplus_adfr_params->mux_vsync_switch_gpio_level);
+}
+
+/* test te */
+int oplus_adfr_set_test_te(void *buf)
+{
+	unsigned int *test_te_config = buf;
+	unsigned int test_te_irq = 0;
+	struct dsi_display *display = oplus_display_get_current_display();
+	struct oplus_adfr_params *p_oplus_adfr_params = NULL;
+
+	ADFR_DEBUG("start\n");
+
+	if (!buf || !display || !display->panel) {
+		ADFR_ERR("invalid buf or display params\n");
+		return -EINVAL;
+	}
+
+#if defined(CONFIG_PXLW_IRIS)
+	if (iris_is_chip_supported() && (!strcmp(display->display_type, "secondary"))) {
+		ADFR_ERR("can not set test te for iris chip\n");
+		return -EFAULT;
+	}
+#endif /* CONFIG_PXLW_IRIS */
+
+	p_oplus_adfr_params = oplus_adfr_get_params(display->panel);
+	if (!p_oplus_adfr_params) {
+		ADFR_ERR("invalid p_oplus_adfr_params param\n");
+		return -EINVAL;
+	}
+
+	if (!oplus_adfr_is_supported(p_oplus_adfr_params)) {
+		ADFR_ERR("adfr is not supported\n");
+		return -EINVAL;
+	}
+
+	if (!gpio_is_valid(p_oplus_adfr_params->test_te.gpio)) {
+		ADFR_ERR("test te gpio is invalid, should not set test te\n");
+		return -EINVAL;
+	}
+
+	OPLUS_ADFR_TRACE_BEGIN("oplus_adfr_set_test_te");
+
+	p_oplus_adfr_params->test_te.config = *test_te_config;
+	ADFR_INFO("oplus_adfr_test_te_config:%u\n", p_oplus_adfr_params->test_te.config);
+	OPLUS_ADFR_TRACE_INT("oplus_adfr_test_te_config", p_oplus_adfr_params->test_te.config);
+
+	test_te_irq = gpio_to_irq(p_oplus_adfr_params->test_te.gpio);
+	if (p_oplus_adfr_params->test_te.config != OPLUS_ADFR_TEST_TE_DISABLE) {
+		enable_irq(test_te_irq);
+		ADFR_INFO("enable test te irq\n");
+	} else {
+		disable_irq(test_te_irq);
+		ADFR_INFO("disable test te irq\n");
+	}
+
+	OPLUS_ADFR_TRACE_END("oplus_adfr_set_test_te");
+
+	ADFR_DEBUG("end\n");
+
+	return 0;
+}
+
+int oplus_adfr_get_test_te(void *buf)
+{
+	unsigned int *refresh_rate = buf;
+	struct dsi_display *display = oplus_display_get_current_display();
+	struct oplus_adfr_params *p_oplus_adfr_params = NULL;
+
+	ADFR_DEBUG("start\n");
+
+	if (!buf || !display || !display->panel) {
+		ADFR_ERR("invalid buf or display params\n");
+		return -EINVAL;
+	}
+
+#if defined(CONFIG_PXLW_IRIS)
+	if (iris_is_chip_supported() && (!strcmp(display->display_type, "secondary"))) {
+		ADFR_ERR("can not get test te refresh rate for iris chip\n");
+		return -EFAULT;
+	}
+#endif /* CONFIG_PXLW_IRIS */
+
+	p_oplus_adfr_params = oplus_adfr_get_params(display->panel);
+	if (!p_oplus_adfr_params) {
+		ADFR_ERR("invalid p_oplus_adfr_params param\n");
+		return -EINVAL;
+	}
+
+	if (!oplus_adfr_is_supported(p_oplus_adfr_params)) {
+		ADFR_ERR("adfr is not supported\n");
+		return -EINVAL;
+	}
+
+	if (!display->panel->cur_mode) {
+		ADFR_ERR("invalid cur_mode param\n");
+		return -EINVAL;
+	}
+
+	OPLUS_ADFR_TRACE_BEGIN("oplus_adfr_get_test_te");
+
+	if (!gpio_is_valid(p_oplus_adfr_params->test_te.gpio)) {
+		*refresh_rate = display->panel->cur_mode->timing.refresh_rate;
+		ADFR_INFO("test te gpio is invalid, use current timing refresh rate\n");
+	} else {
+		*refresh_rate = p_oplus_adfr_params->test_te.refresh_rate;
+	}
+
+	ADFR_DEBUG("oplus_adfr_test_te_refresh_rate:%u\n", *refresh_rate);
+
+	OPLUS_ADFR_TRACE_END("oplus_adfr_get_test_te");
+
+	ADFR_DEBUG("end\n");
+
+	return 0;
+}
+
+ssize_t oplus_adfr_set_test_te_attr(struct kobject *obj,
+	struct kobj_attribute *attr, const char *buf, size_t count)
+{
+	unsigned int test_te_config = OPLUS_ADFR_TEST_TE_DISABLE;
+	unsigned int test_te_irq = 0;
+	struct dsi_display *display = oplus_display_get_current_display();
+	struct oplus_adfr_params *p_oplus_adfr_params = NULL;
+
+	ADFR_DEBUG("start\n");
+
+	if (!buf || !display || !display->panel) {
+		ADFR_ERR("invalid buf or display params\n");
+		return count;
+	}
+
+#if defined(CONFIG_PXLW_IRIS)
+	if (iris_is_chip_supported() && (!strcmp(display->display_type, "secondary"))) {
+		ADFR_ERR("can not set test te for iris chip\n");
+		return count;
+	}
+#endif /* CONFIG_PXLW_IRIS */
+
+	p_oplus_adfr_params = oplus_adfr_get_params(display->panel);
+	if (!p_oplus_adfr_params) {
+		ADFR_ERR("invalid p_oplus_adfr_params param\n");
+		return count;
+	}
+
+	if (!oplus_adfr_is_supported(p_oplus_adfr_params)) {
+		ADFR_ERR("adfr is not supported\n");
+		return count;
+	}
+
+	if (!gpio_is_valid(p_oplus_adfr_params->test_te.gpio)) {
+		ADFR_ERR("test te gpio is invalid, should not set test te\n");
+		return count;
+	}
+
+	OPLUS_ADFR_TRACE_BEGIN("oplus_adfr_set_test_te_attr");
+
+	sscanf(buf, "%u", &test_te_config);
+
+	p_oplus_adfr_params->test_te.config = test_te_config;
+	ADFR_INFO("oplus_adfr_test_te_config:%u\n", p_oplus_adfr_params->test_te.config);
+	OPLUS_ADFR_TRACE_INT("oplus_adfr_test_te_config", p_oplus_adfr_params->test_te.config);
+
+	test_te_irq = gpio_to_irq(p_oplus_adfr_params->test_te.gpio);
+	if (p_oplus_adfr_params->test_te.config != OPLUS_ADFR_TEST_TE_DISABLE) {
+		enable_irq(test_te_irq);
+		ADFR_INFO("enable test te irq\n");
+	} else {
+		disable_irq(test_te_irq);
+		ADFR_INFO("disable test te irq\n");
+	}
+
+	OPLUS_ADFR_TRACE_END("oplus_adfr_set_test_te_attr");
+
+	ADFR_DEBUG("end\n");
+
+	return count;
+}
+
+ssize_t oplus_adfr_get_test_te_attr(struct kobject *obj,
+	struct kobj_attribute *attr, char *buf)
+{
+	unsigned int refresh_rate = 0;
+	struct dsi_display *display = oplus_display_get_current_display();
+	struct oplus_adfr_params *p_oplus_adfr_params = NULL;
+
+	ADFR_DEBUG("start\n");
+
+	if (!buf || !display || !display->panel) {
+		ADFR_ERR("invalid buf or display params\n");
+		return -EINVAL;
+	}
+
+#if defined(CONFIG_PXLW_IRIS)
+	if (iris_is_chip_supported() && (!strcmp(display->display_type, "secondary"))) {
+		ADFR_ERR("can not get test te refresh rate for iris chip\n");
+		return -EFAULT;
+	}
+#endif /* CONFIG_PXLW_IRIS */
+
+	p_oplus_adfr_params = oplus_adfr_get_params(display->panel);
+	if (!p_oplus_adfr_params) {
+		ADFR_ERR("invalid p_oplus_adfr_params param\n");
+		return -EINVAL;
+	}
+
+	if (!oplus_adfr_is_supported(p_oplus_adfr_params)) {
+		ADFR_ERR("adfr is not supported\n");
+		return -EINVAL;
+	}
+
+	if (!display->panel->cur_mode) {
+		ADFR_ERR("invalid cur_mode param\n");
+		return -EINVAL;
+	}
+
+	OPLUS_ADFR_TRACE_BEGIN("oplus_adfr_get_test_te_attr");
+
+	if (!gpio_is_valid(p_oplus_adfr_params->test_te.gpio)) {
+		refresh_rate = display->panel->cur_mode->timing.refresh_rate;
+		ADFR_INFO("test te gpio is invalid, use current timing refresh rate\n");
+	} else {
+		refresh_rate = p_oplus_adfr_params->test_te.refresh_rate;
+	}
+
+	ADFR_INFO("oplus_adfr_test_te_refresh_rate:%u\n", refresh_rate);
+
+	OPLUS_ADFR_TRACE_END("oplus_adfr_get_test_te_attr");
+
+	ADFR_DEBUG("end\n");
+
+	return sprintf(buf, "%u\n", refresh_rate);
+}

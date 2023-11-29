@@ -1958,6 +1958,11 @@ void dsi_ctrl_hw_cmn_init_cmddma_trig_ctrl(struct dsi_ctrl_hw *ctrl,
 	reg = DSI_R32(ctrl, DSI_TRIG_CTRL);
 	reg &= ~BIT(16); /* Reset DMA_TRG_MUX */
 	reg &= ~(0xF); /* Reset DMA_TRIGGER_SEL */
-	reg |= (trigger_map[cfg->dma_cmd_trigger] & 0xF);
+	if (cfg->force_dma_cmd_trigger) {
+		reg |= (trigger_map[cfg->force_dma_cmd_trigger] & 0xF);
+		SDE_EVT32(cfg->force_dma_cmd_trigger);
+	} else {
+		reg |= (trigger_map[cfg->dma_cmd_trigger] & 0xF);
+	}
 	DSI_W32(ctrl, DSI_TRIG_CTRL, reg);
 }

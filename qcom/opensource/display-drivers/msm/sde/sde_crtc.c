@@ -48,16 +48,21 @@
 #include "msm_drv.h"
 #include "sde_vm.h"
 #ifdef OPLUS_FEATURE_DISPLAY
-#include "../oplus/oplus_adfr.h"
 #include "../oplus/oplus_display_interface.h"
 #include "../oplus/oplus_display_private_api.h"
-
+extern void oplus_sde_cp_crtc_apply_properties(struct drm_crtc *crtc,
+	struct drm_encoder *encoder);
 extern void oplus_sde_cp_crtc_pcc_change(struct drm_crtc *crtc_drm);
 #endif /* OPLUS_FEATURE_DISPLAY */
 
 #ifdef OPLUS_FEATURE_DISPLAY_ONSCREENFINGERPRINT
 #include "../oplus/oplus_onscreenfingerprint.h"
 #endif /* OPLUS_FEATURE_DISPLAY_ONSCREENFINGERPRINT */
+
+#if defined(CONFIG_PXLW_IRIS)
+#include "dsi_iris_api.h"
+extern u32 iris_pq_disable;
+#endif
 
 #define SDE_PSTATES_MAX (SDE_STAGE_MAX * 4)
 #define SDE_MULTIRECT_PLANE_MAX (SDE_STAGE_MAX * 2)
@@ -3201,13 +3206,6 @@ static void sde_crtc_frame_event_work(struct kthread_work *work)
 				? SDE_FENCE_SIGNAL_ERROR : SDE_FENCE_SIGNAL);
 	}
 
-#ifdef OPLUS_FEATURE_DISPLAY
-	/* OPLUS_FEATURE_ADFR, fake frame */
-	if (oplus_adfr_is_support()) {
-		sde_crtc_adfr_handle_frame_event(crtc, fevent);
-	}
-#endif /* OPLUS_FEATURE_DISPLAY */
-
 	if (fevent->event & SDE_ENCODER_FRAME_EVENT_PANEL_DEAD)
 		SDE_ERROR("crtc%d ts:%lld received panel dead event\n",
 				crtc->base.id, ktime_to_ns(fevent->ts));
@@ -3723,6 +3721,12 @@ static int _sde_crtc_check_dest_scaler_data(struct drm_crtc *crtc,
 		goto err;
 
 disable:
+#if defined(CONFIG_PXLW_IRIS)
+	if (iris_is_chip_supported() && (iris_pq_disable > 0)) {
+		//need to disable detail enhancer in dual memc
+		_sde_crtc_check_dest_scaler_data_disable(crtc, cstate, 0);
+	} else
+#endif
 	_sde_crtc_check_dest_scaler_data_disable(crtc, cstate, num_ds_enable);
 	return 0;
 
@@ -4183,6 +4187,7 @@ static void _sde_crtc_atomic_begin(struct drm_crtc *crtc,
 
 #if defined(CONFIG_PXLW_IRIS) || defined(CONFIG_PXLW_SOFT_IRIS)
 	iris_backlight_update = 1;
+	iris_sde_crtc_atomic_begin(crtc, old_state);
 #endif
 
 	if (!crtc->state->enable) {
@@ -4269,7 +4274,11 @@ static void _sde_crtc_atomic_begin(struct drm_crtc *crtc,
 #endif /* OPLUS_FEATURE_DISPLAY_ONSCREENFINGERPRINT */
 
 	if (sde_kms_is_cp_operation_allowed(sde_kms))
+#ifndef OPLUS_FEATURE_DISPLAY
 		sde_cp_crtc_apply_properties(crtc);
+#else
+		oplus_sde_cp_crtc_apply_properties(crtc, encoder);
+#endif /* OPLUS_FEATURE_DISPLAY */
 
 	/*
 	 * PP_DONE irq is only used by command mode for now.
@@ -4875,9 +4884,12 @@ static void _sde_crtc_reserve_resource(struct drm_crtc *crtc, struct drm_connect
 	encoder = conn->state->best_encoder;
 	if (!sde_encoder_is_built_in_display(encoder))
 		return;
-
-	if (sde_encoder_check_curr_mode(encoder, MSM_DISPLAY_CMD_MODE))
-		sde_encoder_get_transfer_time(encoder, &min_transfer_time);
+#if defined(CONFIG_PXLW_IRIS)
+	if (!iris_is_chip_supported()) {
+		if (sde_encoder_check_curr_mode(encoder, MSM_DISPLAY_CMD_MODE))
+			sde_encoder_get_transfer_time(encoder, &min_transfer_time);
+	}
+#endif
 
 	if (min_transfer_time)
 		updated_fps = DIV_ROUND_UP(1000000, min_transfer_time);

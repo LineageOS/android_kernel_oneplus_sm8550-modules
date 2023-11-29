@@ -14,8 +14,10 @@
 #include <linux/mm_types.h>
 #include "oplus_display_panel.h"
 #include "oplus_display_private_api.h"
-/* OPLUS_FEATURE_ADFR, include header file*/
+
+#ifdef OPLUS_FEATURE_DISPLAY_ADFR
 #include "oplus_adfr.h"
+#endif /* OPLUS_FEATURE_DISPLAY_ADFR */
 
 #ifdef OPLUS_FEATURE_DISPLAY_ONSCREENFINGERPRINT
 #include "oplus_onscreenfingerprint.h"
@@ -82,23 +84,27 @@ static const struct panel_ioctl_desc panel_ioctls[] = {
 	PANEL_IOCTL_DEF(PANEL_IOCTL_GET_LCD_MAX_BRIGHTNESS, oplus_display_panel_get_lcd_max_brightness),
 	PANEL_IOCTL_DEF(PANEL_IOCTL_SET_APOLLO_BACKLIGHT, oplus_display_set_apollo_backlight_value),
 	PANEL_IOCTL_DEF(PANEL_IOCTL_GET_SOFTIRIS_COLOR, oplus_display_panel_get_softiris_color_status),
+	PANEL_IOCTL_DEF(PANEL_IOCTL_GET_PANEL_TYPE, oplus_display_panel_get_panel_type),
 	PANEL_IOCTL_DEF(PANEL_IOCTL_SET_DITHER_STATUS, oplus_display_panel_set_dither),
 	PANEL_IOCTL_DEF(PANEL_IOCTL_GET_DITHER_STATUS, oplus_display_panel_get_dither),
-	PANEL_IOCTL_DEF(PANEL_IOCTL_SET_TE_REFCOUNT_ENABLE, oplus_enable_te_refcount),
-	PANEL_IOCTL_DEF(PANEL_IOCTL_GET_TE_REFCOUNT_ENABLE, oplus_get_te_fps),
 	PANEL_IOCTL_DEF(PANEL_IOCTL_GET_DP_SUPPORT, oplus_display_panel_get_dp_support),
 	PANEL_IOCTL_DEF(PANEL_IOCTL_SET_CABC_STATUS, oplus_display_panel_set_cabc_status),
 	PANEL_IOCTL_DEF(PANEL_IOCTL_GET_CABC_STATUS, oplus_display_panel_get_cabc_status),
 	PANEL_IOCTL_DEF(PANEL_IOCTL_SET_DRE_STATUS, oplus_display_panel_set_dre_status),
 	PANEL_IOCTL_DEF(PANEL_IOCTL_GET_DRE_STATUS, oplus_display_panel_get_dre_status),
-	/* OPLUS_FEATURE_ADFR, dynamic te detect */
-	PANEL_IOCTL_DEF(PANEL_IOCTL_SET_DYNAMIC_TE, oplus_display_set_dynamic_te),
-	PANEL_IOCTL_DEF(PANEL_IOCTL_GET_DYNAMIC_TE, oplus_display_get_dynamic_te),
+	PANEL_IOCTL_DEF(PANEL_IOCTL_SET_DYNAMIC_TE, oplus_adfr_set_test_te),
+	PANEL_IOCTL_DEF(PANEL_IOCTL_GET_DYNAMIC_TE, oplus_adfr_get_test_te),
+	PANEL_IOCTL_DEF(PANEL_IOCTL_GET_PANEL_NAME, oplus_display_panel_get_panel_name),
+	PANEL_IOCTL_DEF(PANEL_IOCTL_GET_PANEL_BPP, oplus_display_panel_get_panel_bpp),
 	PANEL_IOCTL_DEF(PANEL_IOCTL_GET_IRIS_LOOP_STATUS, oplus_display_panel_get_iris_loopback_status),
 	PANEL_IOCTL_DEF(PANEL_IOCTL_SET_FP_TYPE, oplus_ofp_set_fp_type),
 	PANEL_IOCTL_DEF(PANEL_IOCTL_GET_FP_TYPE, oplus_ofp_get_fp_type),
 	PANEL_IOCTL_DEF(PANEL_IOCTL_SET_PWM_TURBO, oplus_display_panel_set_pwm_turbo),
 	PANEL_IOCTL_DEF(PANEL_IOCTL_GET_PWM_TURBO, oplus_display_panel_get_pwm_turbo),
+	PANEL_IOCTL_DEF(PANEL_IOCTL_SET_HBM_MAX, oplus_display_panel_set_hbm_max),
+	PANEL_IOCTL_DEF(PANEL_IOCTL_GET_HBM_MAX, oplus_display_panel_get_hbm_max),
+	PANEL_IOCTL_DEF(PANEL_IOCTL_SET_PWM_PULSE, oplus_display_panel_set_pwm_pulse),
+	PANEL_IOCTL_DEF(PANEL_IOCTL_GET_PWM_PULSE, oplus_display_panel_get_pwm_pulse),
 };
 
 int oplus_display_fix_apollo_level(void)
@@ -223,7 +229,7 @@ static int oplus_export_dmabuf(int buf_size)
 	}
 
 	bl_addr = (char *)vaddr;
-	sprintf(bl_addr, "dma test!");
+	scnprintf(bl_addr, PAGE_SIZE, "dma test!");
 
 	oplus_exp_info.ops = &oplus_dmabuf_ops;
 	oplus_exp_info.size = page_order*PAGE_SIZE;
@@ -315,6 +321,11 @@ long panel_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
 	}
 
 	ioctl = &panel_ioctls[nr];
+	if (!ioctl) {
+		LCD_ERR("invalid ioctl\n");
+		return retcode;
+	}
+
 	func = ioctl->func;
 
 	if (unlikely(!func)) {
@@ -323,7 +334,9 @@ long panel_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
 		return retcode;
 	}
 
-	in_size = out_size = drv_size = PANEL_IOCTL_SIZE(cmd);
+	drv_size = PANEL_IOCTL_SIZE(cmd);
+	out_size = drv_size;
+	in_size = drv_size;
 
 	if ((cmd & ioctl->cmd & IOC_IN) == 0) {
 		in_size = 0;
@@ -371,10 +384,6 @@ long panel_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
 	}
 
 err_panel:
-
-	if (!ioctl) {
-		LCD_ERR("invalid ioctl\n");
-	}
 
 	if (kdata != static_data) {
 		kfree(kdata);

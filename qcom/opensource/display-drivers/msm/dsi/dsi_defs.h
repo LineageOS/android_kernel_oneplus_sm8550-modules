@@ -297,8 +297,49 @@ enum dsi_cmd_set_type {
 	DSI_CMD_SET_POST_TIMING_SWITCH,
 	DSI_CMD_SET_QSYNC_ON,
 	DSI_CMD_SET_QSYNC_OFF,
+#ifdef OPLUS_FEATURE_DISPLAY_ADFR
+	DSI_CMD_ADFR_AUTO_ON,
+	DSI_CMD_ADFR_AUTO_OFF,
+	DSI_CMD_ADFR_MIN_FPS_0,
+	DSI_CMD_ADFR_MIN_FPS_1,
+	DSI_CMD_ADFR_MIN_FPS_2,
+	DSI_CMD_ADFR_MIN_FPS_3,
+	DSI_CMD_ADFR_MIN_FPS_4,
+	DSI_CMD_ADFR_MIN_FPS_5,
+	DSI_CMD_ADFR_MIN_FPS_6,
+	DSI_CMD_ADFR_MIN_FPS_7,
+	DSI_CMD_ADFR_MIN_FPS_8,
+	DSI_CMD_ADFR_MIN_FPS_9,
+	DSI_CMD_ADFR_MIN_FPS_10,
+	DSI_CMD_ADFR_MIN_FPS_11,
+	DSI_CMD_ADFR_MIN_FPS_12,
+	DSI_CMD_ADFR_MIN_FPS_13,
+	DSI_CMD_ADFR_MIN_FPS_14,
+	DSI_CMD_HPWM_ADFR_MIN_FPS_0,
+	DSI_CMD_HPWM_ADFR_MIN_FPS_1,
+	DSI_CMD_HPWM_ADFR_MIN_FPS_2,
+	DSI_CMD_HPWM_ADFR_MIN_FPS_3,
+	DSI_CMD_HPWM_ADFR_MIN_FPS_4,
+	DSI_CMD_HPWM_ADFR_MIN_FPS_5,
+	DSI_CMD_HPWM_ADFR_MIN_FPS_6,
+	DSI_CMD_HPWM_ADFR_MIN_FPS_7,
+	DSI_CMD_HPWM_ADFR_MIN_FPS_8,
+	DSI_CMD_HPWM_ADFR_MIN_FPS_9,
+	DSI_CMD_HPWM_ADFR_MIN_FPS_10,
+	DSI_CMD_HPWM_ADFR_MIN_FPS_11,
+	DSI_CMD_HPWM_ADFR_MIN_FPS_12,
+	DSI_CMD_HPWM_ADFR_MIN_FPS_13,
+	DSI_CMD_HPWM_ADFR_MIN_FPS_14,
+	DSI_CMD_ADFR_FAKEFRAME,
+	DSI_CMD_ADFR_PRE_SWITCH,
+#endif /* OPLUS_FEATURE_DISPLAY_ADFR */
+#ifdef OPLUS_FEATURE_DISPLAY_TEMP_COMPENSATION
+	DSI_CMD_READ_TEMP_COMPENSATION_REG,
+	DSI_CMD_TEMPERATURE_COMPENSATION,
+#endif /* OPLUS_FEATURE_DISPLAY_TEMP_COMPENSATION */
 #ifdef OPLUS_FEATURE_DISPLAY_ONSCREENFINGERPRINT
 	DSI_CMD_HBM_ON,
+	DSI_CMD_HBM_ON_ONEPULSE,
 	DSI_CMD_HBM_OFF,
 	DSI_CMD_AOR_ON,
 	DSI_CMD_AOR_OFF,
@@ -323,6 +364,8 @@ enum dsi_cmd_set_type {
 	DSI_CMD_DATA_DIMMING_OFF,
 	DSI_CMD_OSC_CLK_MODEO0,
 	DSI_CMD_OSC_CLK_MODEO1,
+	DSI_CMD_OSC_TRACK_ON,
+	DSI_CMD_OSC_TRACK_OFF,
 	DSI_CMD_FFC_MODE0,
 	DSI_CMD_FFC_MODE1,
 	DSI_CMD_FFC_MODE2,
@@ -335,21 +378,23 @@ enum dsi_cmd_set_type {
 	DSI_CMD_LOADING_EFFECT_OFF,
 	DSI_CMD_HBM_ENTER_SWITCH,
 	DSI_CMD_HBM_EXIT_SWITCH,
-	/* OPLUS_FEATURE_ADFR, qsync enhance */
-	DSI_CMD_QSYNC_MIN_FPS_0,
-	DSI_CMD_QSYNC_MIN_FPS_1,
-	DSI_CMD_QSYNC_MIN_FPS_2,
-	DSI_CMD_QSYNC_MIN_FPS_3,
-	DSI_CMD_QSYNC_MIN_FPS_4,
-	DSI_CMD_QSYNC_MIN_FPS_5,
-	DSI_CMD_QSYNC_MIN_FPS_6,
-	DSI_CMD_QSYNC_MIN_FPS_7,
-	DSI_CMD_QSYNC_MIN_FPS_8,
-	DSI_CMD_QSYNC_MIN_FPS_9,
-	/* OPLUS_FEATURE_ADFR, fake frame */
-	DSI_CMD_FAKEFRAME,
-	/* OPLUS_FEATURE_ADFR, vsync switch */
-	DSI_CMD_ADFR_PRE_SWITCH,
+	DSI_CMD_HBM_MAX,
+	DSI_CMD_EXIT_HBM_MAX,
+	DSI_CMD_PWM_SWITCH_ONEPULSE,
+	DSI_CMD_TIMMING_PWM_SWITCH_ONEPULSE,
+	DSI_CMD_PWM_SWITCH_THREEPULSE,
+	DSI_CMD_PWM_SWITCH_HIGH,
+	DSI_CMD_PWM_SWITCH_LOW,
+	DSI_CMD_PWM_SWITCH_HIGH_RESTORE,
+	DSI_CMD_PWM_SWITCH_LOW_RESTORE,
+	DSI_CMD_TIMMING_PWM_SWITCH_HIGH,
+	DSI_CMD_TIMMING_PWM_SWITCH_LOW,
+	DSI_CMD_POWER_ON_PWM_SWITCH_HIGH,
+	DSI_CMD_POWER_ON_PWM_SWITCH_LOW,
+	DSI_CMD_DISABLE_PWM_BACKLIGHT_COMPENSATION,
+	DSI_CMD_DEMURA_DBV_MODE0,
+	DSI_CMD_DEMURA_DBV_MODE1,
+	DSI_CMD_DEMURA_DBV_MODE2,
 	DSI_CMD_DLY_ON,
 	DSI_CMD_DLY_OFF,
 	DSI_CMD_CABC_OFF,
@@ -358,6 +403,7 @@ enum dsi_cmd_set_type {
 	DSI_CMD_CABC_VIDEO,
 	DSI_CMD_ESD_SWITCH_PAGE,
 	DSI_CMD_PANEL_DATE_SWITCH,
+	DSI_CMD_PANEL_INFO_SWITCH_PAGE,
 	DSI_CMD_PANEL_INIT,
 	DSI_CMD_PWM_TURBO_ON,
 	DSI_CMD_PWM_TURBO_OFF,
@@ -366,17 +412,22 @@ enum dsi_cmd_set_type {
 	DSI_CMD_PWM_TURBO_AOR_ON,
 	DSI_CMD_PWM_TURBO_AOR_OFF,
 	DSI_CMD_PWM_TURBO_TIMING_SWITCH,
+	DSI_CMD_SET_BL_DEMUA1,
+	DSI_CMD_SET_BL_DEMUA2,
+	DSI_CMD_SET_BL_DEMUA3,
+	DSI_CMD_SET_BL_DEMUA4,
+	DSI_CMD_SET_BL_DEMUA5,
+	DSI_CMD_SET_BL_DEMUA6,
+	DSI_CMD_SET_ON_EVT,
+	DSI_CMD_SET_ON_DVT,
 #endif /* OPLUS_FEATURE_DISPLAY */
 #if defined(CONFIG_PXLW_IRIS)
 	DSI_CMD_SET_IRIS_SWITCH_TSP_VSYNC_SCANLINE,
 #endif
+	DSI_CMD_DEFAULT_SWITCH_PAGE,
+	DSI_CMD_SKIPFRAME_DBV,
 	DSI_CMD_SET_MAX
 };
-
-#ifdef OPLUS_FEATURE_DISPLAY
-/* OPLUS_FEATURE_ADFR, qsync enhance */
-#define DSI_CMD_QSYNC_MIN_FPS_COUNTS 10
-#endif /* OPLUS_FEATURE_DISPLAY */
 
 /**
  * enum dsi_cmd_set_state - command set state
@@ -468,6 +519,9 @@ struct dsi_panel_cmd_set {
 	u32 count;
 	u32 ctrl_idx;
 	struct dsi_cmd_desc *cmds;
+#ifdef OPLUS_FEATURE_DISPLAY
+	bool pack;
+#endif /* OPLUS_FEATURE_DISPLAY */
 };
 
 /**
@@ -591,6 +645,7 @@ struct dsi_host_common_cfg {
 	enum dsi_te_mode te_mode;
 	enum dsi_trigger_type mdp_cmd_trigger;
 	enum dsi_trigger_type dma_cmd_trigger;
+	enum dsi_trigger_type force_dma_cmd_trigger;
 	u32 cmd_trigger_stream;
 	enum dsi_color_swap_mode swap_mode;
 	bool bit_swap_red;
@@ -746,17 +801,6 @@ struct dsi_display_mode_priv_info {
 	bool widebus_support;
 	u32 allowed_mode_switch;
 
-#ifdef OPLUS_FEATURE_DISPLAY
-	/*  OPLUS_FEATURE_ADFR, qsync enhance */
-	u32 qsync_min_fps_sets_size;
-	u32 qsync_min_fps_sets[DSI_CMD_QSYNC_MIN_FPS_COUNTS];
-	u32 current_qsync_mode;
-	/* OPLUS_FEATURE_ADFR, fake frame */
-	// fakeframe_config: 0st Bit:firsttime 1st Bit:secondtime, 1:enable 0:disable
-	// for example, 3 mean both first and second time should send fake frame
-	u32 fakeframe_config;
-	u32 deferred_fakeframe_time;
-#endif /* OPLUS_FEATURE_DISPLAY */
 	bool disable_rsc_solver;
 #ifdef OPLUS_FEATURE_DISPLAY
 	/* Add for apollo */
@@ -765,7 +809,14 @@ struct dsi_display_mode_priv_info {
 	 */
 	u32 vsync_width;
 	u32 vsync_period;
+	u32 async_bl_delay;
 #endif /* OPLUS_FEATURE_DISPLAY */
+#ifdef OPLUS_FEATURE_DISPLAY_ADFR
+	unsigned int *oplus_adfr_min_fps_mapping_table;
+	unsigned char oplus_adfr_min_fps_mapping_table_count;
+	unsigned int oplus_adfr_fakeframe_config;
+	unsigned int oplus_adfr_idle_off_min_fps;
+#endif /* OPLUS_FEATURE_DISPLAY_ADFR */
 #ifdef OPLUS_FEATURE_DISPLAY_ONSCREENFINGERPRINT
 	bool oplus_ofp_need_to_separate_backlight;
 	bool oplus_ofp_need_to_sync_data_in_aod_unlocking;
@@ -794,10 +845,9 @@ struct dsi_display_mode {
 	bool is_preferred;
 	u32 mode_idx;
 	struct dsi_display_mode_priv_info *priv_info;
-#ifdef OPLUS_FEATURE_DISPLAY
-	/* OPLUS_FEATURE_ADFR, qcom patch for two TE source */
+#ifdef OPLUS_FEATURE_DISPLAY_ADFR
 	u32 vsync_source;
-#endif /* OPLUS_FEATURE_DISPLAY */
+#endif /* OPLUS_FEATURE_DISPLAY_ADFR */
 };
 
 /**

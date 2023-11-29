@@ -653,21 +653,11 @@ struct sde_connector {
 #endif
 	struct edid *cached_edid;
 #ifdef OPLUS_FEATURE_DISPLAY
-	/* indicate that whether the current frame backlight has been updated */
-	bool oplus_adfr_backlight_updated;
-	/* need qsync mode recovery after backlight status updated */
-	bool qsync_mode_recovery;
-	/* set timer to reset qsync after the backlight is no longer updated */
-	struct hrtimer qsync_mode_timer;
-	/* OPLUS_FEATURE_ADFR, qsync enhance */
-	u32 qsync_dynamic_min_fps;
-	/* OPLUS_FEATURE_ADFR, fixed qsync window and panel min fps nonsynchronous issue */
-	/* store the min fps value for next window setting */
-	u32 qsync_curr_dynamic_min_fps;
-	/* deferred min fps window setting status */
-	u32 qsync_deferred_window_status;
 	/* Used to indicate whether to update panel backlight in crtc_commit */
 	bool bl_need_sync;
+	bool bl_nits_dirty;
+	bool dimming_scale_dirty;
+	bool osc_need_update;
 #endif /* OPLUS_FEATURE_DISPLAY */
 	bool misr_event_notify_enabled;
 	struct sde_misr_sign previous_misr_sign;
@@ -732,17 +722,6 @@ struct dc_apollo_pcc_sync {
  * Returns: Current cached avr_step value for given connector
  */
 #define sde_connector_get_avr_step(C) ((C) ? to_sde_connector((C))->avr_step : 0)
-
-#ifdef OPLUS_FEATURE_DISPLAY
-/* OPLUS_FEATURE_ADFR, qsync enhance */
-/**
- * sde_connector_get_qsync_dynamic_min_fps - get sde connector's qsync_dynamic_min_fps
- * @C: Pointer to drm connector structure
- * Returns: Current cached qsync_dynamic_min_fps for given connector
- */
-#define sde_connector_get_qsync_dynamic_min_fps(C) \
-	((C) ? to_sde_connector((C))->qsync_dynamic_min_fps : 0)
-#endif /* OPLUS_FEATURE_DISPLAY */
 
 /**
  * sde_connector_get_propinfo - get sde connector's property info pointer

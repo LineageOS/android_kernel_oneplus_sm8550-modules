@@ -14,10 +14,11 @@
 #include "oplus_display_private_api.h"
 
 enum oplus_ofp_log_level {
-	OPLUS_OFP_LOG_LEVEL_ERR = 0,
-	OPLUS_OFP_LOG_LEVEL_WARN = 1,
-	OPLUS_OFP_LOG_LEVEL_INFO = 2,
-	OPLUS_OFP_LOG_LEVEL_DEBUG = 3,
+	OPLUS_OFP_LOG_LEVEL_NONE = 0,
+	OPLUS_OFP_LOG_LEVEL_ERR,
+	OPLUS_OFP_LOG_LEVEL_WARN,
+	OPLUS_OFP_LOG_LEVEL_INFO,
+	OPLUS_OFP_LOG_LEVEL_DEBUG,
 };
 
 enum oplus_ofp_display_id {
@@ -159,7 +160,9 @@ bool oplus_ofp_oled_capacitive_is_enabled(void);
 bool oplus_ofp_optical_new_solution_is_enabled(void);
 bool oplus_ofp_local_hbm_is_enabled(void);
 bool oplus_ofp_ultrasonic_is_enabled(void);
+bool oplus_ofp_ultra_low_power_aod_is_enabled(void);
 bool oplus_ofp_get_hbm_state(void);
+bool oplus_ofp_get_ultra_low_power_aod_state(void);
 int oplus_ofp_property_update(void *sde_connector, void *sde_connector_state, int prop_id, uint64_t prop_val);
 
 /* -------------------- fod -------------------- */

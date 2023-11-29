@@ -158,5 +158,34 @@ int oplus_panel_set_pinctrl_state(struct dsi_panel *panel, bool enable);
  */
 int oplus_panel_pinctrl_init(struct dsi_panel *panel);
 
+/**
+ * oplus_vddr_power_on_after_vddio() - oplus panel power on vddr as vddio vddr vci
+ * @panel: Display panel
+ * Return: Zero on Success
+ */
+int oplus_panel_vddr_on(struct dsi_display *display, const char *vreg_name);
+
+/**
+ * oplus_vddr_power_on_after_vddio() - oplus panel power off vddr as vci vddr vddio
+ * @panel: Display panel
+ * Return: Zero on Success
+ */
+int oplus_panel_vddr_off(struct dsi_display *display, const char *vreg_name);
+
+void oplus_sde_cp_crtc_apply_properties(struct drm_crtc *crtc, struct drm_encoder *encoder);
+void oplus_panel_event_notification_trigger(enum panel_event_notifier_tag panel_type,
+	struct panel_event_notification *notification);
+void oplus_wait_for_notify_done(struct dsi_display *display);
+int oplus_set_osc_status(struct drm_encoder *drm_enc);
+
+/**
+ * oplus_display_send_dcs_lock() - send dcs with lock
+ */
+int oplus_display_send_dcs_lock(struct dsi_display *display,
+        enum dsi_cmd_set_type type);
+
+int oplus_panel_cmdq_pack_handle(void *dsi_panel, enum dsi_cmd_set_type type, bool before_cmd);
+int oplus_panel_cmdq_pack_status_reset(void *sde_connector);
+int oplus_panel_get_id(struct dsi_display *display, char *boot_str);
 #endif /* __OPLUS_DISPLAY_INTERFACE_H__ */
 

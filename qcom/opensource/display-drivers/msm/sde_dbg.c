@@ -1244,6 +1244,37 @@ void sde_evtlog_dump_all(struct sde_dbg_evtlog *evtlog)
 
 }
 
+#ifdef OPLUS_FEATURE_DISPLAY
+void oplus_sde_evtlog_dump_all(void)
+{
+	struct sde_dbg_base *dbg_base = &sde_dbg_base;
+	u32 reg_dump_size;
+	u32 dump_mode_temp;
+
+	pr_err("oplus_sde_evtlog_dump_all entry\n");
+	SDE_EVT32(0x11, 0x22, 0x33);
+	SDE_EVT32(0x11, 0x22, 0x33);
+
+	mutex_lock(&dbg_base->mutex);
+
+	reg_dump_size =  _sde_dbg_get_reg_dump_size();
+	if (!dbg_base->reg_dump_base)
+		dbg_base->reg_dump_base = vzalloc(reg_dump_size);
+
+	dbg_base->reg_dump_addr =  dbg_base->reg_dump_base;
+	dump_mode_temp = dbg_base->evtlog->dump_mode;
+
+	if (sde_evtlog_is_enabled(dbg_base->evtlog, SDE_EVTLOG_ALWAYS)) {
+		dbg_base->evtlog->dump_mode = SDE_DBG_DUMP_IN_LOG;
+		sde_evtlog_dump_all(dbg_base->evtlog);
+		dbg_base->evtlog->dump_mode = dump_mode_temp;
+	}
+
+	mutex_unlock(&dbg_base->mutex);
+	pr_err("oplus_sde_evtlog_dump_all end\n");
+}
+#endif /* OPLUS_FEATURE_DISPLAY */
+
 /**
  * _sde_dump_array - dump array of register bases
  * @do_panic: whether to trigger a panic after dumping

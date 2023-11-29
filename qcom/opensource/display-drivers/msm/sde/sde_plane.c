@@ -3470,7 +3470,7 @@ static void _sde_plane_update_properties(struct drm_plane *plane,
 		_sde_plane_update_format_and_rects(psde, pstate, fmt);
 
 #if defined(CONFIG_PXLW_IRIS)
-	if (iris_is_chip_supported() &&  iris_pq_disable)
+	if (iris_is_chip_supported() && (iris_pq_disable & 0x04))
 		sde_color_process_plane_disable(plane);
 	else
 #endif

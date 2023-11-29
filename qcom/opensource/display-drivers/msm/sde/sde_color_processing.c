@@ -2319,10 +2319,10 @@ void sde_cp_crtc_apply_properties(struct drm_crtc *crtc)
 #if defined(CONFIG_PXLW_IRIS)
 	if (iris_is_chip_supported()) {
 		iris_pq_dirty = false;
-		if (iris_pq_disable == 1 && iris_pq_ops == SDE_CP_CRTC_DSPP_MAX) {
+		if ((iris_pq_disable & 0x02) == 2 && iris_pq_ops == SDE_CP_CRTC_DSPP_MAX) {
 			iris_pq_ops = SDE_CP_CRTC_DSPP_PCC;
 			iris_pq_dirty = true;
-		} else if (iris_pq_disable == 0 && iris_pq_ops == SDE_CP_CRTC_DSPP_PCC) {
+		} else if ((iris_pq_disable & 0x02) == 0 && iris_pq_ops == SDE_CP_CRTC_DSPP_PCC) {
 			iris_pq_ops = SDE_CP_CRTC_DSPP_MAX;
 			iris_pq_dirty = true;
 		}
@@ -2381,12 +2381,14 @@ void sde_cp_crtc_apply_properties(struct drm_crtc *crtc)
 			if (prop_node == NULL)
 				continue;
 			_sde_cp_crtc_commit_feature(prop_node, sde_crtc);
+			_sde_cp_dspp_flush_helper(sde_crtc, prop_node->feature);
 			/* Set the flush flag to true */
 			if (prop_node->is_dspp_feature)
 				set_dspp_flush = true;
 			else
 				set_lm_flush = true;
 		}
+		_sde_cp_dspp_flush_helper(sde_crtc, SDE_CP_CRTC_DSPP_SB);
 		iris_pq_dirty = false;
 	}
 #endif

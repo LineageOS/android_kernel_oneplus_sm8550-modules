@@ -246,13 +246,16 @@ enum msm_mdp_conn_property {
 	CONNECTOR_PROP_WB_USAGE_TYPE,
 
 #ifdef OPLUS_FEATURE_DISPLAY
-	CONNECTOR_PROP_QSYNC_MIN_FPS,
-#endif /* OPLUS_FEATURE_DISPLAY */
-
-#ifdef OPLUS_FEATURE_DISPLAY
 	// Prop to store sync panel backlight level
 	CONNECTOR_PROP_SYNC_BACKLIGHT_LEVEL,
+	CONNECTOR_PROP_SET_BACKLIGHT_NITS,
+	CONNECTOR_PROP_SET_DIMMING_SCALE,
+	CONNECTOR_PROP_SET_OSC_STATUS,
 #endif /* OPLUS_FEATURE_DISPLAY */
+
+#ifdef OPLUS_FEATURE_DISPLAY_ADFR
+	CONNECTOR_PROP_ADFR_MIN_FPS,
+#endif /* OPLUS_FEATURE_DISPLAY_ADFR */
 
 #ifdef OPLUS_FEATURE_DISPLAY_ONSCREENFINGERPRINT
 	CONNECTOR_PROP_HBM_ENABLE,
@@ -961,9 +964,6 @@ struct msm_display_kickoff_params {
 struct msm_display_conn_params {
 	uint32_t qsync_mode;
 	bool qsync_update;
-#ifdef OPLUS_FEATURE_DISPLAY
-	uint32_t qsync_dynamic_min_fps;
-#endif /* OPLUS_FEATURE_DISPLAY */
 };
 
 /**
@@ -1051,10 +1051,6 @@ struct msm_drm_private {
 
 	struct msm_drm_thread disp_thread[MAX_CRTCS];
 	struct msm_drm_thread event_thread[MAX_CRTCS];
-
-#ifdef OPLUS_FEATURE_DISPLAY
-	struct msm_drm_thread adfr_thread[MAX_CRTCS];
-#endif /* OPLUS_FEATURE_DISPLAY */
 
 	struct task_struct *pp_event_thread;
 	struct kthread_worker pp_event_worker;

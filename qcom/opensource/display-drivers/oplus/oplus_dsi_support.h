@@ -28,6 +28,11 @@ extern unsigned int oplus_bl_print_window;
 /* dual display id */
 extern unsigned int oplus_ofp_display_id;
 
+static inline int str_equal(const char *a, const char *b)
+{
+	return !strcmp(a, b);
+}
+
 /* lcd debug log */
 #define LCD_ERR(fmt, arg...)	\
 	do {	\
@@ -103,39 +108,44 @@ extern unsigned int oplus_ofp_display_id;
 			SDE_ATRACE_INT(name, value);	\
 	} while (0)
 
+enum oplus_log_level {
+	OPLUS_LOG_LEVEL_NONE = 0,
+	OPLUS_LOG_LEVEL_ERR,
+	OPLUS_LOG_LEVEL_WARN,
+	OPLUS_LOG_LEVEL_INFO,
+	OPLUS_LOG_LEVEL_DEBUG,
+};
+
 /**
  * enum oplus_debug_log --       flags to control debug log; 1->enbale  0->disable
  * @OPLUS_DEBUG_LOG_DISABLED:    disable all debug log
  * @OPLUS_DEBUG_LOG_CMD:         dump register log
  * @OPLUS_DEBUG_LOG_BACKLIGHT:   backlight log
- * @OPLUS_DEBUG_LOG_OFP:         ofp log
- * @OPLUS_DEBUG_LOG_VRR:         vrr log
+ * @OPLUS_DEBUG_LOG_COMMON:      common log
+ * @OPLUS_DEBUG_LOG_OFP:         OFP log
+ * @OPLUS_DEBUG_LOG_ADFR:        ADFR log
  * @OPLUS_DEBUG_LOG_LCD:         lcd log
+ * @OPLUS_DEBUG_LOG_TEMP_COMPENSATION:temp compensation log
  * @OPLUS_DEBUG_LOG_ALL:         enable all debug log
  */
 enum oplus_debug_log {
-	OPLUS_DEBUG_LOG_DISABLED     = 0,
-	OPLUS_DEBUG_LOG_CMD          = BIT(0),
-	OPLUS_DEBUG_LOG_BACKLIGHT    = BIT(1),
-	OPLUS_DEBUG_LOG_COMMON       = BIT(2),
-	OPLUS_DEBUG_LOG_OFP          = BIT(3),
-	OPLUS_DEBUG_LOG_VRR          = BIT(4),
-	OPLUS_DEBUG_LOG_LCD          = BIT(5),
-	OPLUS_DEBUG_LOG_ALL          = 0xFFFF,
-};
-
-enum oplus_log_level {
-	OPLUS_LOG_LEVEL_ERR = 0,
-	OPLUS_LOG_LEVEL_WARN = 1,
-	OPLUS_LOG_LEVEL_INFO = 2,
-	OPLUS_LOG_LEVEL_DEBUG = 3,
+	OPLUS_DEBUG_LOG_DISABLED = 0,
+	OPLUS_DEBUG_LOG_CMD = BIT(0),
+	OPLUS_DEBUG_LOG_BACKLIGHT = BIT(1),
+	OPLUS_DEBUG_LOG_COMMON = BIT(2),
+	OPLUS_DEBUG_LOG_OFP = BIT(3),
+	OPLUS_DEBUG_LOG_ADFR = BIT(4),
+	OPLUS_DEBUG_LOG_LCD = BIT(5),
+	OPLUS_DEBUG_LOG_TEMP_COMPENSATION = BIT(6),
+	OPLUS_DEBUG_LOG_ALL = 0xFFFF,
 };
 
 enum oplus_display_trace_enable {
 	OPLUS_DISPLAY_DISABLE_TRACE = 0,
 	OPLUS_DISPLAY_OFP_TRACE_ENABLE = BIT(0),
-	OPLUS_DISPLAY_VRR_TRACE_ENABLE = BIT(1),
+	OPLUS_DISPLAY_ADFR_TRACE_ENABLE = BIT(1),
 	OPLUS_DISPLAY_LCD_TRACE_ENABLE = BIT(2),
+	OPLUS_DISPLAY_TEMP_COMPENSATION_TRACE_ENABLE = BIT(3),
 };
 
 enum oplus_display_support_list {

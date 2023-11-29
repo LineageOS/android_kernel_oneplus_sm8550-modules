@@ -27,17 +27,23 @@
 
 #include <linux/version.h>
 
-#ifdef OPLUS_FEATURE_DISPLAY
-#include "../oplus/oplus_display_interface.h"
-#include "../oplus/oplus_display_private_api.h"
-#include "../oplus/oplus_dc_diming.h"
-#include <linux/sched.h>
+#ifdef OPLUS_FEATURE_DISPLAY_ADFR
 #include "../oplus/oplus_adfr.h"
+#endif /* OPLUS_FEATURE_DISPLAY_ADFR */
+
+#ifdef OPLUS_FEATURE_DISPLAY_TEMP_COMPENSATION
+#include "../oplus/oplus_display_temp_compensation.h"
+#endif /* OPLUS_FEATURE_DISPLAY_TEMP_COMPENSATION */
 
 #ifdef OPLUS_FEATURE_DISPLAY_ONSCREENFINGERPRINT
 #include "../oplus/oplus_onscreenfingerprint.h"
 #endif /* OPLUS_FEATURE_DISPLAY_ONSCREENFINGERPRINT */
 
+#ifdef OPLUS_FEATURE_DISPLAY
+#include "../oplus/oplus_display_interface.h"
+#include "../oplus/oplus_display_private_api.h"
+#include "../oplus/oplus_dc_diming.h"
+#include <linux/sched.h>
 #include "sde_trace.h"
 #include <linux/list.h>
 #include <linux/list_sort.h>
@@ -183,22 +189,11 @@ static int sde_backlight_device_update_status(struct backlight_device *bd)
 
 #ifdef OPLUS_FEATURE_DISPLAY
 	SDE_ATRACE_BEGIN("sde_backlight_device_update_status");
-
-	/* OPLUS_FEATURE_ADFR, backlight filter for OA */
-	if (oplus_adfr_is_support()) {
-		int qsync_propval = 0;
-
-		/* get backlight update status to avoid tearing issue */
-		c_conn->oplus_adfr_backlight_updated = true;
-
-		/* if qsync is still enable reset the qsync mode timer */
-		qsync_propval = sde_connector_get_property(c_conn->base.state,
-						CONNECTOR_PROP_QSYNC_MODE);
-		if (qsync_propval != SDE_RM_QSYNC_DISABLED) {
-			oplus_adfr_qsync_mode_timer_start(c_conn, 1000);
-		}
-	}
 #endif /* OPLUS_FEATURE_DISPLAY */
+
+#ifdef OPLUS_FEATURE_DISPLAY_ADFR
+	oplus_adfr_osync_backlight_updated(c_conn, true);
+#endif /* OPLUS_FEATURE_DISPLAY_ADFR */
 
 	brightness = bd->props.brightness;
 
@@ -819,6 +814,15 @@ static int _sde_connector_update_power_locked(struct sde_connector *c_conn)
 		display = c_conn->display;
 		set_power = c_conn->ops.set_power;
 
+#ifdef OPLUS_FEATURE_DISPLAY_TEMP_COMPENSATION
+		if (oplus_temp_compensation_is_supported()) {
+			if (mode == SDE_MODE_DPMS_ON) {
+				SDE_DEBUG("update ntc temp immediately when power on\n");
+				oplus_temp_compensation_get_ntc_temp();
+			}
+		}
+#endif /* OPLUS_FEATURE_DISPLAY_TEMP_COMPENSATION */
+
 		mutex_unlock(&c_conn->lock);
 		rc = set_power(connector, mode, display);
 		mutex_lock(&c_conn->lock);
@@ -1047,16 +1051,11 @@ void sde_connector_set_qsync_params(struct drm_connector *connector)
 	prop_dirty = msm_property_is_dirty(&c_conn->property_info,
 					&c_state->property_state,
 					CONNECTOR_PROP_QSYNC_MODE);
-#ifdef OPLUS_FEATURE_DISPLAY
-	/* OPLUS_FEATURE_ADFR, backlight filter for OA */
-	/* need qsync mode recovery after backlight status updated */
-	if (prop_dirty || c_conn->qsync_mode_recovery) {
-		if (oplus_adfr_is_support()) {
-			c_conn->qsync_mode_recovery = false;
-		}
-#else /* OPLUS_FEATURE_DISPLAY */
+#ifdef OPLUS_FEATURE_DISPLAY_ADFR
+	if (prop_dirty || oplus_adfr_need_restore_osync_mode(c_conn)) {
+#else /* OPLUS_FEATURE_DISPLAY_ADFR */
 	if (prop_dirty) {
-#endif /* OPLUS_FEATURE_DISPLAY */
+#endif /* OPLUS_FEATURE_DISPLAY_ADFR */
 		qsync_propval = sde_connector_get_property(c_conn->base.state,
 						CONNECTOR_PROP_QSYNC_MODE);
 		if (qsync_propval != c_conn->qsync_mode) {
@@ -1064,22 +1063,16 @@ void sde_connector_set_qsync_params(struct drm_connector *connector)
 					c_conn->qsync_mode, qsync_propval);
 			c_conn->qsync_updated = true;
 			c_conn->qsync_mode = qsync_propval;
-#ifdef OPLUS_FEATURE_DISPLAY
-			/* OPLUS_FEATURE_ADFR, fixed qsync window and panel min fps nonsynchronous issue */
-			if (oplus_adfr_is_support()) {
-				if (c_conn->qsync_mode == SDE_RM_QSYNC_DISABLED) {
-					/* qsync disable need change min fps */
-					c_conn->qsync_curr_dynamic_min_fps = 0;
-					/* OPLUS_FEATURE_ADFR, Modify for closing window immediately when qsync off */
-					c_conn->qsync_deferred_window_status = SET_WINDOW_IMMEDIATELY;
-				} else {
-					/* qsync enable no need change window */
-					c_conn->qsync_dynamic_min_fps = 0;
-				}
-			}
-#endif /* OPLUS_FEATURE_DISPLAY */
+#ifdef OPLUS_FEATURE_DISPLAY_ADFR
+			OPLUS_ADFR_TRACE_INT("oplus_adfr_osync_mode", c_conn->qsync_mode);
+			oplus_adfr_set_osync_params(c_conn, OPLUS_ADFR_OSYNC_MODE);
+#endif /* OPLUS_FEATURE_DISPLAY_ADFR */
 		}
 	}
+
+#ifdef OPLUS_FEATURE_DISPLAY_ADFR
+	oplus_adfr_set_osync_params(c_conn, OPLUS_ADFR_OSYNC_MIN_FPS);
+#endif /* OPLUS_FEATURE_DISPLAY_ADFR */
 
 	prop_dirty = msm_property_is_dirty(&c_conn->property_info, &c_state->property_state,
 					CONNECTOR_PROP_AVR_STEP);
@@ -1091,44 +1084,6 @@ void sde_connector_set_qsync_params(struct drm_connector *connector)
 			c_conn->avr_step = step_val;
 		}
 	}
-
-#ifdef OPLUS_FEATURE_DISPLAY
-	/* OPLUS_FEATURE_ADFR, qsync enhance */
-	if (oplus_adfr_is_support()) {
-		/*
-		prop_dirty = msm_property_is_dirty(&c_conn->property_info,
-						&c_state->property_state,
-						CONNECTOR_PROP_QSYNC_MIN_FPS);
-		*/
-		prop_dirty = oplus_adfr_qsync_mode_minfps_is_updated();
-		if (prop_dirty) {
-			/*
-			qsync_propval = sde_connector_get_property(c_conn->base.state,
-							CONNECTOR_PROP_QSYNC_MIN_FPS);
-			*/
-			qsync_propval = oplus_adfr_get_qsync_mode_minfps();
-			if (oplus_adfr_has_auto_mode(qsync_propval)) {
-				SDE_DEBUG("kVRR updated for auto mode %08X\n", qsync_propval);
-			} else {
-				if (qsync_propval != c_conn->qsync_dynamic_min_fps) {
-					SDE_INFO("kVRR updated qsync min fps %d -> %d\n",
-							c_conn->qsync_dynamic_min_fps, qsync_propval);
-					c_conn->qsync_updated = true;
-					/* OPLUS_FEATURE_ADFR, fixed qsync window and panel min fps nonsynchronous issue */
-					c_conn->qsync_curr_dynamic_min_fps = qsync_propval;
-					/* OPLUS_FEATURE_ADFR, fixed qsync off tearing issue */
-					if (qsync_propval == 0) {
-						/* closing window immediately when qsync off */
-						c_conn->qsync_deferred_window_status = SET_WINDOW_IMMEDIATELY;
-					} else {
-						c_conn->qsync_deferred_window_status = DEFERRED_WINDOW_START;
-					}
-				}
-			}
-		}
-	}
-#endif /* OPLUS_FEATURE_DISPLAY */
-
 }
 
 void sde_connector_complete_qsync_commit(struct drm_connector *conn,
@@ -1201,6 +1156,21 @@ static int _sde_connector_update_dirty_properties(
 		case CONNECTOR_PROP_SYNC_BACKLIGHT_LEVEL:
 			if (c_conn) {
 				c_conn->bl_need_sync = true;
+			}
+			break;
+		case CONNECTOR_PROP_SET_BACKLIGHT_NITS:
+			if (c_conn) {
+				c_conn->bl_nits_dirty = true;
+			}
+			break;
+		case CONNECTOR_PROP_SET_DIMMING_SCALE:
+			if (c_conn) {
+				c_conn->dimming_scale_dirty = true;
+			}
+			break;
+		case CONNECTOR_PROP_SET_OSC_STATUS:
+			if (c_conn) {
+				c_conn->osc_need_update = true;
 			}
 			break;
 #endif /* OPLUS_FEATURE_DISPLAY */
@@ -1321,13 +1291,6 @@ int sde_connector_prepare_commit(struct drm_connector *connector)
 	if (c_conn->qsync_updated) {
 		params.qsync_mode = c_conn->qsync_mode;
 		params.qsync_update = true;
-#ifdef OPLUS_FEATURE_DISPLAY
-		/* OPLUS_FEATURE_ADFR, qsync enhance */
-		if (oplus_adfr_is_support()) {
-			/* OPLUS_FEATURE_ADFR, fixed qsync window and panel min fps nonsynchronous issue */
-			params.qsync_dynamic_min_fps = c_conn->qsync_curr_dynamic_min_fps;
-		}
-#endif /* OPLUS_FEATURE_DISPLAY */
 	}
 
 	rc = c_conn->ops.prepare_commit(c_conn->display, &params);
@@ -2082,25 +2045,11 @@ static int sde_connector_atomic_set_property(struct drm_connector *connector,
 	case CONNECTOR_PROP_DYN_TRANSFER_TIME:
 		_sde_connector_set_prop_dyn_transfer_time(c_conn, val);
 		break;
-#ifdef OPLUS_FEATURE_DISPLAY
-	/* OPLUS_FEATURE_ADFR, qsync enhance */
-	case CONNECTOR_PROP_QSYNC_MIN_FPS:
-		if (oplus_adfr_is_support()) {
-			SDE_INFO("kVRR set qsync minfps dirty with %llu[%08X]\n", val, val);
-
-			/* minfps maybe disappear after state change, so handle it early */
-			if (oplus_adfr_handle_auto_mode(val)) {
-				SDE_DEBUG("kVRR updated auto mode %08X\n", val);
-			} else {
-				oplus_adfr_handle_qsync_mode_minfps(val);
-				SDE_DEBUG("kVRR updated qsync mode minfps %08X\n", val);
-			}
-
-			msm_property_set_dirty(&c_conn->property_info,
-					&c_state->property_state, idx);
-		}
+#ifdef OPLUS_FEATURE_DISPLAY_ADFR
+	case CONNECTOR_PROP_ADFR_MIN_FPS:
+		oplus_adfr_property_update(c_conn, c_state, idx, val);
 		break;
-#endif /* OPLUS_FEATURE_DISPLAY */
+#endif /* OPLUS_FEATURE_DISPLAY_ADFR */
 	case CONNECTOR_PROP_LP:
 		/* suspend case: clear stale MISR */
 		if (val == SDE_MODE_DPMS_OFF)
@@ -2137,6 +2086,15 @@ static int sde_connector_atomic_set_property(struct drm_connector *connector,
 
 #ifdef OPLUS_FEATURE_DISPLAY
 	case CONNECTOR_PROP_SYNC_BACKLIGHT_LEVEL:
+		msm_property_set_dirty(&c_conn->property_info, &c_state->property_state, idx);
+		break;
+	case CONNECTOR_PROP_SET_BACKLIGHT_NITS:
+		msm_property_set_dirty(&c_conn->property_info, &c_state->property_state, idx);
+		break;
+	case CONNECTOR_PROP_SET_DIMMING_SCALE:
+		msm_property_set_dirty(&c_conn->property_info, &c_state->property_state, idx);
+		break;
+	case CONNECTOR_PROP_SET_OSC_STATUS:
 		msm_property_set_dirty(&c_conn->property_info, &c_state->property_state, idx);
 		break;
 #endif /* OPLUS_FEATURE_DISPLAY */
@@ -2932,7 +2890,9 @@ static int sde_connector_fill_modes(struct drm_connector *connector,
 			max_width, max_height);
 
 #ifdef OPLUS_FEATURE_DISPLAY
-	drm_mode_sort_for_adfr(&connector->modes);
+	if (connector->connector_type == DRM_MODE_CONNECTOR_DSI) {
+		drm_mode_sort_for_adfr(&connector->modes);
+	}
 #endif /* OPLUS_FEATURE_DISPLAY */
 
 	if (sde_conn->ops.set_allowed_mode_switch)
@@ -3472,6 +3432,12 @@ static int _sde_connector_install_properties(struct drm_device *dev,
 #ifdef OPLUS_FEATURE_DISPLAY
 		msm_property_install_volatile_range(&c_conn->property_info, "sync_backlight_level",
 				0x0, 0, ~0, 0, CONNECTOR_PROP_SYNC_BACKLIGHT_LEVEL);
+		msm_property_install_volatile_range(&c_conn->property_info, "set_backlight_nits",
+				0x0, 0, ~0, 0, CONNECTOR_PROP_SET_BACKLIGHT_NITS);
+		msm_property_install_volatile_range(&c_conn->property_info, "set_dimming_scale",
+				0x0, 0, ~0, 0, CONNECTOR_PROP_SET_DIMMING_SCALE);
+		msm_property_install_volatile_range(&c_conn->property_info, "set_osc_status",
+				0x0, 0, ~0, 0, CONNECTOR_PROP_SET_OSC_STATUS);
 #endif /* OPLUS_FEATURE_DISPLAY */
 
 		msm_property_install_range(&c_conn->property_info, "dyn_transfer_time",
@@ -3539,14 +3505,13 @@ static int _sde_connector_install_properties(struct drm_device *dev,
 						CONNECTOR_PROP_AVR_STEP);
 		}
 
-#ifdef OPLUS_FEATURE_DISPLAY
-		/* OPLUS_FEATURE_ADFR, qsync enhance */
-		/* add qsync min fps prop when DPU support and ADFR support */
-		if (dsi_display->panel->qsync_caps.qsync_support && oplus_adfr_is_support()) {
+#ifdef OPLUS_FEATURE_DISPLAY_ADFR
+		if (test_bit(SDE_FEATURE_QSYNC, sde_kms->catalog->features) && dsi_display &&
+		    dsi_display->panel && dsi_display->panel->qsync_caps.qsync_support) {
 			msm_property_install_range(&c_conn->property_info, "qsync_min_fps",
-					0x0, 0, ~0, 0, CONNECTOR_PROP_QSYNC_MIN_FPS);
+					0x0, 0, ~0, 0, CONNECTOR_PROP_ADFR_MIN_FPS);
 		}
-#endif /* OPLUS_FEATURE_DISPLAY */
+#endif /* OPLUS_FEATURE_DISPLAY_ADFR */
 
 #ifdef OPLUS_FEATURE_DISPLAY_ONSCREENFINGERPRINT
 		if (oplus_ofp_is_supported()) {
@@ -3791,15 +3756,6 @@ struct drm_connector *sde_connector_init(struct drm_device *dev,
 	INIT_DELAYED_WORK(&c_conn->status_work,
 			sde_connector_check_status_work);
 
-#ifdef OPLUS_FEATURE_DISPLAY
-	/* OPLUS_FEATURE_ADFR, backlight filter for OA */
-	if (oplus_adfr_is_support()) {
-		/* qsync mode timer init */
-		hrtimer_init(&c_conn->qsync_mode_timer, CLOCK_MONOTONIC, HRTIMER_MODE_REL);
-		c_conn->qsync_mode_timer.function = oplus_adfr_qsync_mode_timer_handler;
-	}
-#endif /* OPLUS_FEATURE_DISPLAY */
-
 	return &c_conn->base;
 
 error_destroy_property:
@@ -3983,10 +3939,11 @@ static int _sde_connector_update_panel_level(struct sde_connector *c_conn)
 	c_conn->unset_bl_level = 0;
 
 	bd = c_conn->bl_device;
-	if (!bd)
+	if (bd) {
+		bd->props.brightness = bl_config->bl_level;
+		SDE_DEBUG("bl_level: %u\n", bl_config->bl_level);
+	} else
 		SDE_ERROR("Failed to get raw backlight\n");
-	bd->props.brightness = bl_config->bl_level;
-	SDE_DEBUG("bl_level: %u\n", bl_config->bl_level);
 
 	return rc;
 }

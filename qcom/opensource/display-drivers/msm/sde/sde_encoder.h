@@ -262,9 +262,6 @@ struct sde_encoder_virt {
 	bool delay_kickoff;
 	bool autorefresh_solver_disable;
 #ifdef OPLUS_FEATURE_DISPLAY
-	/* OPLUS_FEATURE_ADFR, fake frame */
-	struct hrtimer fakeframe_timer;
-	struct kthread_work fakeframe_work;
 	/* OPLUS_FEATURE_ADFR, double TE */
 	uint32_t cur_mode_hdisplay;
 #endif /* OPLUS_FEATURE_DISPLAY */

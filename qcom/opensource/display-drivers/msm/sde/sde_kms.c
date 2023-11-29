@@ -72,9 +72,12 @@
 #include "sde_trace.h"
 #ifdef OPLUS_FEATURE_DISPLAY
 #include "../oplus/oplus_display_private_api.h"
-/* OPLUS_FEATURE_ADFR, oplus adfr */
-#include "../oplus/oplus_adfr.h"
+#include "../oplus/oplus_display_interface.h"
 #endif /* OPLUS_FEATURE_DISPLAY */
+
+#ifdef OPLUS_FEATURE_DISPLAY_ADFR
+#include "../oplus/oplus_adfr.h"
+#endif /* OPLUS_FEATURE_DISPLAY_ADFR */
 
 /* defines for secure channel call */
 #define MEM_PROTECT_SD_CTRL_SWITCH 0x18
@@ -1054,8 +1057,14 @@ static void _sde_kms_drm_check_dpms(struct drm_atomic_state *old_state,
 			notification.notif_data.old_fps = old_fps;
 			notification.notif_data.new_fps = new_fps;
 			notification.notif_data.early_trigger = is_pre_commit;
+
+#ifndef OPLUS_FEATURE_DISPLAY
 			panel_event_notification_trigger(panel_type,
 					&notification);
+#else
+			oplus_panel_event_notification_trigger(panel_type, &notification);
+#endif /* OPLUS_FEATURE_DISPLAY */
+
 		}
 	}
 
@@ -1663,25 +1672,13 @@ static void sde_kms_complete_commit(struct msm_kms *kms,
 	for_each_old_crtc_in_state(old_state, crtc, old_crtc_state, i)
 		_sde_kms_release_splash_resource(sde_kms, crtc);
 
-#ifdef OPLUS_FEATURE_DISPLAY
-	/* OPLUS_FEATURE_ADFR, double TE */
-	if (oplus_adfr_is_support()) {
-		if (oplus_adfr_get_vsync_mode() == OPLUS_DOUBLE_TE_VSYNC) {
-			SDE_ATRACE_BEGIN("sde_kms_adfr_vsync_source_switch");
-			for_each_old_crtc_in_state(old_state, crtc, old_crtc_state, i) {
-				sde_kms_adfr_vsync_source_switch(kms, crtc);
-			}
-			SDE_ATRACE_END("sde_kms_adfr_vsync_source_switch");
-		} else if (oplus_adfr_get_vsync_mode() == OPLUS_EXTERNAL_TE_TP_VSYNC) {
-			/* OPLUS_FEATURE_ADFR, add for vsync switch in resolution switch and aod scene */
-			SDE_ATRACE_BEGIN("sde_kms_adfr_vsync_switch");
-			for_each_old_crtc_in_state(old_state, crtc, old_crtc_state, i) {
-				sde_kms_adfr_vsync_switch(kms, crtc);
-			}
-			SDE_ATRACE_END("sde_kms_adfr_vsync_switch");
-		}
+#ifdef OPLUS_FEATURE_DISPLAY_ADFR
+	for_each_old_connector_in_state(old_state, connector,
+			old_conn_state, i) {
+		oplus_adfr_frame_done_te_source_vsync_switch(connector);
+		oplus_adfr_frame_done_mux_vsync_switch(connector);
 	}
-#endif /* OPLUS_FEATURE_DISPLAY */
+#endif /* OPLUS_FEATURE_DISPLAY_ADFR */
 
 	SDE_EVT32_VERBOSE(SDE_EVTLOG_FUNC_EXIT);
 	SDE_ATRACE_END("sde_kms_complete_commit");

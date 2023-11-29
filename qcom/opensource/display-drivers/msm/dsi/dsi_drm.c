@@ -22,9 +22,12 @@
 #include "sde_encoder.h"
 
 #ifdef OPLUS_FEATURE_DISPLAY
-/* OPLUS_FEATURE_ADFR, oplus adfr */
-#include "../oplus/oplus_adfr.h"
+#include "../oplus/oplus_display_interface.h"
 #endif /* OPLUS_FEATURE_DISPLAY */
+
+#ifdef OPLUS_FEATURE_DISPLAY_ADFR
+#include "../oplus/oplus_adfr.h"
+#endif /* OPLUS_FEATURE_DISPLAY_ADFR */
 
 #define to_dsi_bridge(x)     container_of((x), struct dsi_bridge, base)
 #define to_dsi_state(x)      container_of((x), struct dsi_connector_state, base)
@@ -363,6 +366,11 @@ static void dsi_bridge_post_disable(struct drm_bridge *bridge)
 		SDE_ATRACE_END("dsi_bridge_post_disable");
 		return;
 	}
+
+#ifdef OPLUS_FEATURE_DISPLAY
+	oplus_wait_for_notify_done(display);
+#endif /* OPLUS_FEATURE_DISPLAY */
+
 	SDE_ATRACE_END("dsi_bridge_post_disable");
 }
 
@@ -559,13 +567,9 @@ static bool dsi_bridge_mode_fixup(struct drm_bridge *bridge,
 		return false;
 	}
 
-#ifdef OPLUS_FEATURE_DISPLAY
-	/* OPLUS_FEATURE_ADFR, qcom patch for two TE source */
-	/* add vsync source info from panel_dsi_mode to dsi_mode */
-	if (oplus_adfr_is_support()) {
-		dsi_mode.vsync_source = panel_dsi_mode->vsync_source;
-	}
-#endif /* OPLUS_FEATURE_DISPLAY */
+#ifdef OPLUS_FEATURE_DISPLAY_ADFR
+	oplus_adfr_te_source_vsync_switch_mode_fixup(display, &dsi_mode, panel_dsi_mode);
+#endif /* OPLUS_FEATURE_DISPLAY_ADFR */
 
 	rc = dsi_display_validate_mode(c_bridge->display, &dsi_mode,
 			DSI_VALIDATE_FLAG_ALLOW_ADJUST);
@@ -1569,7 +1573,7 @@ int dsi_conn_set_dyn_bit_clk(struct drm_connector *connector, uint64_t value)
 	display->dyn_bit_clk_pending = true;
 
 	SDE_EVT32(display->dyn_bit_clk);
-	DSI_DEBUG("update dynamic bit clock rate to %llu\n", display->dyn_bit_clk);
+	DSI_INFO("update dynamic bit clock rate to %llu\n", display->dyn_bit_clk);
 
 	return 0;
 }

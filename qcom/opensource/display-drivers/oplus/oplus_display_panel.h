@@ -27,7 +27,6 @@
 #include "oplus_display_panel_common.h"
 #include "oplus_ffl.h"
 #include "oplus_dc_diming.h"
-#include "oplus_adfr.h"
 
 #define OPLUS_PANEL_NAME "oplus_display"
 #define OPLUS_PANEL_CLASS_NAME "oplus_display_class"
@@ -90,6 +89,10 @@ struct softiris_color
 	uint32_t color_dual_panel_status;
 	uint32_t color_dual_brightness_status;
 	uint32_t color_oplus_calibrate_status;
+	uint32_t color_samsung_status;
+	uint32_t color_loading_status;
+	uint32_t color_2nit_status;
+	uint32_t color_nature_profession_status;
 };
 
 struct kernel_loglevel {
@@ -99,7 +102,7 @@ struct kernel_loglevel {
 
 /* oplus ioctl case start */
 #define PANEL_COMMOND_BASE 0x00
-#define PANEL_COMMOND_MAX  0x68
+#define PANEL_COMMOND_MAX  0x74
 
 #define PANEL_IOCTL_SET_POWER                    PANEL_IOW(0x01, struct panel_vol_set)
 #define PANEL_IOCTL_GET_POWER                    PANEL_IOWR(0x02, struct panel_vol_get)
@@ -157,6 +160,8 @@ struct kernel_loglevel {
 #define PANEL_IOCTL_GET_PANEL_ROUND_CORNER       PANEL_IOWR(0x36, unsigned int)
 #define PANEL_IOCTL_SET_DC_REAL_BACKLIGHT        PANEL_IOWR(0x37, unsigned int)
 #define PANEL_IOCTL_GET_LCD_MAX_BRIGHTNESS       PANEL_IOWR(0x38, unsigned int)
+#define PANEL_IOCTL_GET_PANEL_BPP                PANEL_IOWR(0x3B, unsigned int)
+#define PANEL_IOCTL_GET_PANEL_NAME               PANEL_IOWR(0x3C, struct panel_name)
 #define PANEL_IOCTL_SET_APOLLO_BACKLIGHT         PANEL_IOW(0x51, struct apollo_backlight_map_value)
 #define PANEL_IOCTL_GET_SOFTIRIS_COLOR           PANEL_IOWR(0x53, struct softiris_color)
 #define PANEL_IOCTL_SET_DITHER_STATUS            PANEL_IOWR(0x54, unsigned int)
@@ -179,6 +184,11 @@ struct kernel_loglevel {
 #define PANEL_IOCTL_GET_PQ_TRIGGER               PANEL_IOWR(0x63, unsigned int)
 #define PANEL_IOCTL_SET_PWM_TURBO                PANEL_IOWR(0x66, unsigned int)
 #define PANEL_IOCTL_GET_PWM_TURBO                PANEL_IOWR(0x67, unsigned int)
+#define PANEL_IOCTL_GET_PANEL_TYPE               PANEL_IOWR(0x69, unsigned int)
+#define PANEL_IOCTL_SET_HBM_MAX                  PANEL_IOWR(0x70, unsigned int)
+#define PANEL_IOCTL_GET_HBM_MAX                  PANEL_IOWR(0x71, unsigned int)
+#define PANEL_IOCTL_SET_PWM_PULSE                PANEL_IOWR(0x72, unsigned int)
+#define PANEL_IOCTL_GET_PWM_PULSE                PANEL_IOWR(0x73, unsigned int)
 /*oplus ioctl case end*/
 
 int oplus_display_panel_init(void);

@@ -305,17 +305,10 @@ struct dsi_display {
 	bool enabled;
 
 #ifdef OPLUS_FEATURE_DISPLAY
-	/* OPLUS_FEATURE_ADFR, qsync enhance */
-	/* save qsync info, then restore qsync status after panel enable*/
-	bool need_qsync_restore;
-	/* OPLUS_FEATURE_ADFR, Add for qsync tearing issue */
-	/* force close qysnc window when qsync mode is on before panel enable */
-	bool force_qsync_mode_off;
-	uint32_t current_qsync_mode;
-	uint32_t current_qsync_dynamic_min_fps;
-	/* OPLUS_FEATURE_ADFR, vsync switch */
-	struct completion switch_te_gate;
-	int disp_te_gpio_1;
+	struct mutex dspp_lock;
+	u32 panel_id_da;
+	u32 panel_id_db;
+	u32 panel_id_dc;
 #endif /* OPLUS_FEATURE_DISPLAY */
 #if defined(CONFIG_PXLW_IRIS)
 	u32 off;
@@ -660,6 +653,8 @@ int dsi_display_set_tpg_state(struct dsi_display *display, bool enable,
 		enum dsi_test_pattern type,
 		u32 init_val,
 		enum dsi_ctrl_tpg_pattern pattern);
+int dsi_display_override_dma_cmd_trig(struct dsi_display *display,
+		enum dsi_trigger_type type);
 
 int dsi_display_clock_gate(struct dsi_display *display, bool enable);
 int dsi_dispaly_static_frame(struct dsi_display *display, bool enable);

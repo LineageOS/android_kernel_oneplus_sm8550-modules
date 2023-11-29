@@ -11,6 +11,9 @@
 #include "dsi_defs.h"
 #include "dsi_phy_hw.h"
 #include "dsi_catalog.h"
+#ifdef OPLUS_FEATURE_DISPLAY
+#include "dsi_display.h"
+#endif
 
 #define DSIPHY_CMN_REVISION_ID0                                   0x000
 #define DSIPHY_CMN_REVISION_ID1                                   0x004
@@ -117,6 +120,10 @@
 
 #ifdef OPLUS_FEATURE_DISPLAY
 extern bool oplus_enhance_mipi_strength;
+#endif /* OPLUS_FEATURE_DISPLAY */
+
+#ifdef OPLUS_FEATURE_DISPLAY
+extern bool g_oplus_vreg_ctrl_config;
 #endif /* OPLUS_FEATURE_DISPLAY */
 
 static int dsi_phy_hw_v5_0_is_pll_on(struct dsi_phy_hw *phy)
@@ -342,6 +349,9 @@ static void dsi_phy_hw_dphy_enable(struct dsi_phy_hw *phy, struct dsi_phy_cfg *c
 	if (oplus_enhance_mipi_strength) {
 		glbl_str_swi_cal_sel_ctrl = 0x01;
 		glbl_hstx_str_ctrl_0 = 0xFF;
+		if (g_oplus_vreg_ctrl_config) {
+			vreg_ctrl_0 = 0x47;
+		}
 	} else {
 		glbl_str_swi_cal_sel_ctrl = 0x00;
 		glbl_hstx_str_ctrl_0 = 0x88;

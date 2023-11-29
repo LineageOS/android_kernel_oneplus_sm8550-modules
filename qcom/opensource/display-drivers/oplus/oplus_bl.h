@@ -27,6 +27,11 @@ enum GLOBAL_HBM_ENUM{
 	GLOBAL_HBM_ENABLE,   /* Enable global hbm */
 };
 
+enum PWM_SWITCH_STATE{
+	PWM_SWITCH_LOW_STATE = 0,
+	PWM_SWITCH_HIGH_STATE,
+};
+
 static int backlight_buf[] = {
 	0, 1, 2, 3, 4, 5, 6, 6, 7, 8, 9, 10, 11, 11, 12, 13, 14, 15, 16, 16, 17, 18, 19, 20, 21, 21, 22, 23, 24, \
 	25, 26, 26, 27, 28, 29, 30, 30, 31, 32, 33, 34, 35, 35, 36, 37, 38, 39, 40, 40, 41, 42, 43, 44, 45, 45, 46, 47, 48, 49, \
@@ -294,6 +299,12 @@ int oplus_panel_parse_bl_config(struct dsi_panel *panel);
 int oplus_panel_global_hbm_mapping(struct dsi_panel *panel, u32 *backlight_level);
 int oplus_display_panel_get_global_hbm_status(void);
 void oplus_display_panel_set_global_hbm_status(int global_hbm_status);
+void oplus_pwm_disable_duty_set_work_handler(struct work_struct *work);
+int oplus_panel_pwm_switch_backlight(struct dsi_panel *panel, u32 bl_lvl);
+int oplus_panel_pwm_switch_timing_switch(struct dsi_panel *panel);
+int oplus_panel_pwm_switch_wait_te_tx_cmd(struct dsi_panel *panel, u32 pwm_switch_cmd, u32 pwm_switch_state_last);
+int oplus_hbm_pwm_state(struct dsi_panel *panel, bool hbm_state);
+void oplus_panel_backlight_demura_dbv_switch(struct dsi_panel *panel, u32 bl_lvl);
 
 #endif /* __OPLUS_BL_H__ */
 

@@ -129,9 +129,6 @@ struct dsi_pinctrl_info {
 	struct pinctrl_state *suspend;
 	struct pinctrl_state *pwm_pin;
 #ifdef OPLUS_FEATURE_DISPLAY
-	/* OPLUS_FEATURE_ADFR, qcom patch for two TE source */
-	struct pinctrl_state *te1_active;
-	struct pinctrl_state *te1_suspend;
 	/* oplus panel pinctrl */
 	struct pinctrl_state *oplus_panel_active;
 	struct pinctrl_state *oplus_panel_suspend;
@@ -178,6 +175,13 @@ struct dsi_panel_oplus_privite {
 	u32 osc_rate_cur;
 	bool gpio_pre_on;
 	bool pinctrl_enabled;
+	bool pwm_switch_support;
+	bool pwm_onepulse_support;
+	bool pwm_onepulse_enabled;
+	bool dynamic_demua_support;
+	u32 hbm_max_state;
+	bool cmdq_pack_support;
+	bool cmdq_pack_state;
 /********************************************
 	fp_type usage:
 	bit(0):lcd capacitive fingerprint(aod/fod are not supported)
@@ -191,11 +195,21 @@ struct dsi_panel_oplus_privite {
 ********************************************/
 	u32 fp_type;
 	bool enhance_mipi_strength;
+	bool oplus_vreg_ctrl_flag;
+	bool oplus_sw_reset_ctrl_flag;
+	bool oplus_disp_hw_seq_modify_flag;
+	bool pwm_create_thread;
+	bool oplus_bl_demura_dbv_support;
+	int bl_demura_mode;
+	bool pwm_switch_restore_support;
+	bool need_sync;
+	u32 disable_delay_bl_count;
 };
 
 struct dsi_panel_oplus_serial_number {
 	bool serial_number_support;
 	bool is_reg_lock;
+	bool is_switch_page;
 	u32 serial_number_reg;
 	int serial_number_index;
 	int serial_number_conut;
@@ -218,6 +232,8 @@ struct dsi_backlight_config {
 	u32 global_hbm_case_id;
 	u32 global_hbm_threshold;
 	bool global_hbm_scale_mapping;
+	u32 pwm_bl_threshold;
+	u32 pwm_bl_onepulse_threshold;
 #endif /* OPLUS_FEATURE_DISPLAY */
 
 	/* current brightness value */
@@ -395,21 +411,24 @@ struct dsi_panel {
 	struct dsi_panel_oplus_serial_number oplus_ser;
 	int panel_id2;
 	atomic_t esd_pending;
-	/* OPLUS_FEATURE_ADFR, vsync switch */
-	int vsync_switch_gpio;
-	int vsync_switch_gpio_level;
-	bool vsync_switch_pending;
-	bool need_te_source_switch;
-	/* OPLUS_FEATURE_ADFR, add for vsync switch in resolution switch and aod scene */
-	bool force_te_vsync;
-	bool need_vsync_switch;
-	u32 cur_h_active;
-	u32 cur_refresh_rate;
-	/* OPLUS_FEATURE_ADFR, dynamic te detect */
-	int dynamic_te_gpio;
 	struct mutex panel_tx_lock;
-	bool is_switching;
 	struct mutex oplus_ffc_lock;
+	u32 oplus_pwm_switch_state;
+	bool pwm_power_on;
+	bool pwm_hbm_state;
+	ktime_t te_timestamp;
+	/* for notify worker */
+	struct kthread_worker *notify_worker;
+	struct kthread_work work;
+	enum panel_event_notifier_tag panel_event;
+	struct panel_event_notification notification;
+	struct completion notify_done;
+	int need_to_wait_notify_done;
+	/*as the judgment of the first light screen */
+	bool post_power_on;
+	/* for pwm disable duty worker*/
+	struct workqueue_struct *oplus_pwm_disable_duty_set_wq;
+	struct work_struct oplus_pwm_disable_duty_set_work;
 #endif /* OPLUS_FEATURE_DISPLAY */
 
 #if defined(CONFIG_PXLW_IRIS)
