@@ -151,6 +151,7 @@ struct tfa_device {
 	/*Add for calibration range*/
 	u32 min_mohms;
 	u32 max_mohms;
+	u32 default_mohms;
 	#endif /* OPLUS_ARCH_EXTENDS */
 
 	/* 0-left/top, 1-right/bottom, 0xff-default, not initialized */

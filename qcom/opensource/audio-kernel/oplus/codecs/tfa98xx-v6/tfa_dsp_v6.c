@@ -3664,7 +3664,11 @@ enum Tfa98xx_Error tfa_dsp_get_resonance_frequency(struct tfa_device *tfa, uint1
 {
 	enum Tfa98xx_Error error = Tfa98xx_Error_Ok;
 	unsigned char bytes[3 * 2] = { 0 };
+#ifdef OPLUS_ARCH_EXTENDS
+	int data[2] = {0, 0};
+#else
 	int data[2];
+#endif
 	error = tfa_dsp_cmd_id_write_read_v6(tfa, MODULE_SPEAKERBOOST, SB_PARAM_GET_FRES, 6, bytes);
 	if (error == Tfa98xx_Error_Ok) {
 		tfa98xx_convert_bytes2data_v6(6, bytes, data);

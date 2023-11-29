@@ -71,6 +71,10 @@ extern bool g_speaker_resistance_fail;
 #define TF98XX_MAX_DSP_START_TRY_COUNT	10
 #define TFADSP_FLAG_CALIBRATE_DONE 1
 
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(6, 1, 0))
+#define PDE_DATA(inode) pde_data(inode)
+#endif /* KERNEL_VERSION(6, 1, 0) */
+
 /* data accessible by all instances */
 static struct kmem_cache *tfa98xx_cache = NULL;  /* Memory pool used for DSP messages */
 /* Mutex protected data */
@@ -1446,10 +1450,10 @@ static ssize_t tfa98xx_fres_read(struct file *file,
 	uint16_t fres = 0;
 	struct tfa98xx *tfa98xx = NULL;
 
-	str = kmalloc(PAGE_SIZE, GFP_KERNEL);
+	str = kzalloc(PAGE_SIZE, GFP_KERNEL);
 	if (!str) {
 		ret = -ENOMEM;
-		pr_err("[0x%x] memory allocation failed\n", tfa98xx->i2c->addr);
+		pr_err("memory allocation failed\n");
 		goto fres_err;
 	}
 
@@ -1970,7 +1974,7 @@ static ssize_t tfa98xx_dbgfs_rpc_read(struct file *file,
 	int ret = 0;
 	uint8_t *buffer;
 
-	buffer = kmalloc(count, GFP_KERNEL);
+	buffer = kzalloc(count, GFP_KERNEL);
 	if (buffer == NULL) {
 		pr_err("[0x%x] can not allocate memory\n", tfa98xx->i2c->addr);
 		return -ENOMEM;
@@ -3117,6 +3121,76 @@ static int tfa98xx_get_stereo_ctl(struct snd_kcontrol *kcontrol,
 
 #endif /* OPLUS_ARCH_EXTENDS */
 
+#ifdef OPLUS_ARCH_EXTENDS
+/*Add for default impedance*/
+static int tfa98xx_info_default_impedance_ctl(struct snd_kcontrol *kcontrol,
+                                struct snd_ctl_elem_info *uinfo)
+{
+	uinfo->type = SNDRV_CTL_ELEM_TYPE_INTEGER;
+	mutex_lock(&tfa98xx_mutex);
+	uinfo->count = tfa98xx_device_count;
+	mutex_unlock(&tfa98xx_mutex);
+	uinfo->value.integer.min = 0;
+	uinfo->value.integer.max = 0xffff; /* 16 bit value */
+
+	return 0;
+}
+
+static int tfa98xx_set_default_impedance_ctl(struct snd_kcontrol *kcontrol,
+                               struct snd_ctl_elem_value *ucontrol)
+{
+	struct tfa98xx *tfa98xx;
+
+	mutex_lock(&tfa98xx_mutex);
+	list_for_each_entry(tfa98xx, &tfa98xx_device_list, list) {
+		struct tfa_device *tfa = tfa98xx->tfa;
+		int i = 0;
+
+		if (!tfa) {
+			dev_info(tfa98xx->dev, "%s: tfa not init!\n", __func__);
+			break;
+		}
+
+		i = tfa->dev_idx;
+		if (i < 0 || i >= tfa98xx_device_count) {
+			dev_info(tfa98xx->dev, "invail dev_idx %d, device count %d\n", i, tfa98xx_device_count);
+			break;
+		}
+		//tfa->default_mohms = (u32)ucontrol->value.integer.value[i];
+	}
+	mutex_unlock(&tfa98xx_mutex);
+
+	return 1;
+}
+
+static int tfa98xx_get_default_impedance_ctl(struct snd_kcontrol *kcontrol,
+                               struct snd_ctl_elem_value *ucontrol)
+{
+	struct tfa98xx *tfa98xx;
+
+	mutex_lock(&tfa98xx_mutex);
+	list_for_each_entry(tfa98xx, &tfa98xx_device_list, list) {
+		struct tfa_device *tfa = tfa98xx->tfa;
+		int i = 0;
+
+		if (!tfa) {
+			dev_info(tfa98xx->dev, "%s: tfa not init!\n", __func__);
+			break;
+		}
+
+		i = tfa->dev_idx;
+		if (i < 0 || i >= tfa98xx_device_count) {
+			dev_info(tfa98xx->dev, "invail dev_idx %d, device count %d\n", i, tfa98xx_device_count);
+			break;
+		}
+		ucontrol->value.integer.value[i] = tfa->default_mohms;
+	}
+	mutex_unlock(&tfa98xx_mutex);
+
+	return 0;
+}
+#endif /* OPLUS_ARCH_EXTENDS */
+
 static int tfa98xx_create_controls(struct tfa98xx *tfa98xx)
 {
 	int prof, nprof, mix_index = 0;
@@ -3146,6 +3220,11 @@ static int tfa98xx_create_controls(struct tfa98xx *tfa98xx)
 		nr_controls += 1;
 	}
 #endif
+
+	#ifdef OPLUS_ARCH_EXTENDS
+	/* Add for default impedance */
+	nr_controls += 1;
+	#endif /*OPLUS_ARCH_EXTENDS*/
 
 	/* allocate the tfa98xx_controls base on the nr of profiles */
 	nprof = tfa_cnt_get_dev_nprof(tfa98xx->tfa);
@@ -3272,6 +3351,16 @@ static int tfa98xx_create_controls(struct tfa98xx *tfa98xx)
 		tfa98xx_controls[mix_index].put = tfa98xx_set_cal_f0_ctl;
 		mix_index++;
 	}
+	#endif /*OPLUS_ARCH_EXTENDS*/
+
+	#ifdef OPLUS_ARCH_EXTENDS
+	/* Add for default impedance */
+	tfa98xx_controls[mix_index].name = "TFA Default Impedance";
+	tfa98xx_controls[mix_index].iface = SNDRV_CTL_ELEM_IFACE_MIXER;
+	tfa98xx_controls[mix_index].info = tfa98xx_info_default_impedance_ctl;
+	tfa98xx_controls[mix_index].get = tfa98xx_get_default_impedance_ctl;
+	tfa98xx_controls[mix_index].put = tfa98xx_set_default_impedance_ctl;
+	mix_index++;
 	#endif /*OPLUS_ARCH_EXTENDS*/
 
 	#ifdef OPLUS_ARCH_EXTENDS
@@ -5388,8 +5477,14 @@ static int tfa98xx_i2c_probe(struct i2c_client *i2c,
 		tfa98xx->tfa->max_mohms = SMART_PA_RANGE_DEFAULT_MAX;
 	}
 
-	dev_err(&i2c->dev, "min_mohms=%u, max_mohms=%u\n",
-			tfa98xx->tfa->min_mohms, tfa98xx->tfa->max_mohms);
+	ret = of_property_read_u32(i2c->dev.of_node, "tfa_default_mohm", &tfa98xx->tfa->default_mohms);
+	if (ret) {
+		dev_info(&i2c->dev, "Failed to parse default impedance node\n");
+		tfa98xx->tfa->default_mohms = 0;
+	}
+
+	dev_info(&i2c->dev, "min_mohms=%u, max_mohms=%u, default_mohms=%u\n",
+			tfa98xx->tfa->min_mohms, tfa98xx->tfa->max_mohms, tfa98xx->tfa->default_mohms);
 
 	/* 0-left/top, 1-right/bottom, 0xff-default, not initialized */
 	ret = of_property_read_u32(i2c->dev.of_node, "tfa_channel", &tfa98xx->tfa->channel);
@@ -5398,7 +5493,7 @@ static int tfa98xx_i2c_probe(struct i2c_client *i2c,
 		tfa98xx->tfa->channel = 0xff;
 	}
 
-	dev_err(&i2c->dev, "channel=%d   (0-left/top, 1-right/bottom, 0xff-default, not initialized)\n",
+	dev_info(&i2c->dev, "channel=%d   (0-left/top, 1-right/bottom, 0xff-default, not initialized)\n",
 			tfa98xx->tfa->channel);
 	#endif /* OPLUS_ARCH_EXTENDS */
 
@@ -5508,7 +5603,11 @@ static int tfa98xx_i2c_probe(struct i2c_client *i2c,
 	return 0;
 }
 
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(6, 1, 0))
+static void tfa98xx_i2c_remove(struct i2c_client *i2c)
+#else /* KERNEL_VERSION(6, 1, 0) */
 static int tfa98xx_i2c_remove(struct i2c_client *i2c)
+#endif /* KERNEL_VERSION(6, 1, 0) */
 {
 	struct tfa98xx *tfa98xx = i2c_get_clientdata(i2c);
 
@@ -5563,10 +5662,17 @@ static int tfa98xx_i2c_remove(struct i2c_client *i2c)
 	}
 	#endif /* OPLUS_ARCH_EXTENDS */
 
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(6, 1, 0))
+	if (gpio_is_valid(tfa98xx->irq_gpio))
+		gpio_free(tfa98xx->irq_gpio);
+	if (gpio_is_valid(tfa98xx->reset_gpio))
+		gpio_free(tfa98xx->reset_gpio);
+#else /* KERNEL_VERSION(6, 1, 0) */
 	if (gpio_is_valid(tfa98xx->irq_gpio))
 		devm_gpio_free(&i2c->dev, tfa98xx->irq_gpio);
 	if (gpio_is_valid(tfa98xx->reset_gpio))
 		devm_gpio_free(&i2c->dev, tfa98xx->reset_gpio);
+#endif /* KERNEL_VERSION(6, 1, 0) */
 
 	mutex_lock(&tfa98xx_mutex);
 	list_del(&tfa98xx->list);
@@ -5577,7 +5683,9 @@ static int tfa98xx_i2c_remove(struct i2c_client *i2c)
 	}
 	mutex_unlock(&tfa98xx_mutex);
 
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(6, 1, 0))
 	return 0;
+#endif /* KERNEL_VERSION(6, 1, 0) */
 }
 
 static const struct i2c_device_id tfa98xx_i2c_id[] = {
@@ -5635,9 +5743,24 @@ static int __init tfa98xx_i2c_init(void)
 	if (!tfa98xx_cache) {
 		pr_err("tfa98xx can't create memory pool\n");
 		ret = -ENOMEM;
+		#ifdef OPLUS_ARCH_EXTENDS
+		/* Add for return if create memory fail */
+		return ret;
+		#endif /* OPLUS_ARCH_EXTENDS */
 	}
 
 	ret = i2c_add_driver(&tfa98xx_i2c_driver);
+	#ifdef OPLUS_ARCH_EXTENDS
+	/* Add for destroy kmem_cache if fail */
+	if (ret) {
+		pr_err("tfa98xx i2c add fail, ret=%d\n", ret);
+		if (tfa98xx_cache) {
+			kmem_cache_destroy(tfa98xx_cache);
+		}
+	} else {
+		pr_info("tfa98xx i2c add success, ret=%d\n", ret);
+	}
+	#endif /* OPLUS_ARCH_EXTENDS */
 
 	return ret;
 }

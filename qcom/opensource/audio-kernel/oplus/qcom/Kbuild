@@ -21,6 +21,12 @@ ifeq ($(KERNEL_BUILD), 0)
 		-include $(AUDIO_ROOT)/oplus/config/opluskalamaauto.conf
 		INCS    +=  -include $(AUDIO_ROOT)/oplus/config/opluskalamaautoconf.h
 	endif
+	ifeq ($(CONFIG_ARCH_PINEAPPLE), y)
+		include $(AUDIO_ROOT)/config/pineappleauto.conf
+		INCS    +=  -include $(AUDIO_ROOT)/config/pineappleautoconf.h
+		-include $(AUDIO_ROOT)/oplus/config/opluspineappleauto.conf
+		INCS    +=  -include $(AUDIO_ROOT)/oplus/config/opluspineappleautoconf.h
+	endif
 endif
 
 # As per target team, build is done as follows:
@@ -47,14 +53,10 @@ UAPI_INC :=	-I$(AUDIO_ROOT)/include/$(UAPI_DIR)
 COMMON_DIR :=	include
 COMMON_INC :=	-I$(AUDIO_ROOT)/$(COMMON_DIR)
 
-############ tfa98xx ############
+############ audio extend driver ############
 
-# for nxp tfa98xx Codec
-ifdef CONFIG_SND_SOC_TFA98XX
-	TFA98XX_OBJS += tfa_container_v6.o
-	TFA98XX_OBJS += tfa98xx_v6.o
-	TFA98XX_OBJS += tfa_dsp_v6.o
-	TFA98XX_OBJS += tfa_init_v6.o
+ifdef CONFIG_AUDIO_EXTEND_DRV
+AUDIO_EXTEND_OBJS += audio_extend_drv.o
 endif
 
 LINUX_INC +=	-Iinclude/linux
@@ -90,7 +92,6 @@ ifeq ($(call cc-option-yn, -Wheader-guard),y)
 EXTRA_CFLAGS += -Wheader-guard
 endif
 
-
 # Module information used by KBuild framework
-obj-$(CONFIG_SND_SOC_TFA98XX) += tfa98xx-v6_dlkm.o
-tfa98xx-v6_dlkm-y := $(TFA98XX_OBJS)
+obj-$(CONFIG_AUDIO_EXTEND_DRV) += oplus_audio_extend.o
+oplus_audio_extend-y := $(AUDIO_EXTEND_OBJS)
