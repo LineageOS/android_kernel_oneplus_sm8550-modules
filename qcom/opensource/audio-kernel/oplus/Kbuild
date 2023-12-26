@@ -1,2 +1,7 @@
-obj-$(CONFIG_ARCH_QCOM) += qcom/ codecs/
+$(warning "AUDIO_ROOT value is $(AUDIO_ROOT)")
+
+ifneq ($(findstring audio-kernel,$(AUDIO_ROOT)),)
+#Qcom Platform
+obj-y += qcom/ codecs/
 obj-$(CONFIG_ARCH_QCOM) += codecs/tfa98xx-v6/
+endif
