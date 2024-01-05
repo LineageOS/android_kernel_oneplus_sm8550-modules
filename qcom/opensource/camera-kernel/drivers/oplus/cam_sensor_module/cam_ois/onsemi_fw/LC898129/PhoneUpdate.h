@@ -37,7 +37,7 @@ typedef struct {
 	UINT_32				SizeUpdataCode;
 	UINT_64				SizeUpdataCodeCksm;
 	UINT_8*		        FromCode;
-	UINT_32				SizeFromCode;
+	INT_32				SizeFromCode;
 	unsigned int		SizeFromCodeCksm;
 	unsigned int		SizeFromCodeValid;
 }	CODE_TBL_EXT;

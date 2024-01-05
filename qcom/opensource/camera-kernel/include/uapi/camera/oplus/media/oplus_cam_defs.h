@@ -19,12 +19,14 @@
 #define CAM_WRITE_SHIFT_OIS_REGISTER            (CAM_OEM_COMMON_OPCODE_BASE + 0xD)
 #define CAM_FIRMWARE_CALI_GYRO_OFFSET           (CAM_OEM_COMMON_OPCODE_BASE + 0xE)
 #define CAM_TELE_OIS_USE_MONITOR                (CAM_OEM_COMMON_OPCODE_BASE + 0xF)
+#define CAM_RAED_SN_DATA                        (CAM_OEM_COMMON_OPCODE_BASE + 0x10)
+#define CAM_CHECK_CRASH_STATE                   (CAM_OEM_COMMON_OPCODE_BASE + 0x11)
 
 
 #define CAM_OEM_CMD_READ_DEV                    0
 #define CAM_OEM_CMD_WRITE_DEV                   1
 #define CAM_OEM_OIS_CALIB                       2
-#define CAM_OEM_RW_SIZE_MAX                     128
+#define CAM_OEM_RW_SIZE_MAX                    3000
 
 struct cam_oem_i2c_reg_array {
 	unsigned int    reg_addr;
@@ -40,6 +42,13 @@ struct cam_oem_rw_ctl {
 	unsigned int              reg_data_type;
 	signed int                reg_addr_type;
 	signed short              num_bytes;
+};
+
+struct cam_oem_initsettings {
+	struct cam_oem_i2c_reg_array reg_setting[CAM_OEM_RW_SIZE_MAX];
+	signed short size;
+	unsigned short addr_type;
+	unsigned short data_type;
 };
 
 /*add for get hall dat for EIS*/
@@ -66,6 +75,13 @@ typedef struct ois_gyrogain_t
 	int32_t GyroGain_X;
 	int32_t GyroGain_Y;
 } OIS_GYROGAIN;
+
+typedef struct compare_eeprom_data_t{
+    uint32_t offset;
+    uint32_t size;
+    uint32_t slaveAddress;
+    unsigned char data[64];
+} COMPARE_EEPROM_DATA;
 
 typedef struct dual_ois_gyrogain_t
 {

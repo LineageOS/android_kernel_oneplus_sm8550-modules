@@ -122,7 +122,7 @@ static long cam_sensor_subdev_ioctl(struct v4l2_subdev *sd,
         }
         break;
 	case VIDIOC_CAM_SENSOR_STATR:
-		rc = cam_sensor_start(s_ctrl);
+		rc = cam_sensor_start(s_ctrl, arg);
 		break;
 	case VIDIOC_CAM_SENSOR_STOP:
 		rc = cam_sensor_stop(s_ctrl);
@@ -779,6 +779,10 @@ int cam_sensor_driver_init(void)
 		CAM_ERR(CAM_SENSOR, "i3c_driver registration failed, rc: %d", rc);
 		goto i3c_register_err;
 	}
+
+#ifdef OPLUS_FEATURE_CAMERA_COMMON
+	cam_sensor_init();
+#endif
 
 	return 0;
 

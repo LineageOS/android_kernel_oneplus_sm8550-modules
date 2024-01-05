@@ -43,7 +43,7 @@ int ois_power_down_thread(void *arg)
 	else{
 		power_info  = &soc_private->power_info;
 		if (!power_info){
-			CAM_ERR(CAM_OIS, "failed: power_info %pK", o_ctrl, power_info);
+			CAM_ERR(CAM_OIS, "failed: o_ctrl %pK, power_info %pK", o_ctrl, power_info);
 			return -EINVAL;
 		}
 	}
@@ -227,6 +227,9 @@ static int cam_ois_power_up(struct cam_ois_ctrl_t *o_ctrl)
 		} else if(strstr(o_ctrl->ois_name, "bu24721")){
 			oplus_cam_ois_construct_default_power_setting_bu24721(power_info);
 			CAM_DBG(CAM_OIS,"Using bu24271 power settings");
+		}else if (strstr(o_ctrl->ois_name, "sem1217s")) {
+			rc = oplus_cam_ois_construct_default_power_setting_1217s(power_info);
+			CAM_INFO(CAM_OIS,"Using 1217 power settings");
 		} else{
 			rc = oplus_cam_ois_construct_default_power_setting(power_info);
 		}
@@ -337,6 +340,11 @@ static int cam_ois_power_down(struct cam_ois_ctrl_t *o_ctrl)
 
 #ifdef OPLUS_FEATURE_CAMERA_COMMON
 	DeinitOIS(o_ctrl);
+	if ((power_info->power_setting == NULL) &&
+		(power_info->power_down_setting == NULL))
+	{
+		oplus_cam_ois_fill_power_setting(o_ctrl, power_info);
+	}
 
 	rc = cam_sensor_util_power_down(power_info, soc_info, &(o_ctrl->io_master_info));
 #else
@@ -1171,6 +1179,13 @@ static int cam_ois_pkt_parse(struct cam_ois_ctrl_t *o_ctrl, void *arg)
 				delete_request(&i2c_read_settings);
 				return rc;
 			}
+		}else if(o_ctrl->ois_eis_function == 6) {
+			rc = OIS_READ_HALL_DATA_TO_UMD_SEM1217S(o_ctrl,&i2c_read_settings);
+			if (rc < 0) {
+				CAM_ERR(CAM_OIS, "cannot read data rc: %d", rc);
+				delete_request(&i2c_read_settings);
+				return rc;
+			}
 		}else {
 			rc = cam_sensor_i2c_read_data(
 				&i2c_read_settings,
@@ -1621,7 +1636,7 @@ int cam_ois_driver_cmd(struct cam_ois_ctrl_t *o_ctrl, void *arg)
 	}
 	case CAM_WRITE_DUALOIS_GYRO_GAIN: {
 		int m_result = 1;
-		if(strstr(o_ctrl->ois_name, "imx766_bu24721_tele")) {
+		if(strstr(o_ctrl->ois_name, "imx766_bu24721_tele") || strstr(o_ctrl->ois_name, "sem1217s")) {
 			OIS_GYROGAIN current_gyro_gain;
 			if (copy_from_user(&current_gyro_gain, (void __user *)cmd->handle,
 				sizeof(struct ois_gyrogain_t))) {
@@ -1720,6 +1735,8 @@ int cam_ois_driver_cmd(struct cam_ois_ctrl_t *o_ctrl, void *arg)
 		uint32_t gyro_offset = 0;
 		if(strstr(o_ctrl->ois_name, "bu24721")) {
 			DoBU24721GyroOffset(o_ctrl, &gyro_offset);
+		} else if (strstr(o_ctrl->ois_name, "sem1217s")) {
+			DoSEM1217SGyroOffset(o_ctrl, &gyro_offset);
 		}
 		CAM_ERR(CAM_OIS, "[GyroOffsetCaliByFirmware] gyro_offset: 0x%x !!!", gyro_offset);
 		if (copy_to_user((void __user *) cmd->handle, &gyro_offset,

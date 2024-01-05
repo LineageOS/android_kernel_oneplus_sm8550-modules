@@ -110,11 +110,18 @@ static int cam_eeprom_read_memory(struct cam_eeprom_ctrl_t *e_ctrl,
 		}
 
 #ifdef OPLUS_FEATURE_CAMERA_COMMON
+		if (e_ctrl->actuator_ois_eeprom_merge_flag)
+		{
+			CAM_DBG(CAM_EEPROM, "before actuator_ois_eeprom_merge_flag lock");
+			mutex_lock(e_ctrl->actuator_ois_eeprom_merge_mutex);
+			CAM_DBG(CAM_EEPROM, "after actuator_ois_eeprom_merge_flag lock");
+		}
+
 		if (e_ctrl->io_master_info.cci_client->sid==0x24) {
 			rc = oplus_cam_eeprom_read_memory(e_ctrl, emap, j, memptr);
 			if (rc < 0) {
 				CAM_ERR(CAM_EEPROM, "cam_eeprom_read_memory_oem failed rc %d",rc);
-				return rc;
+				goto error_handle;
 			}
 			if(j > 0){
 				memptr += total_size;
@@ -130,12 +137,21 @@ static int cam_eeprom_read_memory(struct cam_eeprom_ctrl_t *e_ctrl,
 				if (rc < 0) {
 					CAM_ERR(CAM_EEPROM, "read failed rc %d",
 						rc);
+#ifdef OPLUS_FEATURE_CAMERA_COMMON
+					goto error_handle;
+#else
 					return rc;
+#endif
 				}
 				memptr += emap[j].mem.valid_size;
 			}
 #ifdef OPLUS_FEATURE_CAMERA_COMMON
-        }
+		}
+
+		if (e_ctrl->actuator_ois_eeprom_merge_flag)
+		{
+			mutex_unlock(e_ctrl->actuator_ois_eeprom_merge_mutex);
+		}
 #endif
 
 		if (emap[j].pageen.valid_size) {
@@ -158,6 +174,13 @@ static int cam_eeprom_read_memory(struct cam_eeprom_ctrl_t *e_ctrl,
 	}
 #ifdef OPLUS_FEATURE_CAMERA_COMMON
 	total_size = 0;
+	return rc;
+
+error_handle:
+	if (e_ctrl->actuator_ois_eeprom_merge_flag)
+	{
+		mutex_unlock(e_ctrl->actuator_ois_eeprom_merge_mutex);
+	}
 #endif
 	return rc;
 }
@@ -169,7 +192,11 @@ static int cam_eeprom_read_memory(struct cam_eeprom_ctrl_t *e_ctrl,
  *
  * Returns success or failure
  */
+#ifdef OPLUS_FEATURE_CAMERA_COMMON
+int cam_eeprom_power_up(struct cam_eeprom_ctrl_t *e_ctrl,
+#else
 static int cam_eeprom_power_up(struct cam_eeprom_ctrl_t *e_ctrl,
+#endif
 	struct cam_sensor_power_ctrl_t *power_info)
 {
 	int32_t                                 rc = 0;
@@ -249,7 +276,11 @@ cci_failure:
  *
  * Returns success or failure
  */
-static int cam_eeprom_power_down(struct cam_eeprom_ctrl_t *e_ctrl)
+#ifdef OPLUS_FEATURE_CAMERA_COMMON
+int cam_eeprom_power_down(struct cam_eeprom_ctrl_t *e_ctrl)
+#else
+int cam_eeprom_power_down(struct cam_eeprom_ctrl_t *e_ctrl)
+#endif
 {
 	struct cam_sensor_power_ctrl_t *power_info;
 	struct cam_hw_soc_info         *soc_info;
@@ -1489,7 +1520,9 @@ void cam_eeprom_shutdown(struct cam_eeprom_ctrl_t *e_ctrl)
 	struct cam_eeprom_soc_private  *soc_private =
 		(struct cam_eeprom_soc_private *)e_ctrl->soc_info.soc_private;
 	struct cam_sensor_power_ctrl_t *power_info = &soc_private->power_info;
-
+#ifdef OPLUS_FEATURE_CAMERA_COMMON
+	e_ctrl->userspace_crash = TRUE;
+#endif
 	if (e_ctrl->cam_eeprom_state == CAM_EEPROM_INIT)
 		return;
 

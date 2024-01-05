@@ -14,6 +14,9 @@
 #ifdef OPLUS_FEATURE_CAMERA_COMMON
 #include "fw_download_interface.h"
 #define VIDIOC_CAM_OIS_PUSHCENTER 0x9020
+#define VIDIOC_CAM_OIS_SHAKE_DETECT_ENABLE 0x9030
+#define VIDIOC_CAM_OIS_LOCK 0x9031
+#define VIDIOC_CAM_OIS_UNLOCK 0x9032
 #endif
 
 static struct cam_i3c_ois_data {
@@ -40,6 +43,17 @@ static int cam_ois_subdev_close_internal(struct v4l2_subdev *sd,
 	mutex_lock(&(o_ctrl->ois_mutex));
 	cam_ois_shutdown(o_ctrl);
 	mutex_unlock(&(o_ctrl->ois_mutex));
+
+#ifdef OPLUS_FEATURE_CAMERA_COMMON
+	if(o_ctrl->camera_ois_shake_detect_enable &&
+		o_ctrl->cam_ois_last_state == CAM_OIS_LOCK){
+		oplus_cam_ois_unlock(sd);
+		CAM_INFO(CAM_OIS, "oplus_cam_ois_unlock");
+	}
+
+	o_ctrl->ois_print_hall_data_thread = NULL;
+#endif
+
 
 	return 0;
 }
@@ -89,6 +103,23 @@ static long cam_ois_subdev_ioctl(struct v4l2_subdev *sd,
 		if (rc)
 			CAM_ERR(CAM_OIS,
 				"Failed with ois push center: %d", rc);
+		break;
+	case VIDIOC_CAM_OIS_SHAKE_DETECT_ENABLE:
+		if (!arg) {
+			CAM_ERR(CAM_OIS, "Invalid arguments");
+			return -EINVAL;
+		}
+		oplus_cam_ois_sds_enable(sd, arg);
+		break;
+	case VIDIOC_CAM_OIS_LOCK:
+		mutex_lock(&(o_ctrl->ois_power_down_mutex));
+		rc = oplus_cam_ois_lock(sd);
+		mutex_unlock(&(o_ctrl->ois_power_down_mutex));
+		break;
+	case VIDIOC_CAM_OIS_UNLOCK:
+		mutex_lock(&(o_ctrl->ois_power_down_mutex));
+		rc = oplus_cam_ois_unlock(sd);
+		mutex_unlock(&(o_ctrl->ois_power_down_mutex));
 		break;
 #endif
 	default:
@@ -390,6 +421,8 @@ static int cam_ois_component_bind(struct device *dev,
 	mutex_init(&(o_ctrl->ois_mutex));
 #ifdef OPLUS_FEATURE_CAMERA_COMMON
 	mutex_init(&(o_ctrl->ois_read_mutex));
+	o_ctrl->cam_ois_last_state = CAM_OIS_INIT;
+	o_ctrl->ois_print_hall_data_thread = NULL;
 #ifdef ENABLE_OIS_DELAY_POWER_DOWN
 	o_ctrl->ois_power_down_thread_state = CAM_OIS_POWER_DOWN_THREAD_STOPPED;
 	o_ctrl->ois_power_state = CAM_OIS_POWER_OFF;

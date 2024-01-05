@@ -363,6 +363,7 @@ enum msm_camera_vreg_name_t {
 	CAM_V_CUSTOM2,
 #ifdef OPLUS_FEATURE_CAMERA_COMMON
 	CAM_VANA1,
+	CAM_CLK,
 #endif
 	CAM_VREG_MAX,
 };

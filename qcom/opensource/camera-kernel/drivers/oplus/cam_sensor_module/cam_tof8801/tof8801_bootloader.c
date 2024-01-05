@@ -63,8 +63,12 @@ void tof8801_BL_init_app(struct tof8801_BL_application *BL_app)
  */
 int is_BL_cmd_busy(struct i2c_client *client)
 {
+	int error = 0;
 	char status = CMD_BUSY;
-	tof8801_get_register(client, TOF8801_CMD_STAT, &status);
+	error = tof8801_get_register(client, TOF8801_CMD_STAT, &status);
+	if (error){
+		CAM_DBG(CAM_TOF, "i2c test failed attempt %d\n", error);
+	}
 	return TOF8801_BL_IS_CMD_BUSY(status);
 }
 
