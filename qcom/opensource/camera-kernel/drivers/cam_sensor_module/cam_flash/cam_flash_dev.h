@@ -231,6 +231,7 @@ struct cam_flash_ctrl {
 	const char *                        flash_name;
 	/*Add by Fangyan @ Camera 2020/08/17 for flash current*/
 	uint32_t                            flash_current;
+	uint32_t                            flash_max_current;
 #endif
 };
 
