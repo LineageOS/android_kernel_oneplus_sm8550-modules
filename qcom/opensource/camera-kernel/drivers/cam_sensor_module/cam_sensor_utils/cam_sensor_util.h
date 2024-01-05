@@ -91,6 +91,8 @@ int cam_sensor_util_power_down_except_sensor(struct cam_sensor_power_ctrl_t *ctr
 		struct cam_hw_soc_info *soc_info);
 int cam_sensor_util_power_down_only_sensor(struct cam_sensor_power_ctrl_t *ctrl,
 		struct cam_hw_soc_info *soc_info);
+int msm_cam_sensor_handle_reg_gpio(int seq_type,
+	struct msm_camera_gpio_num_info *gpio_num_info, int val);
 #endif
 
 int msm_camera_fill_vreg_params(struct cam_hw_soc_info *soc_info,

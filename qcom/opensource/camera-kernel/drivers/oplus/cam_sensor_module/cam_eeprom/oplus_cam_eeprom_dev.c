@@ -32,4 +32,5 @@ void cam_eeprom_component_bind_oem(struct cam_eeprom_ctrl_t * e_ctrl) {
 	e_ctrl->io_master_info_ois.master_type = CCI_MASTER;
 	e_ctrl->io_master_info_ois.cci_client = kzalloc(
 		sizeof(struct cam_sensor_cci_client), GFP_KERNEL);
+	e_ctrl->userspace_crash = FALSE;
 }

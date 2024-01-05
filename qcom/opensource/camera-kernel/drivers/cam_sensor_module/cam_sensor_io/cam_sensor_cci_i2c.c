@@ -98,7 +98,9 @@ int32_t cam_camera_cci_i2c_read_seq(struct cam_sensor_cci_client *cci_client,
 	kfree(buf);
 	return rc;
 }
-
+#ifdef OPLUS_FEATURE_CAMERA_COMMON
+#define MAX_IIC_REGISTER_COUNT 10
+#endif
 static int32_t cam_cci_i2c_write_table_cmd(
 	struct camera_io_master *client,
 	struct cam_sensor_i2c_reg_setting *write_setting,
@@ -130,11 +132,16 @@ static int32_t cam_cci_i2c_write_table_cmd(
 		int32_t i = 0;;
 		for (i = 0; i < write_setting->size; i++)
 		{
-			CAM_ERR(CAM_SENSOR, "write_setting->reg_setting[%d].reg_addr:0x%x, write_setting->reg_setting[%d].reg_addr:0x%x",
+			CAM_INFO(CAM_SENSOR, "iic address 0x%x:write_setting->reg_setting[%d/%d].reg_addr:0x%x, write_setting->reg_setting[%d].reg_addr:0x%x",
+				client->cci_client->sid << 1,
 				i,
+				write_setting->size,
 				write_setting->reg_setting[i].reg_addr,
 				i,
 				write_setting->reg_setting[i].reg_data);
+			if (i >= MAX_IIC_REGISTER_COUNT) {
+				break;
+			}
 		}
 
 		if (write_setting->delay > 20)

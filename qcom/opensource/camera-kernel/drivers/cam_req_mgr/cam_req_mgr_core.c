@@ -5026,7 +5026,7 @@ int cam_req_mgr_schedule_request_v2(
 
 	if (sched_req->req_id <= link->last_flush_id) {
 		CAM_INFO(CAM_CRM,
-			"request %lld is flushed, last_flush_id to flush %d",
+			"request %lld is flushed, last_flush_id to flush %lld",
 			sched_req->req_id, link->last_flush_id);
 		rc = -EBADR;
 		goto end;
@@ -5093,8 +5093,8 @@ int cam_req_mgr_schedule_request_v2(
 	CAM_DBG(CAM_REQ, "Open req %lld on link 0x%x with sync_mode %d",
 		sched_req->req_id, sched_req->link_hdl, sched_req->sync_mode);
 #ifdef OPLUS_FEATURE_CAMERA_COMMON
-	snprintf(trace, sizeof(trace), "KMD %d_1 OpenRequest", sched_req->link_hdl);
-	trace_int_tag(trace, sched_req->req_id);
+	snprintf(trace, sizeof(trace), "KMD 0x%x_1 OpenRequest", sched_req->link_hdl);
+	trace_int_tag(trace, (int32_t)(sched_req->req_id));
 #endif
 end:
 	mutex_unlock(&g_crm_core_dev->crm_lock);

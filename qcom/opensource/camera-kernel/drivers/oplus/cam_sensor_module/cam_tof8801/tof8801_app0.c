@@ -903,7 +903,7 @@ char * tof8801_app0_get_results_rcv_buf(struct tof8801_app0_application *app0,
 	struct tof8801_app0_drv_frame_header * header = &app0->algo_results_frame.results_frame.header;
 	header->id = ID_RESULTS;
 	header->size_lsb = LSB(frame_size);
-	header->size_msb = SHORT_MSB(frame_size);
+	header->size_msb = '0';
 	return &app0->algo_results_frame.buf[DRV_FRAME_DATA];
 }
 
@@ -1032,7 +1032,7 @@ int tof8801_app0_get_v2_results(struct tof_sensor_chip *chip)
 	// report multi object through this method
 	results_size = APP0_ALGO_RESULTS_V2_RSP_SIZE;
 	header->size_lsb = LSB(results_size);
-	header->size_msb = SHORT_MSB(results_size);
+	header->size_msb = '0';
 	if( result->data.numAddTargets > 0 ) {
 		//not supported reading multi-target yet
 	}
@@ -1158,6 +1158,8 @@ static int tof8801_app0_stop_measurements(struct tof_sensor_chip *chip)
 	case OL_COMMAND_START_EXT_CAL:
 		period = chip->app0_app.cap_settings.v2.period;
 		break;
+	default:
+		break;
 	}
 	return (chip->app0_app.cap_settings.cmd == 0) || (period == 0);
 }
@@ -1255,7 +1257,10 @@ void tof8801_app0_process_irq(void *tof_chip, char int_stat)
 			tof8801_app0_report_error(chip, DEV_OK, ERR_DIAG_INFO);
 		}
 		(void) tof8801_app0_get_histograms(chip, diag_info);
-		tof8801_set_register(chip->client, OL_COMMAND_OFFSET, OL_COMMAND_CONTINUE);
+		error = tof8801_set_register(chip->client, OL_COMMAND_OFFSET, OL_COMMAND_CONTINUE);
+		if (error) {
+			dev_err(&chip->client->dev, "Error (%d): sending CONTINUE cmd", error);
+		}
 	}
 }
 
@@ -1274,6 +1279,8 @@ struct tof_sensor_chip *chip)
 	case OL_COMMAND_ENTER_BOOTLOADER:
 		MEASURE_UNLOCK(chip->app0_app.measure_in_prog);
 		return tof8801_app0_switch_to_bootloader(chip);
+	default:
+		break;
 	}
 	error = tof8801_app0_start_measure_timer(chip, cmd);
 	if (error) {

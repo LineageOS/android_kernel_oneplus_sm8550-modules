@@ -113,4 +113,19 @@ void cam_ois_driver_soc_init_oem(struct cam_ois_ctrl_t *o_ctrl, struct device_no
 		o_ctrl->ois_switch_spi_mode = (uint8_t)id;
 		CAM_INFO(CAM_OIS, "read ois_switch_spi_mode success, value:%d", o_ctrl->ois_switch_spi_mode);
 	}
+
+	ret = of_property_read_u32(of_node, "actuator_ois_eeprom_merge", &id);
+	if (ret) {
+		o_ctrl->actuator_ois_eeprom_merge_flag = 0;
+		CAM_DBG(CAM_OIS, "get actuator_ois_eeprom_merge_flag failed rc:%d, default %d", ret, o_ctrl->actuator_ois_eeprom_merge_flag);
+	} else {
+		o_ctrl->actuator_ois_eeprom_merge_flag = (uint8_t)id;
+		CAM_INFO(CAM_OIS, "read actuator_ois_eeprom_merge_flag success, value:%d", o_ctrl->actuator_ois_eeprom_merge_flag);
+
+		o_ctrl->actuator_ois_eeprom_merge_mutex = &actuator_ois_eeprom_shared_mutex;
+		if (!actuator_ois_eeprom_shared_mutex_init_flag) {
+			mutex_init(o_ctrl->actuator_ois_eeprom_merge_mutex);
+			actuator_ois_eeprom_shared_mutex_init_flag = true;
+		}
+	}
 }
