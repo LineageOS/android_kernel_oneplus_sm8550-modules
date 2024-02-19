@@ -1,0 +1,21 @@
+{
+  "comments": [
+    {
+      "unresolved": true,
+      "key": {
+        "uuid": "2001b664_319cedcd",
+        "filename": "/PATCHSET_LEVEL",
+        "patchSetId": 1
+      },
+      "lineNbr": 0,
+      "author": {
+        "id": 30975
+      },
+      "writtenOn": "2024-02-19T10:27:54Z",
+      "side": 1,
+      "message": "camera-kernel drivers changes are not included.",
+      "revId": "f3b06f596ebe660f6f07a5f5aa7469ee3fa295d8",
+      "serverId": "1ec6b3db-b2c1-4fa4-84a2-4c7efe89ba71"
+    }
+  ]
+}
