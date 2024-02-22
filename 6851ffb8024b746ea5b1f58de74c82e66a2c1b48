@@ -16,6 +16,24 @@
       "message": "Why is this needed for us?",
       "revId": "6851ffb8024b746ea5b1f58de74c82e66a2c1b48",
       "serverId": "1ec6b3db-b2c1-4fa4-84a2-4c7efe89ba71"
+    },
+    {
+      "unresolved": true,
+      "key": {
+        "uuid": "597a0964_3c3f1af1",
+        "filename": "/PATCHSET_LEVEL",
+        "patchSetId": 1
+      },
+      "lineNbr": 0,
+      "author": {
+        "id": 30975
+      },
+      "writtenOn": "2024-02-22T18:18:45Z",
+      "side": 1,
+      "message": "../../../../../../kernel/oneplus/sm8550-modules/qcom/opensource/wlan/qcacld-3.0/core/hdd/src/wlan_hdd_sysfs_get_freq_for_pwr.c:134:16: error: stack frame size (2256) exceeds limit (2048) in \u0027wlan_hdd_sysfs_freq_show\u0027 [-Werror,-Wframe-larger-than]\nstatic ssize_t wlan_hdd_sysfs_freq_show(struct kobject *kobj,\n               ^\n72/2256 (3.19%) spills, 2184/2256 (96.81%) variables\n1 error generated.",
+      "parentUuid": "562d1f31_1650da5a",
+      "revId": "6851ffb8024b746ea5b1f58de74c82e66a2c1b48",
+      "serverId": "1ec6b3db-b2c1-4fa4-84a2-4c7efe89ba71"
     }
   ]
 }
