@@ -148,7 +148,7 @@ static int start_poll_thread(void);
 //static int tof_power_down_thread(void *arg);
 static int do_tof_power_down(void);
 
-int do_tof_power_down(void)
+int do_tof_power_down()
 {
 	int rc=0;
 	struct tof_sensor_chip *chip = g_tof_sensor_chip;
@@ -2551,7 +2551,7 @@ int tof8801_app0_poll_irq_thread(void *tof_chip)
 
 		usleep_range(us_sleep, us_sleep + us_sleep/10);
 	}
-	CAM_INFO(CAM_TOF, "End app0_poll_irq_thread thread \n", us_sleep);
+	CAM_INFO(CAM_TOF, "End app0_poll_irq_thread thread \n");
 	return 0;
 }
 
@@ -2709,7 +2709,7 @@ static int tof_input_dev_open(struct input_dev *dev)
 	AMS_MUTEX_UNLOCK(&chip->lock);
 	return error;
 }
-int start_poll_thread(void)
+int start_poll_thread()
 {
 	struct tof_sensor_chip *chip = g_tof_sensor_chip;
 	int error = 0;
@@ -2779,7 +2779,7 @@ int tof_start_thread(void *tof_chip)
 
 }
 
-int tof_oem_start(void)
+int tof_oem_start()
 {
 	struct tof_sensor_chip *chip = g_tof_sensor_chip;
 	/*** Use Polled I/O instead of interrupt ***/
@@ -2840,7 +2840,7 @@ int tof_oem_start(void)
 	return 0;
 }
 
-int tof_reset(void)
+int tof_reset()
 {
 	struct tof_sensor_chip *chip;
 
@@ -2866,7 +2866,7 @@ int tof_reset(void)
 
 }
 
-int	tof_stop(void)
+int	tof_stop()
 {
 	struct tof_sensor_chip *chip;
 
@@ -2900,7 +2900,7 @@ int	tof_stop(void)
 	return 0;
 }
 
-int wait_for_tof_ready(void)
+int wait_for_tof_ready()
 {
 
 	struct i2c_client *client = tof_pdata.client;

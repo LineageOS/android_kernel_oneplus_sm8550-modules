@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2017-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #include <linux/debugfs.h>
@@ -246,7 +246,6 @@ int cam_context_buf_done_from_hw(struct cam_context *ctx,
 				ctx->img_iommu_hdl, req->out_map_entries[j].resource_handle);
 			if (rc) {
 				CAM_ERR(CAM_CTXT, "Failed to retrieve image buffers rc:%d", rc);
-				cam_packet_util_put_packet_addr(req->pf_data.packet_handle);
 				return rc;
 			}
 		}
@@ -257,9 +256,6 @@ int cam_context_buf_done_from_hw(struct cam_context *ctx,
 			done->evt_param);
 		req->out_map_entries[j].sync_id = -1;
 	}
-
-	if (cam_presil_mode_enabled())
-		cam_packet_util_put_packet_addr(req->pf_data.packet_handle);
 
 	if (cam_debug_ctx_req_list & ctx->dev_id)
 		CAM_INFO(CAM_CTXT,
@@ -476,7 +472,6 @@ int32_t cam_context_config_dev_to_hw(
 		rc = -EFAULT;
 	}
 
-	cam_mem_put_cpu_buf((int32_t) cmd->packet_handle);
 	return rc;
 }
 
@@ -1468,7 +1463,6 @@ static int cam_context_user_dump(struct cam_context *ctx,
 	if (dump_args->offset >= buf_len) {
 		CAM_WARN(CAM_CTXT, "dump buffer overshoot offset %zu len %zu",
 			dump_args->offset, buf_len);
-		cam_mem_put_cpu_buf(dump_args->buf_handle);
 		return -ENOSPC;
 	}
 
@@ -1580,7 +1574,6 @@ static int cam_context_user_dump(struct cam_context *ctx,
 		}
 	}
 
-	cam_mem_put_cpu_buf(dump_args->buf_handle);
 	return 0;
 }
 
@@ -1661,7 +1654,7 @@ size_t cam_context_parse_config_cmd(struct cam_context *ctx, struct cam_config_d
 		CAM_ERR(CAM_CTXT, "invalid buff length: %zu or offset: %zu", len,
 			(size_t)cmd->offset);
 		rc = -EINVAL;
-		goto put_cpu_buf;
+		goto err;
 	}
 
 	*packet = (struct cam_packet *) ((uint8_t *)packet_addr + (uint32_t)cmd->offset);
@@ -1671,12 +1664,7 @@ size_t cam_context_parse_config_cmd(struct cam_context *ctx, struct cam_config_d
 		cmd->packet_handle, packet_addr, cmd->offset, len, (*packet)->header.request_id,
 		(*packet)->header.size, (*packet)->header.op_code);
 
-	cam_mem_put_cpu_buf((int32_t) cmd->packet_handle);
 	return (len - (size_t)cmd->offset);
-
-put_cpu_buf:
-	if (cmd)
-		cam_mem_put_cpu_buf((int32_t) cmd->packet_handle);
 
 err:
 	if (packet)
@@ -1739,11 +1727,10 @@ static void __cam_context_req_mini_dump(struct cam_ctx_request *req,
 		req->pf_data.packet_offset);
 	if (rc)
 		return;
-
 	if (packet && packet->num_io_configs) {
 		bytes_required = packet->num_io_configs * sizeof(struct cam_buf_io_cfg);
 		if (start_addr + bytes_written + bytes_required > end_addr)
-			goto exit;
+			goto end;
 
 		io_cfg = (struct cam_buf_io_cfg *)((uint32_t *)&packet->payload +
 			packet->io_configs_offset / 4);
@@ -1752,8 +1739,7 @@ static void __cam_context_req_mini_dump(struct cam_ctx_request *req,
 		bytes_written += bytes_required;
 		req_md->num_io_cfg = packet->num_io_configs;
 	}
-exit:
-	cam_packet_util_put_packet_addr(req->pf_data.packet_handle);
+
 end:
 	*bytes_updated = bytes_written;
 }

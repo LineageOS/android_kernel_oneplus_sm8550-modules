@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2017-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #include <linux/kernel.h>
@@ -9,6 +9,10 @@
 #include "cam_sensor_util.h"
 #include "cam_mem_mgr.h"
 #include "cam_res_mgr_api.h"
+
+#ifdef OPLUS_FEATURE_CAMERA_COMMON
+#include "oplus_cam_sensor_util.h"
+#endif
 
 #define CAM_SENSOR_PINCTRL_STATE_SLEEP "cam_suspend"
 #define CAM_SENSOR_PINCTRL_STATE_DEFAULT "cam_default"
@@ -146,7 +150,7 @@ int32_t cam_sensor_util_get_current_qtimer_ns(uint64_t *qtime_ns)
 	if (qtime_ns != NULL) {
 		*qtime_ns = mul_u64_u32_div(ticks,
 			QTIMER_MUL_FACTOR, QTIMER_DIV_FACTOR);
-		CAM_DBG(CAM_SENSOR, "Qtimer time: 0x%lx", *qtime_ns);
+		CAM_DBG(CAM_SENSOR, "Qtimer time: 0x%x", *qtime_ns);
 	} else {
 		CAM_ERR(CAM_SENSOR, "NULL pointer passed");
 		return -EINVAL;
@@ -378,7 +382,6 @@ static int32_t cam_sensor_get_io_buffer(
 			CAM_ERR(CAM_SENSOR,
 				"invalid size:io_cfg->offsets[0]: %d, buf_size: %d",
 				io_cfg->offsets[0], buf_size);
-			cam_mem_put_cpu_buf(io_cfg->mem_handle[0]);
 			return -EINVAL;
 		}
 		i2c_settings->read_buff =
@@ -390,7 +393,6 @@ static int32_t cam_sensor_get_io_buffer(
 			io_cfg->direction);
 		rc = -EINVAL;
 	}
-	cam_mem_put_cpu_buf(io_cfg->mem_handle[0]);
 	return rc;
 }
 
@@ -423,7 +425,6 @@ int32_t cam_sensor_util_write_qtimer_to_io_buffer(
 			CAM_ERR(CAM_SENSOR,
 				"invalid size:io_cfg->offsets[0]: %d, buf_size: %d",
 				io_cfg->offsets[0], buf_size);
-			cam_mem_put_cpu_buf(io_cfg->mem_handle[0]);
 			return -EINVAL;
 		}
 
@@ -434,12 +435,10 @@ int32_t cam_sensor_util_write_qtimer_to_io_buffer(
 			CAM_ERR(CAM_SENSOR,
 				"not enough size for qtimer, target_size:%d",
 				target_size);
-			cam_mem_put_cpu_buf(io_cfg->mem_handle[0]);
 			return -EINVAL;
 		}
 
 		memcpy((void *)target_buf, &qtime_ns, sizeof(uint64_t));
-		cam_mem_put_cpu_buf(io_cfg->mem_handle[0]);
 	} else {
 		CAM_ERR(CAM_SENSOR, "Invalid direction: %d",
 			io_cfg->direction);
@@ -633,7 +632,6 @@ int cam_sensor_i2c_command_parser(
 			(cmd_desc[i].offset >
 			(len_of_buff - sizeof(struct common_header)))) {
 			CAM_ERR(CAM_SENSOR, "buffer provided too small");
-			cam_mem_put_cpu_buf(cmd_desc[i].mem_handle);
 			return -EINVAL;
 		}
 		cmd_buf = (uint32_t *)generic_ptr;
@@ -642,7 +640,6 @@ int cam_sensor_i2c_command_parser(
 		remain_len -= cmd_desc[i].offset;
 		if (remain_len < cmd_desc[i].length) {
 			CAM_ERR(CAM_SENSOR, "buffer provided too small");
-			cam_mem_put_cpu_buf(cmd_desc[i].mem_handle);
 			return -EINVAL;
 		}
 
@@ -900,12 +897,9 @@ int cam_sensor_i2c_command_parser(
 			}
 		}
 		i2c_reg_settings->is_settings_valid = 1;
-		cam_mem_put_cpu_buf(cmd_desc[i].mem_handle);
 	}
-	return rc;
 
 end:
-	cam_mem_put_cpu_buf(cmd_desc[i].mem_handle);
 	return rc;
 }
 
@@ -2272,6 +2266,15 @@ int cam_sensor_core_power_up(struct cam_sensor_power_ctrl_t *ctrl,
 					seq_min_volt = soc_info->rgltr_min_volt[vreg_idx];
 					seq_max_volt = soc_info->rgltr_max_volt[vreg_idx];
 				}
+
+#ifdef OPLUS_FEATURE_CAMERA_COMMON
+				rc = cam_sensor_core_power_up_vio(power_setting, soc_info, vreg_idx);
+				if (rc) {
+					CAM_ERR(CAM_SENSOR, "Reg Enable failed for %s",
+						soc_info->rgltr_name[vreg_idx]);
+					goto power_up_failed;
+				}
+#endif
 
 				rc =  cam_soc_util_regulator_enable(
 					soc_info->rgltr[vreg_idx],

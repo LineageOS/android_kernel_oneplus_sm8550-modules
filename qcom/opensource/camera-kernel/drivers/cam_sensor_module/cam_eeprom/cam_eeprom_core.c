@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2017-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #include <linux/module.h>
@@ -110,11 +110,18 @@ static int cam_eeprom_read_memory(struct cam_eeprom_ctrl_t *e_ctrl,
 		}
 
 #ifdef OPLUS_FEATURE_CAMERA_COMMON
+		if (e_ctrl->actuator_ois_eeprom_merge_flag)
+		{
+			CAM_DBG(CAM_EEPROM, "before actuator_ois_eeprom_merge_flag lock");
+			mutex_lock(e_ctrl->actuator_ois_eeprom_merge_mutex);
+			CAM_DBG(CAM_EEPROM, "after actuator_ois_eeprom_merge_flag lock");
+		}
+
 		if (e_ctrl->io_master_info.cci_client->sid==0x24) {
 			rc = oplus_cam_eeprom_read_memory(e_ctrl, emap, j, memptr);
 			if (rc < 0) {
 				CAM_ERR(CAM_EEPROM, "cam_eeprom_read_memory_oem failed rc %d",rc);
-				return rc;
+				goto error_handle;
 			}
 			if(j > 0){
 				memptr += total_size;
@@ -130,12 +137,21 @@ static int cam_eeprom_read_memory(struct cam_eeprom_ctrl_t *e_ctrl,
 				if (rc < 0) {
 					CAM_ERR(CAM_EEPROM, "read failed rc %d",
 						rc);
+#ifdef OPLUS_FEATURE_CAMERA_COMMON
+					goto error_handle;
+#else
 					return rc;
+#endif
 				}
 				memptr += emap[j].mem.valid_size;
 			}
 #ifdef OPLUS_FEATURE_CAMERA_COMMON
-        }
+		}
+
+		if (e_ctrl->actuator_ois_eeprom_merge_flag)
+		{
+			mutex_unlock(e_ctrl->actuator_ois_eeprom_merge_mutex);
+		}
 #endif
 
 		if (emap[j].pageen.valid_size) {
@@ -158,6 +174,13 @@ static int cam_eeprom_read_memory(struct cam_eeprom_ctrl_t *e_ctrl,
 	}
 #ifdef OPLUS_FEATURE_CAMERA_COMMON
 	total_size = 0;
+	return rc;
+
+error_handle:
+	if (e_ctrl->actuator_ois_eeprom_merge_flag)
+	{
+		mutex_unlock(e_ctrl->actuator_ois_eeprom_merge_mutex);
+	}
 #endif
 	return rc;
 }
@@ -169,7 +192,11 @@ static int cam_eeprom_read_memory(struct cam_eeprom_ctrl_t *e_ctrl,
  *
  * Returns success or failure
  */
+#ifdef OPLUS_FEATURE_CAMERA_COMMON
+int cam_eeprom_power_up(struct cam_eeprom_ctrl_t *e_ctrl,
+#else
 static int cam_eeprom_power_up(struct cam_eeprom_ctrl_t *e_ctrl,
+#endif
 	struct cam_sensor_power_ctrl_t *power_info)
 {
 	int32_t                                 rc = 0;
@@ -249,7 +276,11 @@ cci_failure:
  *
  * Returns success or failure
  */
-static int cam_eeprom_power_down(struct cam_eeprom_ctrl_t *e_ctrl)
+#ifdef OPLUS_FEATURE_CAMERA_COMMON
+int cam_eeprom_power_down(struct cam_eeprom_ctrl_t *e_ctrl)
+#else
+int cam_eeprom_power_down(struct cam_eeprom_ctrl_t *e_ctrl)
+#endif
 {
 	struct cam_sensor_power_ctrl_t *power_info;
 	struct cam_hw_soc_info         *soc_info;
@@ -782,13 +813,6 @@ static int32_t cam_eeprom_parse_write_memory_packet(
 
 	CAM_DBG(CAM_EEPROM, "Number of Command Buffers: %d",
 		csl_packet->num_cmd_buf);
-
-	if (!csl_packet->num_cmd_buf) {
-		CAM_ERR(CAM_EEPROM, "Invalid num_cmd_buffer = %d",
-			csl_packet->num_cmd_buf);
-		return -EINVAL;
-	}
-
 	for (i = 0; i < csl_packet->num_cmd_buf; i++) {
 		struct list_head               *list = NULL;
 		uint16_t                       generic_op_code;
@@ -959,12 +983,9 @@ static int32_t cam_eeprom_parse_write_memory_packet(
 				break;
 			}
 		}
-		cam_mem_put_cpu_buf(cmd_desc[i].mem_handle);
 	}
-	return rc;
 
 end:
-	cam_mem_put_cpu_buf(cmd_desc[i].mem_handle);
 	return rc;
 }
 
@@ -1010,17 +1031,7 @@ static int32_t cam_eeprom_init_pkt_parser(struct cam_eeprom_ctrl_t *e_ctrl,
 	offset = (uint32_t *)&csl_packet->payload;
 	offset += (csl_packet->cmd_buf_offset / sizeof(uint32_t));
 	cmd_desc = (struct cam_cmd_buf_desc *)(offset);
-	rc = cam_packet_util_validate_cmd_desc(cmd_desc);
-	if (rc) {
-		CAM_ERR(CAM_EEPROM, "Invalid cmd desc ret: %d", rc);
-		return rc;
-	}
 
-	if (!csl_packet->num_cmd_buf) {
-		CAM_ERR(CAM_EEPROM, "Invalid num_cmd_buffer = %d",
-			csl_packet->num_cmd_buf);
-		return -EINVAL;
-	}
 	/* Loop through multiple command buffers */
 	for (i = 0; i < csl_packet->num_cmd_buf; i++) {
 		total_cmd_buf_in_bytes = cmd_desc[i].length;
@@ -1130,12 +1141,9 @@ static int32_t cam_eeprom_init_pkt_parser(struct cam_eeprom_ctrl_t *e_ctrl,
 			}
 		}
 		e_ctrl->cal_data.num_map = num_map + 1;
-		cam_mem_put_cpu_buf(cmd_desc[i].mem_handle);
 	}
-	return rc;
 
 end:
-	cam_mem_put_cpu_buf(cmd_desc[i].mem_handle);
 	return rc;
 }
 
@@ -1177,7 +1185,6 @@ static int32_t cam_eeprom_get_cal_data(struct cam_eeprom_ctrl_t *e_ctrl,
 			}
 			if (buf_size <= io_cfg->offsets[0]) {
 				CAM_ERR(CAM_EEPROM, "Not enough buffer");
-				cam_mem_put_cpu_buf(io_cfg->mem_handle[0]);
 				rc = -EINVAL;
 				return rc;
 			}
@@ -1190,7 +1197,6 @@ static int32_t cam_eeprom_get_cal_data(struct cam_eeprom_ctrl_t *e_ctrl,
 			if (!read_buffer) {
 				CAM_ERR(CAM_EEPROM,
 					"invalid buffer to copy data");
-				cam_mem_put_cpu_buf(io_cfg->mem_handle[0]);
 				rc = -EINVAL;
 				return rc;
 			}
@@ -1199,7 +1205,6 @@ static int32_t cam_eeprom_get_cal_data(struct cam_eeprom_ctrl_t *e_ctrl,
 			if (remain_len < e_ctrl->cal_data.num_data) {
 				CAM_ERR(CAM_EEPROM,
 					"failed to copy, Invalid size");
-				cam_mem_put_cpu_buf(io_cfg->mem_handle[0]);
 				rc = -EINVAL;
 				return rc;
 			}
@@ -1208,7 +1213,6 @@ static int32_t cam_eeprom_get_cal_data(struct cam_eeprom_ctrl_t *e_ctrl,
 				e_ctrl->cal_data.num_data);
 			memcpy(read_buffer, e_ctrl->cal_data.mapdata,
 					e_ctrl->cal_data.num_data);
-			cam_mem_put_cpu_buf(io_cfg->mem_handle[0]);
 		} else {
 			CAM_ERR(CAM_EEPROM, "Invalid direction");
 			rc = -EINVAL;
@@ -1315,7 +1319,6 @@ static int32_t cam_eeprom_pkt_parse(struct cam_eeprom_ctrl_t *e_ctrl, void *arg)
 			"Inval cam_packet strut size: %zu, len_of_buff: %zu",
 			 sizeof(struct cam_packet), pkt_len);
 		rc = -EINVAL;
-		cam_mem_put_cpu_buf(dev_config.packet_handle);
 		return rc;
 	}
 
@@ -1326,7 +1329,6 @@ static int32_t cam_eeprom_pkt_parse(struct cam_eeprom_ctrl_t *e_ctrl, void *arg)
 	if (cam_packet_util_validate_packet(csl_packet,
 		remain_len)) {
 		CAM_ERR(CAM_EEPROM, "Invalid packet params");
-		cam_mem_put_cpu_buf(dev_config.packet_handle);
 		rc = -EINVAL;
 		return rc;
 	}
@@ -1338,7 +1340,6 @@ static int32_t cam_eeprom_pkt_parse(struct cam_eeprom_ctrl_t *e_ctrl, void *arg)
 					e_ctrl->soc_info.dev->of_node, e_ctrl);
 			if (rc < 0) {
 				CAM_ERR(CAM_EEPROM, "Failed: rc : %d", rc);
-				cam_mem_put_cpu_buf(dev_config.packet_handle);
 				return rc;
 			}
 			rc = cam_eeprom_get_cal_data(e_ctrl, csl_packet);
@@ -1354,7 +1355,6 @@ static int32_t cam_eeprom_pkt_parse(struct cam_eeprom_ctrl_t *e_ctrl, void *arg)
 		if (rc) {
 			CAM_ERR(CAM_EEPROM,
 				"Failed in parsing the pkt");
-			cam_mem_put_cpu_buf(dev_config.packet_handle);
 			return rc;
 		}
 
@@ -1413,7 +1413,6 @@ static int32_t cam_eeprom_pkt_parse(struct cam_eeprom_ctrl_t *e_ctrl, void *arg)
 			csl_packet, e_ctrl);
 		if (rc < 0) {
 			CAM_ERR(CAM_EEPROM, "Failed: rc : %d", rc);
-			cam_mem_put_cpu_buf(dev_config.packet_handle);
 			return rc;
 		}
 
@@ -1435,7 +1434,6 @@ static int32_t cam_eeprom_pkt_parse(struct cam_eeprom_ctrl_t *e_ctrl, void *arg)
 			e_ctrl->eebin_info.size);
 		if (rc < 0) {
 			CAM_ERR(CAM_EEPROM, "Failed in erase : %d", rc);
-			cam_mem_put_cpu_buf(dev_config.packet_handle);
 			return rc;
 		}
 
@@ -1445,7 +1443,6 @@ static int32_t cam_eeprom_pkt_parse(struct cam_eeprom_ctrl_t *e_ctrl, void *arg)
 		rc = cam_eeprom_write(e_ctrl);
 		if (rc < 0) {
 			CAM_ERR(CAM_EEPROM, "Failed: rc : %d", rc);
-			cam_mem_put_cpu_buf(dev_config.packet_handle);
 			return rc;
 		}
 
@@ -1464,14 +1461,12 @@ static int32_t cam_eeprom_pkt_parse(struct cam_eeprom_ctrl_t *e_ctrl, void *arg)
 		break;
 	}
 
-	cam_mem_put_cpu_buf(dev_config.packet_handle);
 	return rc;
 power_down:
 	cam_eeprom_power_down(e_ctrl);
 memdata_free:
 	vfree(e_ctrl->cal_data.mapdata);
 error:
-	cam_mem_put_cpu_buf(dev_config.packet_handle);
 	kfree(power_info->power_setting);
 	kfree(power_info->power_down_setting);
 	power_info->power_setting = NULL;
@@ -1489,7 +1484,9 @@ void cam_eeprom_shutdown(struct cam_eeprom_ctrl_t *e_ctrl)
 	struct cam_eeprom_soc_private  *soc_private =
 		(struct cam_eeprom_soc_private *)e_ctrl->soc_info.soc_private;
 	struct cam_sensor_power_ctrl_t *power_info = &soc_private->power_info;
-
+#ifdef OPLUS_FEATURE_CAMERA_COMMON
+	e_ctrl->userspace_crash = TRUE;
+#endif
 	if (e_ctrl->cam_eeprom_state == CAM_EEPROM_INIT)
 		return;
 
