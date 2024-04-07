@@ -6,6 +6,8 @@
 #define _OPLUS_CAM_OIS_SOC_H_
 
 #include "cam_ois_dev.h"
+extern struct mutex actuator_ois_eeprom_shared_mutex;
+extern bool actuator_ois_eeprom_shared_mutex_init_flag;
 
 void cam_ois_driver_soc_init_oem(struct cam_ois_ctrl_t *o_ctrl,struct device_node *of_node);
 

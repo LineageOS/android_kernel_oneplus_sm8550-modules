@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2017-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #include <linux/uaccess.h>
@@ -206,7 +206,6 @@ static int cam_jpeg_add_command_buffers(struct cam_packet *packet,
 			if ((cmd_desc[i].offset / sizeof(uint32_t)) >= len) {
 				CAM_ERR(CAM_JPEG, "Invalid offset: %u cmd buf len: %zu",
 					cmd_desc[i].offset, len);
-				cam_mem_put_cpu_buf(cmd_desc[i].mem_handle);
 				return -EINVAL;
 			}
 
@@ -216,7 +215,6 @@ static int cam_jpeg_add_command_buffers(struct cam_packet *packet,
 			jpeg_request_data->encode_size_buffer_ptr = &inout_params->output_size;
 			CAM_DBG(CAM_JPEG, "encode_size_buf_ptr: 0x%p",
 				jpeg_request_data->encode_size_buffer_ptr);
-			cam_mem_put_cpu_buf(cmd_desc[i].mem_handle);
 			break;
 		case CAM_JPEG_PACKET_GENERIC_BLOB:
 			rc = cam_packet_util_process_generic_cmd_buffer(&cmd_desc[i],
@@ -446,9 +444,6 @@ static int cam_jpeg_mgr_bottom_half_irq(void *priv, void *data)
 			g_jpeg_hw_mgr.devices[dev_type][0]->hw_priv,
 			CAM_JPEG_CMD_DUMP_HW_MISR_VAL, &misr_args,
 			sizeof(struct cam_jpeg_misr_dump_args));
-		if (rc)
-			CAM_WARN_RATE_LIMIT(CAM_JPEG, "jpeg and camnoc hw misr enable failed %d",
-				rc);
 	}
 
 	/* If we have processed just plane 1 for jpeg dma,
@@ -680,8 +675,6 @@ static int cam_jpeg_insert_cdm_change_base(
 		CAM_ERR(CAM_JPEG, "Not enough buf offset %d len %d",
 			config_args->hw_update_entries[CAM_JPEG_CHBASE_CMD_BUFF_IDX].offset,
 			ch_base_len);
-		cam_mem_put_cpu_buf(
-			config_args->hw_update_entries[CAM_JPEG_CHBASE_CMD_BUFF_IDX].handle);
 		return -EINVAL;
 	}
 
@@ -716,9 +709,6 @@ static int cam_jpeg_insert_cdm_change_base(
 	*ch_base_iova_addr = 0;
 	ch_base_iova_addr += size;
 	*ch_base_iova_addr = 0;
-
-	cam_mem_put_cpu_buf(
-		config_args->hw_update_entries[CAM_JPEG_CHBASE_CMD_BUFF_IDX].handle);
 
 	return rc;
 }
@@ -1019,8 +1009,7 @@ static int cam_jpeg_mgr_prepare_hw_update(void *hw_mgr_priv,
 		return rc;
 	}
 
-	if (!packet->num_cmd_buf ||
-		(packet->num_cmd_buf > CAM_JPEG_MAX_NUM_CMD_BUFFS) ||
+	if ((packet->num_cmd_buf > CAM_JPEG_MAX_NUM_CMD_BUFFS) ||
 		!packet->num_patches || !packet->num_io_configs ||
 		(packet->num_io_configs > CAM_JPEG_IMAGE_MAX)) {
 		CAM_ERR(CAM_JPEG,
@@ -1892,7 +1881,6 @@ hw_dump:
 		CAM_WARN(CAM_JPEG, "dump offset overshoot len %zu offset %zu",
 			jpeg_dump_args.buf_len, dump_args->offset);
 		mutex_unlock(&hw_mgr->hw_mgr_mutex);
-		cam_mem_put_cpu_buf(dump_args->buf_handle);
 		return -ENOSPC;
 	}
 
@@ -1903,7 +1891,6 @@ hw_dump:
 		CAM_WARN(CAM_JPEG, "dump buffer exhaust remain %zu min %u",
 			remain_len, min_len);
 		mutex_unlock(&hw_mgr->hw_mgr_mutex);
-		cam_mem_put_cpu_buf(dump_args->buf_handle);
 		return -ENOSPC;
 	}
 
@@ -1936,7 +1923,6 @@ hw_dump:
 	CAM_DBG(CAM_JPEG, "Offset before %u after %u",
 		dump_args->offset, jpeg_dump_args.offset);
 	dump_args->offset = jpeg_dump_args.offset;
-	cam_mem_put_cpu_buf(dump_args->buf_handle);
 	return rc;
 }
 
@@ -1976,13 +1962,11 @@ static void cam_jpeg_mgr_dump_pf_data(
 		&jpeg_pid_mid_args, sizeof(jpeg_pid_mid_args));
 	if (rc) {
 		CAM_ERR(CAM_JPEG, "CAM_JPEG_CMD_MATCH_PID_MID failed %d", rc);
-		cam_packet_util_put_packet_addr(pf_req_info->packet_handle);
 		return;
 	}
 
 	if (!jpeg_pid_mid_args.pid_match_found) {
 		CAM_INFO(CAM_JPEG, "This context data is not matched with pf pid and mid");
-		cam_packet_util_put_packet_addr(pf_req_info->packet_handle);
 		return;
 	}
 	pf_args->pf_context_info.resource_type = jpeg_pid_mid_args.match_res;
@@ -1990,7 +1974,6 @@ static void cam_jpeg_mgr_dump_pf_data(
 iodump:
 	cam_packet_util_dump_io_bufs(packet, hw_mgr->iommu_hdl, hw_mgr->iommu_sec_hdl,
 		pf_args, hw_pid_support);
-	cam_packet_util_put_packet_addr(pf_req_info->packet_handle);
 }
 
 static int cam_jpeg_mgr_cmd(void *hw_mgr_priv, void *cmd_args)
