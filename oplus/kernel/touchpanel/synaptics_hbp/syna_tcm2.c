@@ -707,6 +707,11 @@ static void syna_dev_report_input_events(struct syna_tcm *tcm)
 					LOGI("unknown fingerprint error type: 0x%x\n", touch_data->extra_gesture_info[0]);
 					break;
 				}
+			} else if (touch_data->gesture_id == DTAP_DETECT) {
+				input_report_key(input_dev, KEY_WAKEUP, 1);
+				input_sync(input_dev);
+				input_report_key(input_dev, KEY_WAKEUP, 0);
+				input_sync(input_dev);
 			} else {
 				input_report_key(input_dev, KEY_F4, 1);
 				input_sync(input_dev);
@@ -872,6 +877,8 @@ static int syna_dev_create_input_device(struct syna_tcm *tcm)
 
 	set_bit(KEY_SLEEP, input_dev->keybit);
 #ifdef ENABLE_WAKEUP_GESTURE
+	set_bit(KEY_WAKEUP, input_dev->keybit);
+	input_set_capability(input_dev, EV_KEY, KEY_WAKEUP);
 	set_bit(KEY_F4, input_dev->keybit);
 	input_set_capability(input_dev, EV_KEY, KEY_F4);
 #endif
