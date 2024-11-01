@@ -340,6 +340,8 @@ OIS_LONG bu24_write_flash_fw_data(void)
         buf[1] = (subaddr_FLASH_DATA_BIN_1 & 0xFF);
         memcpy(&buf[2],param2, mod);  ///change all
         I2C_FM_block_write(buf,mod + 2);
+    }else {
+        CAM_INFO(CAM_OIS, "mod = %u",mod);
     }
 
     param2 = FLASH_DATA_BIN_5;
@@ -359,6 +361,8 @@ OIS_LONG bu24_write_flash_fw_data(void)
         buf[1] = (subaddr_FLASH_DATA_BIN_5 & 0xFF);
         memcpy(&buf[2],param2, mod);  ///change all
         I2C_FM_block_write(buf,mod + 2);
+    }else {
+        CAM_INFO(CAM_OIS, "mod = %u",mod);
     }
 
     param2 = FLASH_DATA_BIN_6;
@@ -378,6 +382,8 @@ OIS_LONG bu24_write_flash_fw_data(void)
         buf[1] = (subaddr_FLASH_DATA_BIN_6 & 0xFF);
         memcpy(&buf[2],param2, mod);  ///change all
         I2C_FM_block_write(buf,mod + 2);
+    }else {
+        CAM_INFO(CAM_OIS, "mod = %u",mod);
     }
 #if    0
     /*
@@ -832,7 +838,7 @@ void Boot_err_sla_change (void)
 }
 
 
-int Rohm_bu24721_fw_download(void)
+int Rohm_bu24721_fw_download()
 {
     OIS_ULONG	Prog_ID;
     int ret = 0;
@@ -881,7 +887,7 @@ int Rohm_bu24721_fw_download(void)
     return ret;
 }
 
-int bu24721_do_push_center(void)
+int bu24721_do_push_center()
 {
     int rc = 0;
 

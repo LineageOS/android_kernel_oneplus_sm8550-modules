@@ -38,6 +38,9 @@ enum cam_ois_state {
 	CAM_OIS_ACQUIRE,
 	CAM_OIS_CONFIG,
 	CAM_OIS_START,
+#ifdef OPLUS_FEATURE_CAMERA_COMMON
+	CAM_OIS_LOCK,
+#endif
 };
 
 /**
@@ -132,7 +135,9 @@ struct cam_ois_ctrl_t {
 	uint8_t ois_actuator_vendor;        //Actuator vendor
 	uint8_t ois_module_vendor;          //Module vendor
 	uint8_t ois_switch_spi_mode;
+	uint8_t actuator_ois_eeprom_merge_flag;
 	struct mutex ois_read_mutex;
+	struct mutex *actuator_ois_eeprom_merge_mutex;
 	bool ois_read_thread_start_to_read;
 	struct task_struct *ois_read_thread;
 	struct mutex ois_hall_data_mutex;
@@ -144,6 +149,11 @@ struct cam_ois_ctrl_t {
 	struct kfifo ois_hall_data_fifoV2;
 	bool isTeleOisUseMonitor;
 	bool pre_isTeleOisUseMonitor;
+	bool camera_ois_shake_detect_enable;
+	enum cam_ois_state cam_ois_last_state;
+	bool ois_hall_data_debug_enable;
+	bool dump_hall_thread_run;
+	struct task_struct *ois_print_hall_data_thread;
 #ifdef ENABLE_OIS_DELAY_POWER_DOWN
 	struct mutex ois_power_down_mutex;
 	enum cam_ois_power_down_thread_state ois_power_down_thread_state;
