@@ -8,9 +8,13 @@
 #include "cam_sensor_dev.h"
 
 #define CAM_IMX709_SENSOR_ID 0x709
+#define CAM_IMX888_SENSOR_ID 0x888
+
+#define CAM_IMX888_VENDOR_ID_ADDR 0x0018
+#define CAM_IMX888_VENDOR_ID_FLAG 0x20
 
 struct cam_sensor_i2c_reg_setting_array {
-	struct cam_sensor_i2c_reg_array reg_setting[1600];
+	struct cam_sensor_i2c_reg_array reg_setting[CAM_OEM_RW_SIZE_MAX];
 	unsigned short size;
 	enum camera_sensor_i2c_type addr_type;
 	enum camera_sensor_i2c_type data_type;
@@ -60,6 +64,12 @@ struct cam_sensor_settings {
 	struct cam_sensor_i2c_reg_setting_array imx581_setting;
 	struct cam_sensor_i2c_reg_setting_array imx989_setting;
 	struct cam_sensor_i2c_reg_setting_array imx890_setting;
+	struct cam_sensor_i2c_reg_setting_array imx890_zonda_setting;
+	struct cam_sensor_i2c_reg_setting_array imx888_setting;
+	struct cam_sensor_i2c_reg_setting_array imx888_mp_setting;
+	struct cam_sensor_i2c_reg_setting_array ov64b40_setting;
+	struct cam_sensor_i2c_reg_setting_array ov32c_setting;
+	struct cam_sensor_i2c_reg_setting_array imx355_setting;
 };
 
 int cam_ftm_power_down(struct cam_sensor_ctrl_t *s_ctrl);
@@ -78,8 +88,10 @@ int32_t cam_sensor_update_id_info(struct cam_cmd_probe_v2 *probe_info,
     struct cam_sensor_ctrl_t *s_ctrl);
 
 int cam_sensor_stop(struct cam_sensor_ctrl_t *s_ctrl);
-int cam_sensor_start(struct cam_sensor_ctrl_t *s_ctrl);
-int32_t oplus_cam_sensor_driver_cmd(struct cam_sensor_ctrl_t *s_ctrl,void *arg);
+int cam_sensor_start(struct cam_sensor_ctrl_t *s_ctrl, void *arg);
+int32_t post_cam_sensor_driver_cmd(struct cam_sensor_ctrl_t *s_ctrl,void *arg);
+int32_t pre_cam_sensor_driver_cmd(struct cam_sensor_ctrl_t *s_ctrl,void *arg);
+void cam_sensor_init(void);
 
 #ifdef OPLUS_FEATURE_CAMERA_COMMON
 int oplus_shift_sensor_mode(struct cam_sensor_ctrl_t *s_ctrl);
