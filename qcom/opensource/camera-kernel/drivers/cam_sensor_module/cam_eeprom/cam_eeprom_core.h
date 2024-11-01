@@ -20,5 +20,10 @@ void cam_eeprom_shutdown(struct cam_eeprom_ctrl_t *e_ctrl);
 
 struct completion *cam_eeprom_get_i3c_completion(uint32_t index);
 
+#ifdef OPLUS_FEATURE_CAMERA_COMMON
+int cam_eeprom_power_up(struct cam_eeprom_ctrl_t *e_ctrl,
+	struct cam_sensor_power_ctrl_t *power_info);
+int cam_eeprom_power_down(struct cam_eeprom_ctrl_t *e_ctrl);
+#endif
 #endif
 /* _CAM_EEPROM_CORE_H_ */

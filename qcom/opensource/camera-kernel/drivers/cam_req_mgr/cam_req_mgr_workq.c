@@ -192,7 +192,7 @@ int cam_req_mgr_workq_enqueue_task(struct crm_workq_task *task,
 	}
 	workq = (struct cam_req_mgr_core_workq *)task->parent;
 	if (!workq) {
-		CAM_WARN_RATE_LIMIT(CAM_CRM, "NULL workq pointer suspect mem corruption");
+		CAM_DBG(CAM_CRM, "NULL workq pointer suspect mem corruption");
 		return -EINVAL;
 	}
 
@@ -227,7 +227,7 @@ int cam_req_mgr_workq_enqueue_task(struct crm_workq_task *task,
 		queue_work(workq->job, &workq->work);
 	}
 #else
-	queue_work(workq->job, &workq->work);
+		queue_work(workq->job, &workq->work);
 #endif
 	WORKQ_RELEASE_LOCK(workq, flags);
 
@@ -360,15 +360,14 @@ void cam_req_mgr_workq_destroy(struct cam_req_mgr_core_workq **crm_workq)
 		}
 		/* Destroy workq payload data */
 		kfree(workq->task.pool[0].payload);
-		workq->task.pool[0].payload = NULL;
 		kfree(workq->task.pool);
 
 		/* Leave lists in stable state after freeing pool */
 		INIT_LIST_HEAD(&workq->task.empty_head);
 		for (i = 0; i < CRM_TASK_PRIORITY_MAX; i++)
 			INIT_LIST_HEAD(&workq->task.process_head[i]);
+		*crm_workq = NULL;
 		WORKQ_RELEASE_LOCK(workq, flags);
 		kfree(workq);
-		*crm_workq = NULL;
 	}
 }

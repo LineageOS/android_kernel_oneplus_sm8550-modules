@@ -165,9 +165,13 @@ struct cam_sensor_ctrl_t {
 	uint32_t                       num_batched_frames;
 	bool                           is_stopped_by_user;
 	bool                           stream_off_after_eof;
+	bool                           hw_no_ops;
+	bool                           is_res_info_updated;
 #ifdef OPLUS_FEATURE_CAMERA_COMMON
 	int                            is_support_laser;
 	int                            is_read_eeprom;
+	int                            is_gpio_reuse;
+	int                            is_power_up_advance;
 	struct mutex                   sensor_power_state_mutex;
 	struct mutex                   sensor_initsetting_mutex;
 	enum cam_sensor_power_state    sensor_power_state;
@@ -178,9 +182,8 @@ struct cam_sensor_ctrl_t {
 	struct work_struct             aon_wq;
 	int                            pid;
 	bool                           is_aon_user;
+	struct cam_sensor_i2c_reg_setting sensor_init_setting;
 #endif
-	bool                           hw_no_ops;
-	bool                           is_res_info_updated;
 };
 
 /**
