@@ -49,7 +49,6 @@
 #define CAM_FLASH_PACKET_OPCODE_SET_OPS              1
 #define CAM_FLASH_PACKET_OPCODE_NON_REALTIME_SET_OPS 2
 #define CAM_FLASH_PACKET_OPCODE_STREAM_OFF           3
-#define CAM_FLASH_PACKET_OPCODE_INIT_FIRE            4
 
 struct cam_flash_ctrl;
 
@@ -231,6 +230,7 @@ struct cam_flash_ctrl {
 	const char *                        flash_name;
 	/*Add by Fangyan @ Camera 2020/08/17 for flash current*/
 	uint32_t                            flash_current;
+	uint32_t                            flash_max_current;
 #endif
 };
 

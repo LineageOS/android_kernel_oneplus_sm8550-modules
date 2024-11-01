@@ -133,7 +133,6 @@ struct cam_tfe_ppp_data {
 	uint32_t                                     left_last_pixel;
 	uint32_t                                     first_line;
 	uint32_t                                     last_line;
-	uint32_t                                     core_cfg;
 	bool                                         lcr_enable;
 };
 
@@ -405,10 +404,13 @@ static void cam_tfe_log_error_irq_status(
 	for (i = 0; i < common_reg->num_debug_reg; i++) {
 		val_0 = cam_io_r(mem_base  +
 			common_reg->debug_reg[i]);
-		CAM_INFO(CAM_ISP, "Top debug [%d]:0x%x", i, val_0);
+		CAM_INFO(CAM_ISP, "Top debug [i]:0x%x", i, val_0);
 	}
 
-	cam_cpas_dump_camnoc_buff_fill_info(soc_private->cpas_handle);
+	cam_cpas_reg_read(soc_private->cpas_handle,
+		CAM_CPAS_REG_CAMNOC, 0x20, true, &val_0);
+	CAM_INFO(CAM_ISP, "tfe_niu_MaxWr_Low offset 0x20 val 0x%x",
+		val_0);
 
 	for (i = 0; i < common_reg->num_perf_cfg; i++) {
 		val_0 = cam_io_r(mem_base + common_reg->perf_cfg[i].perf_pixel_count);
@@ -517,7 +519,7 @@ static void cam_tfe_log_error_irq_status(
 		"TFE clock rate:%d TFE total bw applied:%lld",
 		top_priv->hw_clk_rate,
 		top_priv->total_bw_applied);
-	cam_cpas_log_votes(false);
+	cam_cpas_log_votes();
 }
 
 static void cam_tfe_check_out_of_sync(
@@ -565,7 +567,6 @@ static int cam_tfe_error_irq_bottom_half(
 	hw_info = core_info->tfe_hw_info;
 	evt_info.hw_idx = core_info->core_index;
 	evt_info.res_type = CAM_ISP_RESOURCE_TFE_IN;
-	evt_info.hw_type = CAM_ISP_HW_TYPE_TFE;
 
 	if (evt_payload->irq_reg_val[0] & hw_info->error_irq_mask[0]) {
 		err_evt_info.err_type = CAM_TFE_IRQ_STATUS_OVERFLOW;
@@ -1509,9 +1510,8 @@ static int cam_tfe_top_get_reg_update(
 	struct cam_tfe_top_priv *top_priv,
 	void *cmd_args, uint32_t arg_size)
 {
-	int                               rc = 0;
 	uint32_t                          size = 0;
-	uint32_t                          reg_val_pair[2] = {0};
+	uint32_t                          reg_val_pair[2];
 	struct cam_isp_hw_get_cmd_update *cdm_args = cmd_args;
 	struct cam_cdm_utils_ops         *cdm_util_ops = NULL;
 	struct cam_tfe_camif_data        *camif_rsrc_data = NULL;
@@ -1522,22 +1522,19 @@ static int cam_tfe_top_get_reg_update(
 
 	if (arg_size != sizeof(struct cam_isp_hw_get_cmd_update)) {
 		CAM_ERR(CAM_ISP, "Invalid cmd size");
-		rc = -EINVAL;
-		goto end;
+		return -EINVAL;
 	}
 
 	if (!cdm_args || !cdm_args->res) {
 		CAM_ERR(CAM_ISP, "Invalid args");
-		rc = -EINVAL;
-		goto end;
+		return -EINVAL;
 	}
 
 	cdm_util_ops = (struct cam_cdm_utils_ops *)cdm_args->res->cdm_ops;
 
 	if (!cdm_util_ops) {
 		CAM_ERR(CAM_ISP, "Invalid CDM ops");
-		rc = -EINVAL;
-		goto end;
+		return -EINVAL;
 	}
 
 	soc_info = top_priv->common_data.soc_info;
@@ -1547,17 +1544,12 @@ static int cam_tfe_top_get_reg_update(
 	if ((!cdm_args->reg_write) && ((size * 4) > cdm_args->cmd.size)) {
 		CAM_ERR(CAM_ISP, "buf size:%d is not sufficient, expected: %d",
 			cdm_args->cmd.size, size);
-		rc = -EINVAL;
-		goto end;
+		return -EINVAL;
 	}
 
 	mup_config = (struct cam_isp_mode_switch_data *) cdm_args->data;
 	if (in_res->res_id == CAM_ISP_HW_TFE_IN_CAMIF) {
 		camif_rsrc_data =  in_res->res_priv;
-		if (camif_rsrc_data->shdr_en && !camif_rsrc_data->is_shdr_master) {
-			CAM_DBG(CAM_ISP, "Skip reg update cmd for slave camif");
-			goto end;
-		}
 		reg_val_pair[0] = camif_rsrc_data->camif_reg->reg_update_cmd;
 		reg_val_pair[1] =
 			camif_rsrc_data->reg_data->reg_update_cmd_data;
@@ -1571,11 +1563,7 @@ static int cam_tfe_top_get_reg_update(
 		CAM_DBG(CAM_ISP, "Reg update not supported for res %d",
 			in_res->res_id);
 		cdm_args->cmd.used_bytes = 0;
-		goto end;
-	} else {
-		CAM_ERR(CAM_ISP, "Unknown resource with res_id = %d", in_res->res_id);
-		rc = -EINVAL;
-		goto end;
+		return 0;
 	}
 
 	reg_val_pair[1] |= cam_tfe_top_update_mup(top_priv, mup_config);
@@ -1586,11 +1574,11 @@ static int cam_tfe_top_get_reg_update(
 	} else {
 		cdm_util_ops->cdm_write_regrandom(cdm_args->cmd.cmd_buf_addr,
 			1, reg_val_pair);
+
 		cdm_args->cmd.used_bytes = size * 4;
 	}
 
-end:
-	return rc;
+	return 0;
 }
 
 static int cam_tfe_top_init_config_update(
@@ -2330,7 +2318,6 @@ int cam_tfe_top_reserve(void *device_priv,
 					acquire_args->in_port->line_end;
 				ppp_data->lcr_enable =
 					acquire_args->lcr_enable;
-				ppp_data->core_cfg = acquire_args->in_port->core_cfg;
 			} else {
 				rdi_data = (struct cam_tfe_rdi_data      *)
 					top_priv->in_rsrc[i].res_priv;
@@ -2596,12 +2583,14 @@ static int cam_tfe_ppp_resource_start(
 
 	rsrc_data = (struct cam_tfe_ppp_data  *)ppp_res->res_priv;
 
-	val = cam_io_r_mb(rsrc_data->mem_base + rsrc_data->common_reg->core_cfg_0);
-
 	/* Config tfe core */
-	val |= (1 << rsrc_data->reg_data->pdaf_path_en_shift);
+	val = (1 << rsrc_data->reg_data->pdaf_path_en_shift);
 
-	val |= (rsrc_data->core_cfg & (1 << rsrc_data->reg_data->lcr_dis_en_shift));
+	if (!rsrc_data->lcr_enable)
+		val = (1 << rsrc_data->reg_data->lcr_dis_en_shift);
+
+	if (rsrc_data->sync_mode != CAM_ISP_HW_SYNC_NONE)
+		val = (1 << rsrc_data->reg_data->lcr_dis_en_shift);
 
 	cam_io_w_mb(val, rsrc_data->mem_base +
 		rsrc_data->common_reg->core_cfg_0);
@@ -2924,8 +2913,8 @@ int cam_tfe_top_init(
 				hw_info->ppp_hw_info.ppp_reg;
 			ppp_priv->reg_data    =
 				hw_info->ppp_hw_info.reg_data;
-		} else if (hw_info->in_port[i] == CAM_TFE_RDI_VER_1_0 &&
-				(j < CAM_TFE_RDI_MAX)) {
+		} else if (hw_info->in_port[i] ==
+			CAM_TFE_RDI_VER_1_0) {
 			top_priv->in_rsrc[i].res_id =
 				CAM_ISP_HW_TFE_IN_RDI0 + j;
 
@@ -2949,8 +2938,8 @@ int cam_tfe_top_init(
 			rdi_priv->reg_data =
 				hw_info->rdi_hw_info[j++].reg_data;
 		}  else {
-			CAM_WARN(CAM_ISP, "TFE:%d Invalid inport type: %u at i = %d. j = %d",
-				core_info->core_index, hw_info->in_port[i], i, j);
+			CAM_WARN(CAM_ISP, "TFE:%d Invalid inport type: %u",
+				core_info->core_index, hw_info->in_port[i]);
 		}
 	}
 
@@ -3406,8 +3395,7 @@ int cam_tfe_process_cmd(void *hw_priv, uint32_t cmd_type,
 
 	if (!hw_priv) {
 		CAM_ERR(CAM_ISP, "Invalid arguments");
-		rc = -EINVAL;
-		goto end;
+		return -EINVAL;
 	}
 
 	soc_info = &tfe_hw->soc_info;
@@ -3462,7 +3450,6 @@ int cam_tfe_process_cmd(void *hw_priv, uint32_t cmd_type,
 		rc = cam_tfe_top_init_config_update(core_info->top_priv, cmd_args,
 			arg_size);
 		break;
-	case CAM_ISP_HW_NOTIFY_OVERFLOW:
 	case CAM_ISP_HW_CMD_GET_BUF_UPDATE:
 	case CAM_ISP_HW_CMD_GET_HFR_UPDATE:
 	case CAM_ISP_HW_CMD_STRIPE_UPDATE:
@@ -3473,9 +3460,6 @@ int cam_tfe_process_cmd(void *hw_priv, uint32_t cmd_type,
 	case CAM_ISP_HW_CMD_DUMP_BUS_INFO:
 	case CAM_ISP_HW_CMD_IS_PDAF_RDI2_MUX_EN:
 	case CAM_ISP_HW_CMD_WM_BW_LIMIT_CONFIG:
-	case CAM_ISP_HW_CMD_BUS_WM_DISABLE:
-	case CAM_ISP_HW_CMD_BUFFER_ALIGNMENT_UPDATE:
-	case CAM_ISP_HW_CMD_WM_CONFIG_UPDATE:
 		rc = core_info->tfe_bus->hw_ops.process_cmd(
 			core_info->tfe_bus->bus_priv, cmd_type, cmd_args,
 			arg_size);
@@ -3493,12 +3477,6 @@ int cam_tfe_process_cmd(void *hw_priv, uint32_t cmd_type,
 		rc = -EINVAL;
 		break;
 	}
-
-	if (rc) {
-		CAM_ERR(CAM_ISP, "TFE: %d error with cmd type: %d",
-			core_info->core_index, cmd_type);
-	}
-end:
 	return rc;
 }
 

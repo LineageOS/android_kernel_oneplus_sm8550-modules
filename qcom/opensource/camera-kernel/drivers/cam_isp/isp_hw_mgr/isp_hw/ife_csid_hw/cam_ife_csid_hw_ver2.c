@@ -1441,10 +1441,8 @@ void cam_ife_csid_hw_ver2_rdi_line_buffer_conflict_handler(
 		soc_info->reg_map[CAM_IFE_CSID_CLC_MEM_BASE_ID].mem_base;
 	const struct cam_ife_csid_ver2_path_reg_info *path_reg;
 	uint32_t i = 0, rdi_cfg = 0;
-	uint8_t *log_buf = csid_hw->log_buf;
+	uint8_t *log_buf = NULL;
 	size_t len = 0;
-
-	memset(log_buf, 0x0, sizeof(uint8_t) * CAM_IFE_CSID_LOG_BUF_LEN);
 
 	for (i = CAM_IFE_PIX_PATH_RES_RDI_0; i < CAM_IFE_PIX_PATH_RES_RDI_4;
 		i++) {
@@ -2884,7 +2882,7 @@ static int cam_ife_csid_hw_ver2_config_rx(
 	case CAM_ISP_IFE_IN_RES_TPG:
 		csid_hw->rx_cfg.phy_sel = 0;
 		csid_hw->rx_cfg.tpg_mux_sel = 0;
-		break;
+		fallthrough;
 	case CAM_ISP_IFE_IN_RES_CPHY_TPG_0:
 		csid_hw->rx_cfg.tpg_mux_sel = 1;
 		csid_hw->rx_cfg.tpg_num_sel = 1;
@@ -3208,13 +3206,6 @@ int cam_ife_csid_ver2_release(void *hw_priv,
 
 	path_cfg = (struct cam_ife_csid_ver2_path_cfg *)res->res_priv;
 
-	if (path_cfg->cid >= CAM_IFE_CSID_CID_MAX) {
-		CAM_ERR(CAM_ISP, "CSID:%d Invalid cid:%d",
-				csid_hw->hw_intf->hw_idx, path_cfg->cid);
-		rc = -EINVAL;
-		goto end;
-	}
-
 	cam_ife_csid_cid_release(&csid_hw->cid_data[path_cfg->cid],
 		csid_hw->hw_intf->hw_idx,
 		path_cfg->cid);
@@ -3389,10 +3380,7 @@ static int cam_ife_csid_ver2_init_config_rdi_path(
 	 * Plain format
 	 * Packing format
 	 */
-
-	cfg1 = cam_io_r_mb(mem_base + path_reg->cfg1_addr);
-
-	cfg1 |= (path_cfg->crop_enable << path_reg->crop_h_en_shift_val) |
+	cfg1 = (path_cfg->crop_enable << path_reg->crop_h_en_shift_val) |
 		(path_cfg->crop_enable <<
 		 path_reg->crop_v_en_shift_val);
 
@@ -3555,8 +3543,6 @@ static int cam_ife_csid_ver2_init_config_pxl_path(
 	 * Timestamp enable and strobe selection
 	 * Pix store enable
 	 */
-
-	cfg1 = cam_io_r_mb(mem_base + path_reg->cfg1_addr);
 
 	if (csid_hw->flags.binning_enabled) {
 
@@ -4203,7 +4189,6 @@ static int cam_ife_csid_ver2_csi2_irq_subscribe(struct cam_ife_csid_ver2_hw *csi
 		CAM_ERR(CAM_ISP, "CSID[%d] RX Subscribe Top Irq fail",
 			csid_hw->hw_intf->hw_idx);
 		rc = -EINVAL;
-		goto err;
 	}
 
 	rc = cam_irq_controller_register_dependent(csid_hw->top_irq_controller,
@@ -4264,7 +4249,7 @@ unsub_top:
 	cam_irq_controller_unsubscribe_irq(csid_hw->top_irq_controller,
 			csid_hw->rx_cfg.top_irq_handle);
 	csid_hw->rx_cfg.top_irq_handle = 0;
-err:
+
 	return rc;
 }
 
@@ -4715,10 +4700,6 @@ static int cam_ife_csid_ver2_disable_core(
 		rc = cam_irq_controller_unsubscribe_irq(
 			csid_hw->top_irq_controller,
 			csid_hw->reset_irq_handle);
-		if (rc)
-			CAM_WARN(CAM_ISP,
-				"CSID:%d Failed to unsubscribe reset irq",
-				csid_hw->hw_intf->hw_idx);
 		csid_hw->reset_irq_handle = 0;
 	}
 
@@ -5133,7 +5114,7 @@ int cam_ife_csid_ver2_stop(void *hw_priv,
 			res->res_name);
 	}
 	if (csid_hw->buf_done_irq_handle) {
-		rc = cam_irq_controller_unsubscribe_irq_evt(
+		rc = cam_irq_controller_unsubscribe_irq(
 			csid_hw->top_irq_controller,
 			csid_hw->buf_done_irq_handle);
 		csid_hw->buf_done_irq_handle = 0;
@@ -5143,14 +5124,14 @@ int cam_ife_csid_ver2_stop(void *hw_priv,
 	}
 
 	if (csid_hw->top_err_irq_handle) {
-		rc = cam_irq_controller_unsubscribe_irq_evt(
+		rc = cam_irq_controller_unsubscribe_irq(
 			csid_hw->top_irq_controller,
 			csid_hw->top_err_irq_handle);
 		csid_hw->top_err_irq_handle = 0;
 	}
 
 	if (csid_hw->debug_info.top_mask) {
-		cam_irq_controller_unsubscribe_irq_evt(csid_hw->top_irq_controller,
+		cam_irq_controller_unsubscribe_irq(csid_hw->top_irq_controller,
 			csid_hw->top_info_irq_handle);
 		csid_hw->top_info_irq_handle = 0;
 	}
@@ -5946,10 +5927,6 @@ static int cam_ife_csid_init_config_update(
 	}
 
 	path_cfg = (struct cam_ife_csid_ver2_path_cfg *)res->res_priv;
-	/* Skip epoch update if resource does not handle camif IRQs */
-	if (!path_cfg->handle_camif_irq)
-		goto end;
-
 	path_cfg->epoch_cfg = (path_cfg->end_line - path_cfg->start_line) *
 		init_cfg->init_config->epoch_cfg.epoch_factor / 100;
 
@@ -5962,7 +5939,7 @@ static int cam_ife_csid_init_config_update(
 	CAM_DBG(CAM_ISP,
 		"Init Update for res_name: %s epoch_factor: %x",
 		res->res_name, path_cfg->epoch_cfg);
-end:
+
 	return 0;
 }
 
