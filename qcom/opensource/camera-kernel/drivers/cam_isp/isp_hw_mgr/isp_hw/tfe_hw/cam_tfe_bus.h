@@ -1,7 +1,8 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 /*
  * Copyright (c) 2019-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 
@@ -70,7 +71,6 @@ enum cam_tfe_bus_rup_grp_id {
 	CAM_TFE_BUS_RUP_GRP_1,
 	CAM_TFE_BUS_RUP_GRP_2,
 	CAM_TFE_BUS_RUP_GRP_3,
-	CAM_TFE_BUS_RUP_GRP_4,
 	CAM_TFE_BUS_RUP_GRP_MAX,
 };
 
@@ -90,9 +90,6 @@ enum cam_tfe_bus_tfe_out_id {
 	CAM_TFE_BUS_TFE_OUT_DS4,
 	CAM_TFE_BUS_TFE_OUT_DS16,
 	CAM_TFE_BUS_TFE_OUT_AI,
-	CAM_TFE_BUS_TFE_OUT_PD_LCR_STATS,
-	CAM_TFE_BUS_TFE_OUT_PD_PREPROCESSED,
-	CAM_TFE_BUS_TFE_OUT_PD_PARSED,
 	CAM_TFE_BUS_TFE_OUT_MAX,
 };
 
@@ -167,13 +164,12 @@ struct cam_tfe_bus_reg_offset_bus_client {
  * struct cam_tfe_bus_tfe_out_hw_info:
  *
  * @Brief:           HW capability of TFE Bus Client
- * tfe_out_id:       Tfe out port id
- * max_width:        Max width supported by the outport
- * max_height:       Max height supported by outport
- * composite_group:  Out port composite group id
- * rup_group_id:     Reg update group of outport id
+ * tfe_out_id        Tfe out port id
+ * max_width         Max width supported by the outport
+ * max_height        Max height supported by outport
+ * composite_group   Out port composite group id
+ * rup_group_id      Reg update group of outport id
  * mid:              ouport mid value
- * pid:              pid associated with mid
  */
 struct cam_tfe_bus_tfe_out_hw_info {
 	enum cam_tfe_bus_tfe_out_id         tfe_out_id;
@@ -182,7 +178,6 @@ struct cam_tfe_bus_tfe_out_hw_info {
 	uint32_t                            composite_group;
 	uint32_t                            rup_group_id;
 	uint32_t                            mid[CAM_TFE_BUS_MAX_MID_PER_PORT];
-	uint64_t                            pid_mask;
 };
 
 /*
@@ -197,8 +192,6 @@ struct cam_tfe_bus_tfe_out_hw_info {
  * @num_comp_grp:          Number of composite group
  * @max_wm_per_comp_grp:   Max number of wm associated with one composite group
  * @comp_done_shift:       Mask shift for comp done mask
- * @mode_cfg_shift:        Mask shift for mode config
- * @height_shift:          Mask shift for height shift
  * @top_bus_wr_irq_shift:  Mask shift for top level BUS WR irq
  * @comp_buf_done_mask:    Composite buf done bits mask
  * @comp_rup_done_mask:    Reg update done mask
@@ -206,10 +199,6 @@ struct cam_tfe_bus_tfe_out_hw_info {
  * @rdi_width:             RDI WM width
  * @support_consumed_addr: Indicate if bus support consumed address
  * @pdaf_rdi2_mux_en:      Indicate is PDAF is muxed with RDI2
- * @pack_align_shift:      pack alignment shift
- * @max_bw_counter_limit:  Max BW counter limit
- * @counter_limit_shift:   Mask shift for BW counter limit
- * @counter_limit_mask:    Default Mask of BW limit counter
  */
 struct cam_tfe_bus_hw_info {
 	struct cam_tfe_bus_reg_offset_common common_reg;
@@ -222,8 +211,6 @@ struct cam_tfe_bus_hw_info {
 	uint32_t num_comp_grp;
 	uint32_t max_wm_per_comp_grp;
 	uint32_t comp_done_shift;
-	uint32_t mode_cfg_shift;
-	uint32_t height_shift;
 	uint32_t top_bus_wr_irq_shift;
 	uint32_t comp_buf_done_mask;
 	uint32_t comp_rup_done_mask;
@@ -231,10 +218,6 @@ struct cam_tfe_bus_hw_info {
 	uint32_t rdi_width;
 	bool support_consumed_addr;
 	bool pdaf_rdi2_mux_en;
-	uint32_t pack_align_shift;
-	uint32_t max_bw_counter_limit;
-	uint32_t counter_limit_shift;
-	uint32_t counter_limit_mask;
 };
 
 /*

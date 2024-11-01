@@ -503,7 +503,7 @@ static struct cam_tfe_bus_hw_info  tfe_lite770_bus_hw_info = {
 	.max_wm_per_comp_grp      = 3,
 	.comp_done_shift          = 8,
 	.top_bus_wr_irq_shift     = 1,
-	.comp_buf_done_mask = 0xE000,
+	.comp_buf_done_mask = 0x7FF00,
 	.comp_rup_done_mask = 0xF,
 	.bus_irq_error_mask = {
 		0xD0000000,
@@ -559,14 +559,9 @@ struct cam_tfe_hw_info cam_tfe_lite770 = {
 		0x00000000,
 	},
 	.error_irq_mask = {
-		0x001F1F00,
+		0x000F0F00,
 		0x00000000,
 		0x0000003F,
-	},
-	.non_fatal_error_irq_mask = {
-		0x00200000,
-		0x00000000,
-		0x00000000,
 	},
 	.bus_reg_irq_mask = {
 		0x00000002,

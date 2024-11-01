@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2017-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2021-2023, Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2021-2022, Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #include "cam_csiphy_soc.h"
@@ -14,6 +14,9 @@
 #include "include/cam_csiphy_2_2_0_hwreg.h"
 #ifdef OPLUS_FEATURE_CAMERA_COMMON
 #include "include/cam_csiphy_2_1_2_hwreg_enhance.h"
+#include "include/cam_csiphy_2_1_2_hwreg_front_enhance.h"
+#include "include/cam_csiphy_2_1_2_hwreg_main_enhance.h"
+
 #endif
 
 /* Clock divide factor for CPHY spec v1.0 */
@@ -166,8 +169,7 @@ enum cam_vote_level get_clk_voting_dynamic(
 		if (soc_info->clk_rate[cam_vote_level]
 			[csiphy_dev->rx_clk_src_idx] > phy_data_rate) {
 			CAM_DBG(CAM_CSIPHY,
-				"Found match PHY:%d clk_name:%s data_rate:%llu clk_rate:%d level:%d",
-				soc_info->index,
+				"match detected %s : %llu:%d level : %d",
 				soc_info->clk_name[csiphy_dev->rx_clk_src_idx],
 				phy_data_rate,
 				soc_info->clk_rate[cam_vote_level]
@@ -197,14 +199,6 @@ int32_t cam_csiphy_enable_hw(struct csiphy_device *csiphy_dev, int32_t index)
 	}
 
 	vote_level = csiphy_dev->ctrl_reg->getclockvoting(csiphy_dev, index);
-
-	for (i = 0; i < soc_info->num_clk; i++) {
-		CAM_DBG(CAM_CSIPHY, "PHY:%d %s:%d",
-			soc_info->index,
-			soc_info->clk_name[i],
-			soc_info->clk_rate[vote_level][i]);
-	}
-
 	rc = cam_soc_util_enable_platform_resource(soc_info, true,
 		vote_level, true);
 	if (rc < 0) {
@@ -331,6 +325,16 @@ int32_t cam_csiphy_parse_dt_info(struct platform_device *pdev,
 	} else if (of_device_is_compatible(soc_info->dev->of_node, "qcom,csiphy-v2.1.2-enhance")) {
 		csiphy_dev->ctrl_reg = &ctrl_reg_2_1_2_enhance;
 		csiphy_dev->hw_version = CSIPHY_VERSION_V212_ENHANCE;
+		csiphy_dev->is_divisor_32_comp = true;
+		csiphy_dev->clk_lane = 0;
+	} else if (of_device_is_compatible(soc_info->dev->of_node, "qcom,csiphy-v2.1.2-front-enhance")) {
+		csiphy_dev->ctrl_reg = &ctrl_reg_2_1_2_front_enhance;
+		csiphy_dev->hw_version = CSIPHY_VERSION_V212_FRONT_ENHANCE;
+		csiphy_dev->is_divisor_32_comp = true;
+		csiphy_dev->clk_lane = 0;
+	} else if (of_device_is_compatible(soc_info->dev->of_node, "qcom,csiphy-v2.1.2-main-enhance")) {
+		csiphy_dev->ctrl_reg = &ctrl_reg_2_1_2_main_enhance;
+		csiphy_dev->hw_version = CSIPHY_VERSION_V212_MAIN_ENHANCE;
 		csiphy_dev->is_divisor_32_comp = true;
 		csiphy_dev->clk_lane = 0;
 #endif
