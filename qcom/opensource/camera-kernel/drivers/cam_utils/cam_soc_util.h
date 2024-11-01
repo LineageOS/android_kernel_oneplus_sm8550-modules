@@ -561,18 +561,6 @@ int cam_soc_util_clk_disable(struct cam_hw_soc_info *soc_info,
 	bool optional_clk, int32_t clk_idx);
 
 /**
- * cam_soc_util_dump_clk()
- *
- * @brief:              Dumps all the clocks of the caller hw, using
- *                      clock api.
- *
- * @soc_info:           Device soc information
- * @return:             Success or failure
- */
-
-int cam_soc_util_dump_clk(struct cam_hw_soc_info *soc_info);
-
-/**
  * cam_soc_util_irq_enable()
  *
  * @brief:              Enable IRQ in SOC
@@ -743,10 +731,6 @@ int cam_soc_util_clk_enable_default(struct cam_hw_soc_info *soc_info,
 
 int cam_soc_util_get_clk_level(struct cam_hw_soc_info *soc_info,
 	int64_t clk_rate, int clk_idx, int32_t *clk_lvl);
-
-unsigned long cam_soc_util_get_clk_rate_applied(
-	struct cam_hw_soc_info *soc_info, int32_t index, bool is_src,
-	enum cam_vote_level clk_level);
 
 /* Callback to get reg space data for specific HW */
 typedef int (*cam_soc_util_regspace_data_cb)(uint32_t reg_base_type,

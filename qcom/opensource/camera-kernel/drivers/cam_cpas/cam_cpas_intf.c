@@ -317,7 +317,8 @@ bool cam_cpas_is_feature_supported(uint32_t flag, uint32_t hw_map,
 		return false;
 	}
 
-	supported = cam_cpas_is_part_supported(flag, hw_map, soc_private->part_info);
+	/* we are supporting only one camera so use idx 0 */
+	supported = cam_cpas_is_part_supported(flag, hw_map, soc_private->part_info[0]);
 
 	for (i = 0; i < soc_private->num_feature_info; i++)
 		if (soc_private->feature_info[i].feature == flag)
@@ -793,46 +794,6 @@ int cam_cpas_get_scid(
 	return rc;
 }
 EXPORT_SYMBOL(cam_cpas_get_scid);
-
-int cam_cpas_prepare_subpart_info(uint32_t subpart_type, uint32_t subpart_count)
-{
-	struct cam_hw_info *cpas_hw = NULL;
-	struct cam_cpas_private_soc *soc_private = NULL;
-
-	cpas_hw = (struct cam_hw_info *) g_cpas_intf->hw_intf->hw_priv;
-
-	mutex_lock(&cpas_hw->hw_mutex);
-	soc_private = (struct cam_cpas_private_soc *)cpas_hw->soc_info.soc_private;
-
-	if (!soc_private) {
-		CAM_ERR(CAM_CPAS, "Invalid soc_private: 0x%x", soc_private);
-		mutex_unlock(&cpas_hw->hw_mutex);
-		return -EINVAL;
-	}
-
-	switch (subpart_type) {
-	case CAM_SYSFS_IFE_HW_IDX:
-		soc_private->sysfs_info.num_ifes = subpart_count;
-		break;
-	case CAM_SYSFS_IFE_LITE_HW_IDX:
-		soc_private->sysfs_info.num_ife_lites = subpart_count;
-		break;
-	case CAM_SYSFS_SFE_HW_IDX:
-		soc_private->sysfs_info.num_sfes = subpart_count;
-		break;
-	case CAM_SYSFS_CUSTOM_HW_IDX:
-		soc_private->sysfs_info.num_custom = subpart_count;
-		break;
-	default:
-		CAM_ERR(CAM_CPAS, "Invalid camera subpart type : %d", subpart_type);
-		mutex_unlock(&cpas_hw->hw_mutex);
-		return -EINVAL;
-	}
-
-	mutex_unlock(&cpas_hw->hw_mutex);
-	return 0;
-}
-EXPORT_SYMBOL(cam_cpas_prepare_subpart_info);
 
 int cam_cpas_activate_llcc(
 	enum cam_sys_cache_config_types type)

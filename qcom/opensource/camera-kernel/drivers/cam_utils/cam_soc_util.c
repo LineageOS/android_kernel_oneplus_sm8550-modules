@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2015-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2023, Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022, Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #include <linux/of.h>
@@ -9,7 +9,6 @@
 #include <linux/slab.h>
 #include <linux/gpio.h>
 #include <linux/of_gpio.h>
-#include <linux/clk/qcom.h>
 #include "cam_soc_util.h"
 #include "cam_debug_util.h"
 #include "cam_cx_ipeak.h"
@@ -1094,31 +1093,6 @@ static int cam_soc_util_get_clk_level_to_apply(
 	return 0;
 }
 
-unsigned long cam_soc_util_get_clk_rate_applied(
-	struct cam_hw_soc_info *soc_info, int32_t index, bool is_src,
-	enum cam_vote_level clk_level)
-{
-	unsigned long clk_rate = 0;
-	struct clk *clk = NULL;
-	int rc = 0;
-	enum cam_vote_level apply_level;
-
-	if (is_src) {
-		clk = soc_info->clk[index];
-		clk_rate = clk_get_rate(clk);
-	} else {
-		rc = cam_soc_util_get_clk_level_to_apply(soc_info, clk_level,
-			&apply_level);
-		if (rc)
-			return rc;
-		if (soc_info->clk_rate[apply_level][index] > 0) {
-			clk = soc_info->clk[index];
-			clk_rate = clk_get_rate(clk);
-		}
-	}
-	return clk_rate;
-}
-
 int cam_soc_util_irq_enable(struct cam_hw_soc_info *soc_info)
 {
 	if (!soc_info) {
@@ -2052,21 +2026,6 @@ int cam_soc_util_set_clk_rate_level(struct cam_hw_soc_info *soc_info,
 
 	return rc;
 };
-
-int cam_soc_util_dump_clk(struct cam_hw_soc_info *soc_info)
-{
-	int i, rc = 0;
-
-	if (!soc_info)
-		return -EINVAL;
-
-	for (i = 0; i < soc_info->num_clk; i++) {
-		CAM_INFO(CAM_UTIL, "Dumping clock = %s", soc_info->clk_name[i]);
-		qcom_clk_dump(soc_info->clk[i], NULL, false);
-	}
-
-	return rc;
-}
 
 static int cam_soc_util_get_dt_gpio_req_tbl(struct device_node *of_node,
 	struct cam_soc_gpio_data *gconf, uint16_t *gpio_array,
@@ -3138,6 +3097,8 @@ put_clk:
 		soc_info->mmrm_handle = NULL;
 	}
 
+	if (i == -1)
+		i = soc_info->num_clk;
 	for (i = i - 1; i >= 0; i--) {
 		if (soc_info->clk[i]) {
 			if (CAM_IS_BIT_SET(soc_info->shared_clk_mask, i))
@@ -3533,7 +3494,8 @@ static int cam_soc_util_dump_dmi_reg_range_user_buf(
 		CAM_ERR(CAM_UTIL,
 			"Invalid input args soc_info: %pK, dump_args: %pK",
 			soc_info, dump_args);
-		return -EINVAL;
+		rc = -EINVAL;
+		goto end;
 	}
 
 	if (dmi_read->num_pre_writes > CAM_REG_DUMP_DMI_CONFIG_MAX ||
@@ -3541,14 +3503,15 @@ static int cam_soc_util_dump_dmi_reg_range_user_buf(
 		CAM_ERR(CAM_UTIL,
 			"Invalid number of requested writes, pre: %d post: %d",
 			dmi_read->num_pre_writes, dmi_read->num_post_writes);
-		return -EINVAL;
+		rc = -EINVAL;
+		goto end;
 	}
 
 	rc = cam_mem_get_cpu_buf(dump_args->buf_handle, &cpu_addr, &buf_len);
 	if (rc) {
 		CAM_ERR(CAM_UTIL, "Invalid handle %u rc %d",
 			dump_args->buf_handle, rc);
-		return -EINVAL;
+		goto end;
 	}
 
 	if (buf_len <= dump_args->offset) {
@@ -3634,8 +3597,6 @@ static int cam_soc_util_dump_dmi_reg_range_user_buf(
 		sizeof(struct cam_hw_soc_dump_header);
 
 end:
-	if (dump_args)
-		cam_mem_put_cpu_buf(dump_args->buf_handle);
 	return rc;
 }
 
@@ -3660,13 +3621,13 @@ static int cam_soc_util_dump_cont_reg_range_user_buf(
 			"Invalid input args soc_info: %pK, dump_out_buffer: %pK reg_read: %pK",
 			soc_info, dump_args, reg_read);
 		rc = -EINVAL;
-		return rc;
+		goto end;
 	}
 	rc = cam_mem_get_cpu_buf(dump_args->buf_handle, &cpu_addr, &buf_len);
 	if (rc) {
 		CAM_ERR(CAM_UTIL, "Invalid handle %u rc %d",
 			dump_args->buf_handle, rc);
-		return rc;
+		goto end;
 	}
 	if (buf_len <= dump_args->offset) {
 		CAM_WARN(CAM_UTIL, "Dump offset overshoot %zu %zu",
@@ -3716,8 +3677,6 @@ static int cam_soc_util_dump_cont_reg_range_user_buf(
 	dump_args->offset +=  hdr->size +
 		sizeof(struct cam_hw_soc_dump_header);
 end:
-	if (dump_args)
-		cam_mem_put_cpu_buf(dump_args->buf_handle);
 	return rc;
 }
 
@@ -3809,8 +3768,6 @@ int cam_soc_util_reg_dump_to_cmd_buf(void *ctx,
 	if (rc || !cpu_addr || (buf_size == 0)) {
 		CAM_ERR(CAM_UTIL, "Failed in Get cpu addr, rc=%d, cpu_addr=%pK",
 			rc, (void *)cpu_addr);
-		if (rc)
-			return rc;
 		goto end;
 	}
 
@@ -4012,7 +3969,6 @@ int cam_soc_util_reg_dump_to_cmd_buf(void *ctx,
 	}
 
 end:
-	cam_mem_put_cpu_buf(cmd_desc->mem_handle);
 	return rc;
 }
 
