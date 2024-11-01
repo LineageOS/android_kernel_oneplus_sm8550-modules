@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2017-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #include <linux/module.h>
@@ -494,11 +494,6 @@ static int cam_csiphy_update_secure_info(struct csiphy_device *csiphy_dev, int32
 	}
 
 	switch (cpas_version) {
-	case CAM_CPAS_TITAN_640_V200:
-	case CAM_CPAS_TITAN_770_V100:
-		bit_offset_bet_phys_in_cp_ctrl =
-			CAM_CSIPHY_MAX_DPHY_LANES + CAM_CSIPHY_MAX_CPHY_LANES + 1;
-		break;
 	case CAM_CPAS_TITAN_580_V100:
 	case CAM_CPAS_TITAN_680_V100:
 	case CAM_CPAS_TITAN_780_V100:
@@ -687,6 +682,7 @@ static int __cam_csiphy_parse_lane_info_cmd_buf(
 	uint32_t *cmd_buf = NULL;
 	struct cam_csiphy_info *cam_cmd_csiphy_info = NULL;
 	size_t len;
+
 	rc = cam_mem_get_cpu_buf(cmd_desc->mem_handle,
 		&generic_ptr, &len);
 	if (rc < 0) {
@@ -710,7 +706,6 @@ static int __cam_csiphy_parse_lane_info_cmd_buf(
 	index = cam_csiphy_get_instance_offset(csiphy_dev, dev_handle);
 	if (index < 0 || index >= csiphy_dev->session_max_device_support) {
 		CAM_ERR(CAM_CSIPHY, "index in invalid: %d", index);
-		cam_mem_put_cpu_buf(cmd_desc->mem_handle);
 		return -EINVAL;
 	}
 
@@ -719,7 +714,6 @@ static int __cam_csiphy_parse_lane_info_cmd_buf(
 	if (rc) {
 		CAM_ERR(CAM_CSIPHY, "Wrong configuration lane_cnt: %u",
 			cam_cmd_csiphy_info->lane_cnt);
-		cam_mem_put_cpu_buf(cmd_desc->mem_handle);
 		return rc;
 	}
 
@@ -730,7 +724,6 @@ static int __cam_csiphy_parse_lane_info_cmd_buf(
 			CAM_ERR(CAM_CSIPHY,
 				"Wrong Datarate Configuration: %llu",
 				cam_cmd_csiphy_info->data_rate);
-			cam_mem_put_cpu_buf(cmd_desc->mem_handle);
 			return rc;
 		}
 	}
@@ -749,7 +742,6 @@ static int __cam_csiphy_parse_lane_info_cmd_buf(
 			"Cannot support %s combo mode with differnt preamble settings",
 			(csiphy_dev->csiphy_info[index].csiphy_3phase ?
 			"CPHY" : "DPHY"));
-		cam_mem_put_cpu_buf(cmd_desc->mem_handle);
 		return -EINVAL;
 	}
 
@@ -817,12 +809,10 @@ static int __cam_csiphy_parse_lane_info_cmd_buf(
 		csiphy_dev->csiphy_info[index].settle_time,
 		csiphy_dev->csiphy_info[index].data_rate);
 
-	cam_mem_put_cpu_buf(cmd_desc->mem_handle);
 	return rc;
 
 reset_settings:
 	cam_csiphy_reset_phyconfig_param(csiphy_dev, index);
-	cam_mem_put_cpu_buf(cmd_desc->mem_handle);
 	return rc;
 }
 
@@ -955,7 +945,6 @@ int32_t cam_cmd_buf_parser(struct csiphy_device *csiphy_dev,
 		CAM_ERR(CAM_CSIPHY,
 			"Inval cam_packet strut size: %zu, len_of_buff: %zu",
 			 sizeof(struct cam_packet), len);
-		cam_mem_put_cpu_buf(cfg_dev->packet_handle);
 		rc = -EINVAL;
 		return rc;
 	}
@@ -967,31 +956,21 @@ int32_t cam_cmd_buf_parser(struct csiphy_device *csiphy_dev,
 	if (cam_packet_util_validate_packet(csl_packet,
 		remain_len)) {
 		CAM_ERR(CAM_CSIPHY, "Invalid packet params");
-		cam_mem_put_cpu_buf(cfg_dev->packet_handle);
 		rc = -EINVAL;
 		return rc;
 	}
 
-	if (csl_packet->num_cmd_buf)
-		cmd_desc = (struct cam_cmd_buf_desc *)
-			((uint32_t *)&csl_packet->payload +
-			csl_packet->cmd_buf_offset / 4);
-	else {
-		CAM_ERR(CAM_CSIPHY, "num_cmd_buffer = %d", csl_packet->num_cmd_buf);
-		cam_mem_put_cpu_buf(cfg_dev->packet_handle);
-		rc = -EINVAL;
-		return rc;
-	}
+	cmd_desc = (struct cam_cmd_buf_desc *)
+		((uint32_t *)&csl_packet->payload +
+		csl_packet->cmd_buf_offset / 4);
 
 	CAM_DBG(CAM_CSIPHY, "CSIPHY:%u num cmd buffers received: %u",
 		csiphy_dev->soc_info.index, csl_packet->num_cmd_buf);
 
 	for (i = 0; i < csl_packet->num_cmd_buf; i++) {
 		rc = cam_packet_util_validate_cmd_desc(&cmd_desc[i]);
-		if (rc) {
-			cam_mem_put_cpu_buf(cfg_dev->packet_handle);
+		if (rc)
 			return rc;
-		}
 
 		cmd_buf_type = cmd_desc[i].meta_data;
 
@@ -1017,7 +996,6 @@ int32_t cam_cmd_buf_parser(struct csiphy_device *csiphy_dev,
 			break;
 	}
 
-	cam_mem_put_cpu_buf(cfg_dev->packet_handle);
 	return rc;
 }
 
@@ -2028,6 +2006,7 @@ int32_t cam_csiphy_core_cfg(void *phy_dev,
 	uint32_t      cphy_trio_status;
 	void __iomem *csiphybase;
 	int32_t              rc = 0;
+	uint32_t             i;
 
 	if (!csiphy_dev || !cmd) {
 		CAM_ERR(CAM_CSIPHY, "Invalid input args");
@@ -2423,10 +2402,9 @@ int32_t cam_csiphy_core_cfg(void *phy_dev,
 	}
 	case CAM_START_DEV: {
 		struct cam_start_stop_dev_cmd config;
-		int32_t i, offset;
+		int32_t offset;
 		int clk_vote_level = -1;
 		uint8_t data_rate_variant_idx = 0;
-		unsigned long clk_rate = 0;
 
 		CAM_DBG(CAM_CSIPHY, "START_DEV Called");
 		rc = copy_from_user(&config, (void __user *)cmd->handle,
@@ -2466,21 +2444,6 @@ int32_t cam_csiphy_core_cfg(void *phy_dev,
 					"Failed to set the clk_rate level: %d",
 					clk_vote_level);
 				rc = 0;
-			}
-
-			for (i = 0; i < csiphy_dev->soc_info.num_clk; i++) {
-				if (i == csiphy_dev->soc_info.src_clk_idx) {
-					CAM_DBG(CAM_CSIPHY, "Skipping call back for src clk %s",
-						csiphy_dev->soc_info.clk_name[i]);
-					continue;
-				}
-				clk_rate = cam_soc_util_get_clk_rate_applied(
-					&csiphy_dev->soc_info, i, false, clk_vote_level);
-				if (clk_rate > 0) {
-					cam_subdev_notify_message(CAM_TFE_DEVICE_TYPE,
-						CAM_SUBDEV_MESSAGE_CLOCK_UPDATE,
-						(void *)(&clk_rate));
-				}
 			}
 
 			if (csiphy_dev->csiphy_info[offset].secure_mode == 1) {
