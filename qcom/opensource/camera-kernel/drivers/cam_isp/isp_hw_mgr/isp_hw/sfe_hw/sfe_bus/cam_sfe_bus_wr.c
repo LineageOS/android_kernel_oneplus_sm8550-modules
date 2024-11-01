@@ -1653,17 +1653,8 @@ static int cam_sfe_bus_start_sfe_out(
 	CAM_DBG(CAM_SFE, "Start SFE:%d out_type:0x%X",
 		rsrc_data->common_data->core_index, rsrc_data->out_type);
 
-	for (i = 0; i < rsrc_data->num_wm; i++) {
+	for (i = 0; i < rsrc_data->num_wm; i++)
 		rc = cam_sfe_bus_start_wm(&rsrc_data->wm_res[i]);
-		if (rc) {
-			CAM_ERR(CAM_SFE,
-				"SFE:%d Start Failed for out_type:0x%X",
-				sfe_out->res_state, rsrc_data->common_data->core_index,
-				rsrc_data->out_type);
-
-			return rc;
-		}
-	}
 
 	memset(bus_irq_reg_mask, 0, sizeof(bus_irq_reg_mask));
 	rc = cam_sfe_bus_start_comp_grp(rsrc_data->comp_grp,
@@ -2213,6 +2204,9 @@ static int cam_sfe_bus_wr_user_dump(
 		}
 
 		rsrc_node = &bus_priv->sfe_out[sfe_out_type];
+		if (!rsrc_node)
+			continue;
+
 		if (rsrc_node->res_state < CAM_ISP_RESOURCE_STATE_RESERVED) {
 			CAM_DBG(CAM_ISP,
 				"SFE BUS WR: path inactive res ID: %d, continuing",
