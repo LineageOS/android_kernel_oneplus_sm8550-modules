@@ -79,7 +79,11 @@ static int32_t cam_actuator_power_up(struct cam_actuator_ctrl_t *a_ctrl)
 		(power_info->power_down_setting == NULL)) {
 		CAM_INFO(CAM_ACTUATOR,
 			"Using default power settings");
+#ifdef OPLUS_FEATURE_CAMERA_COMMON
+		rc = oplus_cam_actuator_construct_default_power_setting(a_ctrl, power_info);
+#else
 		rc = cam_actuator_construct_default_power_setting(power_info);
+#endif
 		if (rc < 0) {
 			CAM_ERR(CAM_ACTUATOR,
 				"Construct default actuator power setting failed.");
@@ -180,6 +184,39 @@ static int32_t cam_actuator_power_down(struct cam_actuator_ctrl_t *a_ctrl)
 		CAM_ERR(CAM_ACTUATOR, "failed: power_info %pK", power_info);
 		return -EINVAL;
 	}
+
+#ifdef OPLUS_FEATURE_CAMERA_COMMON
+	if ((power_info->power_setting == NULL) &&
+		(power_info->power_down_setting == NULL)) {
+		CAM_INFO(CAM_ACTUATOR,"Using default power settings");
+		rc = oplus_cam_actuator_construct_default_power_setting(a_ctrl, power_info);
+		if (rc < 0) {
+			CAM_ERR(CAM_ACTUATOR,
+			"Construct default actuator power setting failed.");
+			return rc;
+		}
+
+		/* Parse and fill vreg params for power up settings */
+		rc = msm_camera_fill_vreg_params(
+			&a_ctrl->soc_info,
+			power_info->power_setting,
+			power_info->power_setting_size);
+		if (rc) {
+			CAM_ERR(CAM_ACTUATOR,
+			"failed to fill vreg params for power up rc:%d", rc);
+			return rc;
+		}
+		/* Parse and fill vreg params for power down settings*/
+		rc = msm_camera_fill_vreg_params(
+			&a_ctrl->soc_info,
+			power_info->power_down_setting,
+			power_info->power_down_setting_size);
+		if (rc) {
+			CAM_ERR(CAM_ACTUATOR,
+				"failed to fill vreg params power down rc:%d", rc);
+		}
+	}
+#endif
 
 #ifdef OPLUS_FEATURE_CAMERA_COMMON
 	rc = cam_sensor_util_power_down(power_info, soc_info, &(a_ctrl->io_master_info));
@@ -328,6 +365,11 @@ int32_t cam_actuator_apply_settings(struct cam_actuator_ctrl_t *a_ctrl,
 				i2c_set->request_id);
 		}
 #ifdef OPLUS_FEATURE_CAMERA_COMMON
+
+		if (rc < 0) {
+			oplus_cam_actuator_reactive_setting_apply(a_ctrl);
+		}
+
                 a_ctrl->is_actuator_ready = FALSE;
 #endif
 	}
@@ -559,28 +601,14 @@ int32_t cam_actuator_i2c_pkt_parse(struct cam_actuator_ctrl_t *a_ctrl,
 	if (csl_packet->header.request_id > a_ctrl->last_flush_req)
 		a_ctrl->last_flush_req = 0;
 
-	offset = (uint32_t *)&csl_packet->payload;
-	offset += (csl_packet->cmd_buf_offset / sizeof(uint32_t));
-	cmd_desc = (struct cam_cmd_buf_desc *)(offset);
-	rc = cam_packet_util_validate_cmd_desc(cmd_desc);
-	if (rc) {
-		CAM_ERR(CAM_ACTUATOR, "Invalid cmd desc ret: %d", rc);
-		return rc;
-	}
-
 	switch (csl_packet->header.op_code & 0xFFFFFF) {
 	case CAM_ACTUATOR_PACKET_OPCODE_INIT:
-		if (!csl_packet->num_cmd_buf) {
-			CAM_ERR(CAM_ACTUATOR, "Invalid num_cmd_buffer = %d",
-				csl_packet->num_cmd_buf);
-			return -EINVAL;
-		}
+		offset = (uint32_t *)&csl_packet->payload;
+		offset += (csl_packet->cmd_buf_offset / sizeof(uint32_t));
+		cmd_desc = (struct cam_cmd_buf_desc *)(offset);
+
 		/* Loop through multiple command buffers */
 		for (i = 0; i < csl_packet->num_cmd_buf; i++) {
-			rc = cam_packet_util_validate_cmd_desc(&cmd_desc[i]);
-			if (rc)
-				return rc;
-
 			total_cmd_buf_in_bytes = cmd_desc[i].length;
 			if (!total_cmd_buf_in_bytes)
 				continue;
@@ -593,7 +621,6 @@ int32_t cam_actuator_i2c_pkt_parse(struct cam_actuator_ctrl_t *a_ctrl,
 			cmd_buf = (uint32_t *)generic_ptr;
 			if (!cmd_buf) {
 				CAM_ERR(CAM_ACTUATOR, "invalid cmd buf");
-				cam_mem_put_cpu_buf(cmd_desc[i].mem_handle);
 				rc = -EINVAL;
 				goto end;
 			}
@@ -602,7 +629,6 @@ int32_t cam_actuator_i2c_pkt_parse(struct cam_actuator_ctrl_t *a_ctrl,
 				sizeof(struct common_header)))) {
 				CAM_ERR(CAM_ACTUATOR,
 					"Invalid length for sensor cmd");
-				cam_mem_put_cpu_buf(cmd_desc[i].mem_handle);
 				rc = -EINVAL;
 				goto end;
 			}
@@ -619,7 +645,6 @@ int32_t cam_actuator_i2c_pkt_parse(struct cam_actuator_ctrl_t *a_ctrl,
 				if (rc < 0) {
 					CAM_ERR(CAM_ACTUATOR,
 					"Failed to parse slave info: %d", rc);
-					cam_mem_put_cpu_buf(cmd_desc[i].mem_handle);
 					goto end;
 				}
 				break;
@@ -635,7 +660,6 @@ int32_t cam_actuator_i2c_pkt_parse(struct cam_actuator_ctrl_t *a_ctrl,
 					CAM_ERR(CAM_ACTUATOR,
 					"Failed:parse power settings: %d",
 					rc);
-					cam_mem_put_cpu_buf(cmd_desc[i].mem_handle);
 					goto end;
 				}
 				break;
@@ -656,12 +680,10 @@ int32_t cam_actuator_i2c_pkt_parse(struct cam_actuator_ctrl_t *a_ctrl,
 					CAM_ERR(CAM_ACTUATOR,
 					"Failed:parse init settings: %d",
 					rc);
-					cam_mem_put_cpu_buf(cmd_desc[i].mem_handle);
 					goto end;
 				}
 				break;
 			}
-			cam_mem_put_cpu_buf(cmd_desc[i].mem_handle);
 		}
 
 		if (a_ctrl->cam_act_state == CAM_ACTUATOR_ACQUIRE) {
@@ -695,11 +717,6 @@ int32_t cam_actuator_i2c_pkt_parse(struct cam_actuator_ctrl_t *a_ctrl,
 		}
 		break;
 	case CAM_ACTUATOR_PACKET_AUTO_MOVE_LENS:
-		if (!csl_packet->num_cmd_buf) {
-			CAM_ERR(CAM_ACTUATOR, "Invalid num_cmd_buffer = %d",
-				csl_packet->num_cmd_buf);
-			return -EINVAL;
-		}
 		if (a_ctrl->cam_act_state < CAM_ACTUATOR_CONFIG) {
 			rc = -EINVAL;
 			CAM_WARN(CAM_ACTUATOR,
@@ -715,6 +732,9 @@ int32_t cam_actuator_i2c_pkt_parse(struct cam_actuator_ctrl_t *a_ctrl,
 		i2c_data->init_settings.request_id =
 			csl_packet->header.request_id;
 		i2c_reg_settings->is_settings_valid = 1;
+		offset = (uint32_t *)&csl_packet->payload;
+		offset += csl_packet->cmd_buf_offset / sizeof(uint32_t);
+		cmd_desc = (struct cam_cmd_buf_desc *)(offset);
 		rc = cam_sensor_i2c_command_parser(
 			&a_ctrl->io_master_info,
 			i2c_reg_settings,
@@ -732,11 +752,6 @@ int32_t cam_actuator_i2c_pkt_parse(struct cam_actuator_ctrl_t *a_ctrl,
 		}
 		break;
 	case CAM_ACTUATOR_PACKET_MANUAL_MOVE_LENS:
-		if (!csl_packet->num_cmd_buf) {
-			CAM_ERR(CAM_ACTUATOR, "Invalid num_cmd_buffer = %d",
-				csl_packet->num_cmd_buf);
-			return -EINVAL;
-		}
 		if (a_ctrl->cam_act_state < CAM_ACTUATOR_CONFIG) {
 			rc = -EINVAL;
 			CAM_WARN(CAM_ACTUATOR,
@@ -753,6 +768,9 @@ int32_t cam_actuator_i2c_pkt_parse(struct cam_actuator_ctrl_t *a_ctrl,
 		 i2c_reg_settings->request_id =
 			csl_packet->header.request_id;
 		i2c_reg_settings->is_settings_valid = 1;
+		offset = (uint32_t *)&csl_packet->payload;
+		offset += csl_packet->cmd_buf_offset / sizeof(uint32_t);
+		cmd_desc = (struct cam_cmd_buf_desc *)(offset);
 		rc = cam_sensor_i2c_command_parser(
 			&a_ctrl->io_master_info,
 			i2c_reg_settings,
@@ -786,7 +804,6 @@ int32_t cam_actuator_i2c_pkt_parse(struct cam_actuator_ctrl_t *a_ctrl,
 		}
 		break;
 	case CAM_ACTUATOR_PACKET_OPCODE_READ: {
-		uint64_t qtime_ns;
 		struct cam_buf_io_cfg *io_cfg;
 		struct i2c_settings_array i2c_read_settings;
 
@@ -817,6 +834,9 @@ int32_t cam_actuator_i2c_pkt_parse(struct cam_actuator_ctrl_t *a_ctrl,
 			goto end;
 		}
 
+		offset = (uint32_t *)&csl_packet->payload;
+		offset += (csl_packet->cmd_buf_offset / sizeof(uint32_t));
+		cmd_desc = (struct cam_cmd_buf_desc *)(offset);
 		i2c_read_settings.is_settings_valid = 1;
 		i2c_read_settings.request_id = 0;
 		rc = cam_sensor_i2c_command_parser(&a_ctrl->io_master_info,
@@ -837,24 +857,6 @@ int32_t cam_actuator_i2c_pkt_parse(struct cam_actuator_ctrl_t *a_ctrl,
 			goto end;
 		}
 
-		if (csl_packet->num_io_configs > 1) {
-			rc = cam_sensor_util_get_current_qtimer_ns(&qtime_ns);
-			if (rc < 0) {
-				CAM_ERR(CAM_SENSOR, "failed to get qtimer rc:%d");
-				delete_request(&i2c_read_settings);
-				return rc;
-			}
-
-			rc = cam_sensor_util_write_qtimer_to_io_buffer(
-				qtime_ns, &io_cfg[1]);
-			if (rc < 0) {
-				CAM_ERR(CAM_ACTUATOR,
-					"write qtimer failed rc: %d", rc);
-				delete_request(&i2c_read_settings);
-				return rc;
-			}
-		}
-
 		rc = delete_request(&i2c_read_settings);
 		if (rc < 0) {
 			CAM_ERR(CAM_ACTUATOR,
@@ -870,11 +872,7 @@ int32_t cam_actuator_i2c_pkt_parse(struct cam_actuator_ctrl_t *a_ctrl,
 		goto end;
 	}
 
-	cam_mem_put_cpu_buf(config.packet_handle);
-	return rc;
-
 end:
-	cam_mem_put_cpu_buf(config.packet_handle);
 	return rc;
 }
 
