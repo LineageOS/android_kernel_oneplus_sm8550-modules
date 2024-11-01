@@ -130,11 +130,4 @@
 #define CAM_CPAS_SECURE_DOMAIN      0
 #define CAM_CPAS_NON_SECURE_DOMAIN  1
 
-#define CAM_FLASH_TYPE_PMIC 0
-#define CAM_FLASH_TYPE_I2C  1
-#define CAM_FLASH_TYPE_GPIO 2
-
-/* Group name for common clock source*/
-#define CAM_COMMON_TFE_SRC_CLK       1
-
 #endif

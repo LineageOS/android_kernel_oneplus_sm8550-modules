@@ -136,6 +136,10 @@ struct cam_actuator_ctrl_t {
 	bool is_update_pid;
 	struct task_struct *actuator_update_pid_thread;
 	struct semaphore actuator_sem;
+	bool reactive_ctrl_support;
+	struct cam_sensor_i2c_reg_array reactive_reg_array;
+	struct cam_sensor_i2c_reg_setting reactive_setting;
+	char actuator_name[CAM_CTX_DEV_NAME_MAX_LENGTH];
 #endif
 };
 
