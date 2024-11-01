@@ -14,6 +14,8 @@
 #include "include/cam_csiphy_2_2_0_hwreg.h"
 #ifdef OPLUS_FEATURE_CAMERA_COMMON
 #include "include/cam_csiphy_2_1_2_hwreg_enhance.h"
+#include "include/cam_csiphy_2_1_2_hwreg_front_enhance.h"
+#include "include/cam_csiphy_2_1_2_hwreg_main_enhance.h"
 #endif
 
 /* Clock divide factor for CPHY spec v1.0 */
@@ -331,6 +333,16 @@ int32_t cam_csiphy_parse_dt_info(struct platform_device *pdev,
 	} else if (of_device_is_compatible(soc_info->dev->of_node, "qcom,csiphy-v2.1.2-enhance")) {
 		csiphy_dev->ctrl_reg = &ctrl_reg_2_1_2_enhance;
 		csiphy_dev->hw_version = CSIPHY_VERSION_V212_ENHANCE;
+		csiphy_dev->is_divisor_32_comp = true;
+		csiphy_dev->clk_lane = 0;
+	} else if (of_device_is_compatible(soc_info->dev->of_node, "qcom,csiphy-v2.1.2-front-enhance")) {
+		csiphy_dev->ctrl_reg = &ctrl_reg_2_1_2_front_enhance;
+		csiphy_dev->hw_version = CSIPHY_VERSION_V212_FRONT_ENHANCE;
+		csiphy_dev->is_divisor_32_comp = true;
+		csiphy_dev->clk_lane = 0;
+	} else if (of_device_is_compatible(soc_info->dev->of_node, "qcom,csiphy-v2.1.2-main-enhance")) {
+		csiphy_dev->ctrl_reg = &ctrl_reg_2_1_2_main_enhance;
+		csiphy_dev->hw_version = CSIPHY_VERSION_V212_MAIN_ENHANCE;
 		csiphy_dev->is_divisor_32_comp = true;
 		csiphy_dev->clk_lane = 0;
 #endif
