@@ -252,7 +252,6 @@ struct i2c_data_settings {
 #endif
 	struct i2c_settings_array *per_frame;
 	struct i2c_settings_array *frame_skip;
-	struct i2c_settings_array *bubble_update;
 	struct i2c_settings_array reg_bank_unlock_settings;
 	struct i2c_settings_array reg_bank_lock_settings;
 };
@@ -363,6 +362,7 @@ enum msm_camera_vreg_name_t {
 	CAM_V_CUSTOM2,
 #ifdef OPLUS_FEATURE_CAMERA_COMMON
 	CAM_VANA1,
+	CAM_CLK,
 #endif
 	CAM_VREG_MAX,
 };
