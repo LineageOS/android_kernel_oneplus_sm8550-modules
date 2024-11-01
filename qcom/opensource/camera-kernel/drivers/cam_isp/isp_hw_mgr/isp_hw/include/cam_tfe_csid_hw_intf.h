@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 /*
  * Copyright (c) 2019-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #ifndef _CAM_TFE_CSID_HW_INTF_H_
@@ -93,7 +93,6 @@ struct cam_isp_tfe_in_port_generic_info {
 	uint32_t                        secure_mode;
 	bool                            shdr_en;
 	bool                            is_shdr_master;
-	bool                            epd_supported;
 	struct cam_isp_tfe_out_port_generic_info    *data;
 };
 
@@ -273,15 +272,5 @@ struct cam_tfe_csid_clock_update_args {
 	uint64_t                           clk_rate;
 };
 
-/*
- * struct cam_tfe_csid_discard_init_frame_args:
- *
- * @num_frames: Num frames to discard
- * @res: Node res for this path
- */
-struct cam_tfe_csid_discard_init_frame_args {
-	uint32_t                          num_frames;
-	struct cam_isp_resource_node     *res;
-};
 
 #endif /* _CAM_TFE_CSID_HW_INTF_H_ */

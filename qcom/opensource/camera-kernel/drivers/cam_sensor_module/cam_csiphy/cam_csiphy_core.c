@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2017-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #include <linux/module.h>
@@ -494,11 +494,6 @@ static int cam_csiphy_update_secure_info(struct csiphy_device *csiphy_dev, int32
 	}
 
 	switch (cpas_version) {
-	case CAM_CPAS_TITAN_640_V200:
-	case CAM_CPAS_TITAN_770_V100:
-		bit_offset_bet_phys_in_cp_ctrl =
-			CAM_CSIPHY_MAX_DPHY_LANES + CAM_CSIPHY_MAX_CPHY_LANES + 1;
-		break;
 	case CAM_CPAS_TITAN_580_V100:
 	case CAM_CPAS_TITAN_680_V100:
 	case CAM_CPAS_TITAN_780_V100:
@@ -817,12 +812,10 @@ static int __cam_csiphy_parse_lane_info_cmd_buf(
 		csiphy_dev->csiphy_info[index].settle_time,
 		csiphy_dev->csiphy_info[index].data_rate);
 
-	cam_mem_put_cpu_buf(cmd_desc->mem_handle);
 	return rc;
 
 reset_settings:
 	cam_csiphy_reset_phyconfig_param(csiphy_dev, index);
-	cam_mem_put_cpu_buf(cmd_desc->mem_handle);
 	return rc;
 }
 
@@ -1017,7 +1010,6 @@ int32_t cam_cmd_buf_parser(struct csiphy_device *csiphy_dev,
 			break;
 	}
 
-	cam_mem_put_cpu_buf(cfg_dev->packet_handle);
 	return rc;
 }
 

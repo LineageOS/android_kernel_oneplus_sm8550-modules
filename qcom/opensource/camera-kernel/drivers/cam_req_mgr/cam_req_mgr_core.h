@@ -219,28 +219,25 @@ struct cam_req_mgr_apply {
  * @apply_at_eof    : Boolean Identifier for request to be applied at EOF
  * @is_applied      : Flag to identify if request is already applied to device
  *                    in previous frame
- * @skip_isp_apply  : Flag to indicate skip apply req for ISP
  */
 struct crm_tbl_slot_special_ops {
 	int32_t dev_hdl;
 	bool apply_at_eof;
 	bool is_applied;
-	bool skip_isp_apply;
 };
 
 /**
  * struct cam_req_mgr_tbl_slot
- * @idx                   : slot index
- * @req_ready_map         : mask tracking which all devices have request ready
- * @state                 : state machine for life cycle of a slot
- * @inject_delay_at_sof   : insert extra bubbling for flash type of use cases
- * @inject_delay_at_eof   : insert extra bubbling for flash type of use cases
- * @ops                   : special operation for the table slot
- *                          e.g.
- *                          skip_next frame: in case of applying one device
- *                          and skip others
- *                          apply_at_eof: device that needs to apply at EOF
- * @ready_state_timestamp : timestamp at which slot state becomes ready
+ * @idx                 : slot index
+ * @req_ready_map       : mask tracking which all devices have request ready
+ * @state               : state machine for life cycle of a slot
+ * @inject_delay_at_sof : insert extra bubbling for flash type of use cases
+ * @inject_delay_at_eof : insert extra bubbling for flash type of use cases
+ * @ops                 : special operation for the table slot
+ *                        e.g.
+ *                        skip_next frame: in case of applying one device
+ *                        and skip others
+ *                        apply_at_eof: device that needs to apply at EOF
  */
 struct cam_req_mgr_tbl_slot {
 	int32_t                                idx;
@@ -249,7 +246,6 @@ struct cam_req_mgr_tbl_slot {
 	uint32_t                               inject_delay_at_sof;
 	uint32_t                               inject_delay_at_eof;
 	struct  crm_tbl_slot_special_ops       ops;
-	uint64_t                               ready_state_timestamp;
 };
 
 /**
@@ -363,12 +359,6 @@ struct cam_req_mgr_connected_device {
 	bool                            is_active;
 };
 
-struct cam_req_mgr_debug_data {
-	uint32_t                       num_skip_frames;
-	uint64_t                       last_open_req;
-	uint64_t                       last_applied_req;
-};
-
 /**
  * struct cam_req_mgr_core_link
  * -  Link Properties
@@ -429,7 +419,6 @@ struct cam_req_mgr_debug_data {
  * @cont_empty_slots     : Continuous empty slots
  * @is_shdr              : flag to indicate auto shdr usecase without SFE
  * @wait_for_dual_trigger: Flag to indicate whether to wait for second epoch in dual trigger
- * @debug_data           : Debug data to be dump in case of receovery
  */
 struct cam_req_mgr_core_link {
 	int32_t                              link_hdl;
@@ -475,7 +464,6 @@ struct cam_req_mgr_core_link {
 	uint32_t                             cont_empty_slots;
 	bool                                 is_shdr;
 	bool                                 wait_for_dual_trigger;
-	struct cam_req_mgr_debug_data        debug_data;
 };
 
 /**
