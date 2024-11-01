@@ -1617,9 +1617,6 @@ bool cam_ife_csid_ver1_is_width_valid(
 		width = reserve->in_port->right_stop -
 			reserve->in_port->right_start + 1;
 
-	if (reserve->in_port->horizontal_bin || reserve->in_port->qcfa_bin)
-		width /= 2;
-
 	if (!cam_ife_csid_ver1_is_width_valid_by_fuse(csid_hw, width)) {
 		CAM_ERR(CAM_ISP, "CSID[%u] width limited by fuse",
 			csid_hw->hw_intf->hw_idx);
@@ -1825,14 +1822,6 @@ int cam_ife_csid_ver1_release(void *hw_priv,
 		csid_hw->hw_intf->hw_idx, res->res_type, res->res_id);
 
 	path_cfg = (struct cam_ife_csid_ver1_path_cfg *)res->res_priv;
-
-	if (path_cfg->cid >= CAM_IFE_CSID_CID_MAX) {
-		CAM_ERR(CAM_ISP, "CSID:%d Invalid cid:%d",
-				csid_hw->hw_intf->hw_idx, path_cfg->cid);
-		rc = -EINVAL;
-		goto end;
-	}
-
 	cam_ife_csid_cid_release(&csid_hw->cid_data[path_cfg->cid],
 		csid_hw->hw_intf->hw_idx,
 		path_cfg->cid);
@@ -2235,12 +2224,10 @@ static int cam_ife_csid_ver1_init_config_rdi_path(
 		cam_io_w_mb(val, mem_base + path_reg->multi_vcdt_cfg0_addr);
 	}
 
+	val = 0;
 	/*configure cfg1 addr
 	 * Timestamp strobe selection
 	 */
-
-	val = cam_io_r_mb(mem_base + path_reg->cfg1_addr);
-
 	val |= cmn_reg->timestamp_strobe_val <<
 			cmn_reg->timestamp_stb_sel_shift_val;
 
@@ -2560,9 +2547,7 @@ static int cam_ife_csid_ver1_init_config_pxl_path(
 	 * timestamp strobe selection
 	 */
 
-	val = cam_io_r_mb(mem_base + path_reg->cfg1_addr);
-
-	val |= cmn_reg->timestamp_strobe_val <<
+	val = cmn_reg->timestamp_strobe_val <<
 		cmn_reg->timestamp_stb_sel_shift_val;
 
 	cam_io_w_mb(val, mem_base + path_reg->cfg1_addr);
@@ -2721,6 +2706,7 @@ static int cam_ife_csid_ver1_enable_hw(struct cam_ife_csid_ver1_hw *csid_hw)
 	csid_hw->flags.fatal_err_detected = false;
 	csid_hw->flags.device_enabled = true;
 	spin_unlock_irqrestore(&csid_hw->lock_state, flags);
+	cam_tasklet_start(csid_hw->tasklet);
 
 	return rc;
 
@@ -2807,14 +2793,7 @@ int cam_ife_csid_ver1_init_hw(void *hw_priv,
 	default:
 		CAM_ERR(CAM_ISP, "CSID:%d Invalid Res id %d",
 			csid_hw->hw_intf->hw_idx, res->res_id);
-		rc = -EINVAL;
 		break;
-	}
-
-	if (rc < 0) {
-		CAM_ERR(CAM_ISP, "CSID:%d res_id:%d path init configuration failed with rc: %d",
-			csid_hw->hw_intf->hw_idx, res->res_id, rc);
-		goto end;
 	}
 
 	rc = cam_ife_csid_ver1_hw_reset(csid_hw);
@@ -2899,6 +2878,7 @@ static int cam_ife_csid_ver1_disable_hw(
 	cam_io_w_mb(0, soc_info->reg_map[0].mem_base +
 		csid_reg->cmn_reg->top_irq_mask_addr);
 
+	cam_tasklet_stop(csid_hw->tasklet);
 	rc = cam_ife_csid_disable_soc_resources(soc_info);
 	if (rc)
 		CAM_ERR(CAM_ISP, "CSID:%d Disable CSID SOC failed",
@@ -3230,9 +3210,6 @@ int cam_ife_csid_ver1_stop(void *hw_priv,
 		csid_hw->hw_intf->hw_idx,
 		csid_stop->num_res);
 	cam_ife_csid_ver1_tpg_stop(csid_hw);
-
-	csid_hw->flags.device_enabled = false;
-
 	/* Stop the resource first */
 	for (i = 0; i < csid_stop->num_res; i++) {
 
@@ -4207,14 +4184,6 @@ static int cam_ife_csid_ver1_bottom_half_handler(
 
 	csid_hw = (struct cam_ife_csid_ver1_hw *)handler_priv;
 	evt_payload = (struct cam_ife_csid_ver1_evt_payload *)evt_payload_priv;
-
-	if (!csid_hw->flags.device_enabled) {
-		CAM_DBG(CAM_ISP, "CSID[%d] bottom-half after csid stop",
-			csid_hw->hw_intf->hw_idx);
-		cam_ife_csid_ver1_put_evt_payload(csid_hw, &evt_payload,
-			&csid_hw->free_payload_list);
-		return 0;
-	}
 
 	if (evt_payload->irq_status[CAM_IFE_CSID_IRQ_REG_RX])
 		cam_ife_csid_ver1_rx_bottom_half_handler(
