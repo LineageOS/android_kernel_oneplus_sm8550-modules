@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 /*
  * Copyright (c) 2017-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2023, Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #ifndef _CAM_ISP_CONTEXT_H_
@@ -58,9 +58,6 @@
 
 /* AEB error count threshold */
 #define CAM_ISP_CONTEXT_AEB_ERROR_CNT_MAX 3
-
-/* Debug Buffer length*/
-#define CAM_ISP_CONTEXT_DBG_BUF_LEN 300
 
 /* forward declaration */
 struct cam_isp_context;
@@ -305,9 +302,6 @@ struct cam_isp_context_event_record {
  *                             This is decided based on the max mode switch delay published
  *                             by other devices on the link as part of link setup
  * @mode_switch_en:            Indicates if mode switch is enabled
- * @is_shdr:                   true, if usecase is sdhr
- * @is_shdr_master:            Flag to indicate master context in shdr usecase
- * @last_num_exp:              Last num of exposure
  *
  */
 struct cam_isp_context {
@@ -375,9 +369,6 @@ struct cam_isp_context {
 	atomic_t                              mswitch_default_apply_delay_ref_cnt;
 	bool                                  handle_mswitch;
 	bool                                  mode_switch_en;
-	bool                                  is_tfe_shdr;
-	bool                                  is_shdr_master;
-	uint32_t                              last_num_exp;
 };
 
 /**
