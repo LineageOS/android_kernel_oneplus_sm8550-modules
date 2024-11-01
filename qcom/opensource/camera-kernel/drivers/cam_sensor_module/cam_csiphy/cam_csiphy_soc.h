@@ -38,6 +38,8 @@
 #define CSIPHY_VERSION_V220                       0x220
 #ifdef OPLUS_FEATURE_CAMERA_COMMON
 #define CSIPHY_VERSION_V212_ENHANCE               0xF212
+#define CSIPHY_VERSION_V212_FRONT_ENHANCE         0xF213
+#define CSIPHY_VERSION_V212_MAIN_ENHANCE          0xF214
 #endif
 
 /**

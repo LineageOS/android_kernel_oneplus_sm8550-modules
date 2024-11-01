@@ -127,7 +127,6 @@ enum cam_sensor_packet_opcodes {
 	CAM_SENSOR_PACKET_OPCODE_SENSOR_LSC,
 	CAM_SENSOR_PACKET_OPCODE_SENSOR_AWBOTP,
 #endif
-	CAM_SENSOR_PACKET_OPCODE_SENSOR_BUBBLE_UPDATE,
 	CAM_SENSOR_PACKET_OPCODE_SENSOR_NOP = 127,
 };
 
@@ -311,21 +310,6 @@ struct cam_cmd_i2c_info {
 	__u8     cmd_type;
 	__u16    reserved;
 } __attribute__((packed));
-
-/**
- * Below macro definition is the param mask for
- * cam_cmd_sensor_res_info.
- */
-#define CAM_SENSOR_FEATURE_MASK                    BIT(0)
-#define CAM_SENSOR_NUM_BATCHED_FRAMES              BIT(1)
-
-/* Below macro definition is the sub definition for CAM_SENSOR_FEATURE_MASK */
-#define CAM_SENSOR_FEATURE_NONE                    0
-#define CAM_SENSOR_FEATURE_AEB_ON                  BIT(0)
-#define CAM_SENSOR_FEATURE_AEB_UPDATE              BIT(1)
-#define CAM_SENSOR_FEATURE_AEB_OFF                 BIT(2)
-#define CAM_SENSOR_FEATURE_INSENSOR_HDR_3EXP_ON    BIT(3)
-#define CAM_SENSOR_FEATURE_INSENSOR_HDR_3EXP_OFF   BIT(4)
 
 /**
  * struct cam_cmd_sensor_res_info - Contains sensor res info
@@ -984,8 +968,5 @@ struct cam_flash_query_cap_info_v2 {
 	__u32    param_mask;
 	__u32    params[3];
 } __attribute__ ((packed));
-
-#define VIDIOC_MSM_CCI_CFG \
-	_IOWR('V', BASE_VIDIOC_PRIVATE + 23, struct cam_cci_ctrl)
 
 #endif

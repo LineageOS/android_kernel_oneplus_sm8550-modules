@@ -1350,8 +1350,6 @@ static void cam_hw_cdm_work(struct work_struct *work)
 				fifo_idx, payload->irq_data, core->arbitration);
 			mutex_unlock(&core->bl_fifo[fifo_idx].fifo_lock);
 			mutex_unlock(&cdm_hw->hw_mutex);
-			kfree(payload);
-			payload = NULL;
 			return;
 		}
 
@@ -1906,7 +1904,7 @@ int cam_hw_cdm_get_cdm_config(struct cam_hw_info *cdm_hw)
 {
 	struct cam_hw_soc_info *soc_info = NULL;
 	struct cam_cdm *core = NULL;
-	int rc = 0, ret = 0;
+	int rc = 0;
 
 	core = (struct cam_cdm *)cdm_hw->core_info;
 	soc_info = &cdm_hw->soc_info;
@@ -1985,9 +1983,9 @@ int cam_hw_cdm_get_cdm_config(struct cam_hw_info *cdm_hw)
 	}
 
 disable_platform_resource:
-	ret = cam_soc_util_disable_platform_resource(soc_info, true, true);
+	rc = cam_soc_util_disable_platform_resource(soc_info, true, true);
 
-	if (ret) {
+	if (rc) {
 		CAM_ERR(CAM_CDM, "disable platform failed for dev %s",
 				soc_info->dev_name);
 	} else {
