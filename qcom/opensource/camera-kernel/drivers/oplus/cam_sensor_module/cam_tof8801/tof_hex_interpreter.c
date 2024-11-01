@@ -211,7 +211,7 @@ static char asciiToBinaryByte ( const char * * linePtr, char * error )
 }
 
 /* reset internal variables for intel hex interpreter */
-static void intelHexInitialise ( void )
+static void intelHexInitialise (  )
 {
 	int i;
 	intelHexRecord.address = 0;
