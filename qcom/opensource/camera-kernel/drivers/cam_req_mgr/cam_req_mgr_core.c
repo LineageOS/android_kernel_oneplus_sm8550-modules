@@ -5093,8 +5093,8 @@ int cam_req_mgr_schedule_request_v2(
 	CAM_DBG(CAM_REQ, "Open req %lld on link 0x%x with sync_mode %d",
 		sched_req->req_id, sched_req->link_hdl, sched_req->sync_mode);
 #ifdef OPLUS_FEATURE_CAMERA_COMMON
-	snprintf(trace, sizeof(trace), "KMD %d_1 OpenRequest", sched_req->link_hdl);
-	trace_int_tag(trace, sched_req->req_id);
+	snprintf(trace, sizeof(trace), "KMD 0x%x_1 OpenRequest", sched_req->link_hdl);
+	trace_int_tag(trace, (int32_t)(sched_req->req_id));
 #endif
 end:
 	mutex_unlock(&g_crm_core_dev->crm_lock);

@@ -1875,6 +1875,10 @@ int cam_flash_pmic_pkt_parser(struct cam_flash_ctrl *fctrl, void *arg)
 				(struct cam_flash_query_curr *)cmd_buf;
 #if __or(IS_REACHABLE(CONFIG_LEDS_QPNP_FLASH_V2), \
 			IS_REACHABLE(CONFIG_LEDS_QTI_FLASH))
+#ifdef OPLUS_FEATURE_CAMERA_COMMON
+			rc = set_flash_max_current_mA(fctrl->flash_max_current);
+			CAM_DBG(CAM_FLASH,"set_flash_max_current_mA");
+#endif
 			rc = cam_flash_led_prepare(fctrl->switch_trigger,
 				QUERY_MAX_AVAIL_CURRENT, &query_curr_ma,
 				soc_private->is_wled_flash);

@@ -79,7 +79,11 @@ static int32_t cam_actuator_power_up(struct cam_actuator_ctrl_t *a_ctrl)
 		(power_info->power_down_setting == NULL)) {
 		CAM_INFO(CAM_ACTUATOR,
 			"Using default power settings");
+#ifdef OPLUS_FEATURE_CAMERA_COMMON
+		rc = oplus_cam_actuator_construct_default_power_setting(a_ctrl, power_info);
+#else
 		rc = cam_actuator_construct_default_power_setting(power_info);
+#endif
 		if (rc < 0) {
 			CAM_ERR(CAM_ACTUATOR,
 				"Construct default actuator power setting failed.");
@@ -180,6 +184,39 @@ static int32_t cam_actuator_power_down(struct cam_actuator_ctrl_t *a_ctrl)
 		CAM_ERR(CAM_ACTUATOR, "failed: power_info %pK", power_info);
 		return -EINVAL;
 	}
+
+#ifdef OPLUS_FEATURE_CAMERA_COMMON
+	if ((power_info->power_setting == NULL) &&
+		(power_info->power_down_setting == NULL)) {
+		CAM_INFO(CAM_ACTUATOR,"Using default power settings");
+		rc = oplus_cam_actuator_construct_default_power_setting(a_ctrl, power_info);
+		if (rc < 0) {
+			CAM_ERR(CAM_ACTUATOR,
+			"Construct default actuator power setting failed.");
+			return rc;
+		}
+
+		/* Parse and fill vreg params for power up settings */
+		rc = msm_camera_fill_vreg_params(
+			&a_ctrl->soc_info,
+			power_info->power_setting,
+			power_info->power_setting_size);
+		if (rc) {
+			CAM_ERR(CAM_ACTUATOR,
+			"failed to fill vreg params for power up rc:%d", rc);
+			return rc;
+		}
+		/* Parse and fill vreg params for power down settings*/
+		rc = msm_camera_fill_vreg_params(
+			&a_ctrl->soc_info,
+			power_info->power_down_setting,
+			power_info->power_down_setting_size);
+		if (rc) {
+			CAM_ERR(CAM_ACTUATOR,
+				"failed to fill vreg params power down rc:%d", rc);
+		}
+	}
+#endif
 
 #ifdef OPLUS_FEATURE_CAMERA_COMMON
 	rc = cam_sensor_util_power_down(power_info, soc_info, &(a_ctrl->io_master_info));
@@ -328,6 +365,11 @@ int32_t cam_actuator_apply_settings(struct cam_actuator_ctrl_t *a_ctrl,
 				i2c_set->request_id);
 		}
 #ifdef OPLUS_FEATURE_CAMERA_COMMON
+
+		if (rc < 0) {
+			oplus_cam_actuator_reactive_setting_apply(a_ctrl);
+		}
+
                 a_ctrl->is_actuator_ready = FALSE;
 #endif
 	}
