@@ -20,7 +20,6 @@
 #include <media/cam_defs.h>
 #include <media/cam_ope.h>
 #include <media/cam_cpas.h>
-#include <linux/math64.h>
 
 #include "cam_sync_api.h"
 #include "cam_packet_util.h"
@@ -657,7 +656,7 @@ static bool cam_ope_check_req_delay(struct cam_ope_ctx *ctx_data,
 
 	if (ts_ns - req_time <
 		((ctx_data->req_timer_timeout -
-			div_u64(ctx_data->req_timer_timeout, 10)) * 1000000)) {
+			ctx_data->req_timer_timeout / 10) * 1000000)) {
 		CAM_INFO(CAM_OPE, "ctx: %d, ts_ns : %llu",
 		ctx_data->ctx_id, ts_ns);
 		cam_ope_req_timer_reset(ctx_data);
@@ -2206,14 +2205,6 @@ static int cam_ope_mgr_process_cmd_buf_req(struct cam_ope_hw_mgr *hw_mgr,
 						hw_mgr->iommu_hdl);
 					goto end;
 				}
-				if ((len <= frame_process->cmd_buf[i][j].offset) ||
-					(frame_process->cmd_buf[i][j].size <
-					frame_process->cmd_buf[i][j].length) ||
-					((len - frame_process->cmd_buf[i][j].offset) <
-					 frame_process->cmd_buf[i][j].length)) {
-					CAM_ERR(CAM_OPE, "Invalid offset.");
-					return -EINVAL;
-				}
 				cpu_addr = cpu_addr +
 					frame_process->cmd_buf[i][j].offset;
 				CAM_DBG(CAM_OPE, "Hdl %x size %d len %d off %d",
@@ -2262,10 +2253,6 @@ static int cam_ope_mgr_process_cmd_buf_req(struct cam_ope_hw_mgr *hw_mgr,
 				uint32_t s_idx = 0;
 
 				s_idx = cmd_buf->stripe_idx;
-				if (s_idx < 0 || s_idx >= OPE_MAX_STRIPES) {
-					CAM_ERR(CAM_OPE, "Invalid index.");
-					return -EINVAL;
-				}
 				num_cmd_bufs =
 				ope_request->num_stripe_cmd_bufs[i][s_idx];
 
