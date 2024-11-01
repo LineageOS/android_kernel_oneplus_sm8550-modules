@@ -62,45 +62,101 @@ void cam_actuator_poll_setting_apply(struct cam_actuator_ctrl_t *a_ctrl) {
 }
 
 int32_t oplus_cam_actuator_construct_default_power_setting(
+	struct cam_actuator_ctrl_t *a_ctrl,
 	struct cam_sensor_power_ctrl_t *power_info)
 {
 	int rc = 0;
+	int pwr_up_count = 0;
+	int pwr_down_count = 0;
 
-	power_info->power_setting_size = 2;
-	power_info->power_setting =
-		kzalloc(sizeof(struct cam_sensor_power_setting) * 2,
-			GFP_KERNEL);
+	if (strstr(a_ctrl->actuator_name, "sem1217s"))
+	{
+		power_info->power_setting_size = 3;
+		power_info->power_setting =
+			kzalloc(sizeof(struct cam_sensor_power_setting) * 3,
+				GFP_KERNEL);
+	}
+	else
+	{
+		power_info->power_setting_size = 2;
+		power_info->power_setting =
+			kzalloc(sizeof(struct cam_sensor_power_setting) * 2,
+				GFP_KERNEL);
+	}
 	if (!power_info->power_setting)
 		return -ENOMEM;
 
-	power_info->power_setting[0].seq_type = SENSOR_VIO;
-	power_info->power_setting[0].seq_val = CAM_VIO;
-	power_info->power_setting[0].config_val = 1;
-	power_info->power_setting[0].delay = 2;
+	power_info->power_setting[pwr_up_count].seq_type = SENSOR_VIO;
+	power_info->power_setting[pwr_up_count].seq_val = CAM_VIO;
+	power_info->power_setting[pwr_up_count].config_val = 1;
+	power_info->power_setting[pwr_up_count].delay = 2;
+	pwr_up_count++;
 
-	power_info->power_setting[1].seq_type = SENSOR_VAF;
-	power_info->power_setting[1].seq_val = CAM_VAF;
-	power_info->power_setting[1].config_val = 1;
-	power_info->power_setting[1].delay = 10;
+	power_info->power_setting[pwr_up_count].seq_type = SENSOR_VAF;
+	power_info->power_setting[pwr_up_count].seq_val = CAM_VAF;
+	power_info->power_setting[pwr_up_count].config_val = 1;
+	power_info->power_setting[pwr_up_count].delay = 10;
+	pwr_up_count++;
 
-	power_info->power_down_setting_size = 2;
-	power_info->power_down_setting =
-		kzalloc(sizeof(struct cam_sensor_power_setting) * 2,
-			GFP_KERNEL);
+	if (strstr(a_ctrl->actuator_name, "sem1217s"))
+	{
+		power_info->power_setting[pwr_up_count].seq_type = SENSOR_CUSTOM_REG1;
+		power_info->power_setting[pwr_up_count].seq_val = CAM_V_CUSTOM1;
+		power_info->power_setting[pwr_up_count].config_val = 1;
+		power_info->power_setting[pwr_up_count].delay = 10;
+		pwr_up_count++;
+	}
+
+	if (strstr(a_ctrl->actuator_name, "sem1217s"))
+	{
+		power_info->power_down_setting_size = 3;
+		power_info->power_down_setting =
+			kzalloc(sizeof(struct cam_sensor_power_setting) * 3,
+				GFP_KERNEL);
+	}
+	else
+	{
+		power_info->power_down_setting_size = 2;
+		power_info->power_down_setting =
+			kzalloc(sizeof(struct cam_sensor_power_setting) * 2,
+				GFP_KERNEL);
+	}
 	if (!power_info->power_down_setting) {
 		rc = -ENOMEM;
 		goto free_power_settings;
 	}
 
-	power_info->power_down_setting[0].seq_type = SENSOR_VAF;
-	power_info->power_down_setting[0].seq_val = CAM_VIO;
-	power_info->power_down_setting[0].config_val = 0;
-	power_info->power_down_setting[0].delay = 1;
+	if (strstr(a_ctrl->actuator_name, "sem1217s"))
+	{
+		power_info->power_down_setting[pwr_down_count].seq_type = SENSOR_CUSTOM_REG1;
+		power_info->power_down_setting[pwr_down_count].seq_val = CAM_V_CUSTOM1;
+		power_info->power_down_setting[pwr_down_count].config_val = 1;
+		power_info->power_down_setting[pwr_down_count].delay = 0;
+		pwr_down_count++;
+	}
 
-	power_info->power_down_setting[1].seq_type = SENSOR_VIO;
-	power_info->power_down_setting[1].seq_val = CAM_VAF;
-	power_info->power_down_setting[1].config_val = 0;
-	power_info->power_down_setting[0].delay = 0;
+	power_info->power_down_setting[pwr_down_count].seq_type = SENSOR_VAF;
+	power_info->power_down_setting[pwr_down_count].seq_val = CAM_VIO;
+	power_info->power_down_setting[pwr_down_count].config_val = 0;
+	power_info->power_down_setting[pwr_down_count].delay = 1;
+	pwr_down_count++;
+
+	power_info->power_down_setting[pwr_down_count].seq_type = SENSOR_VIO;
+	power_info->power_down_setting[pwr_down_count].seq_val = CAM_VAF;
+	power_info->power_down_setting[pwr_down_count].config_val = 0;
+	power_info->power_down_setting[pwr_down_count].delay = 0;
+	pwr_down_count++;
+
+	if (strstr(a_ctrl->actuator_name, "sem1217s"))
+	{
+		power_info->power_setting[0].delay = 2;
+		power_info->power_setting[1].delay = 20;
+		power_info->power_setting[2].delay = 20;
+
+		power_info->power_down_setting[0].delay = 0;
+		power_info->power_down_setting[1].delay = 0;
+		power_info->power_down_setting[2].delay = 2;
+	}
 
 	return rc;
 
@@ -134,7 +190,7 @@ int actuator_power_down_thread(void *arg)
 	else{
 		power_info  = &soc_private->power_info;
 		if (!power_info){
-			CAM_ERR(CAM_ACTUATOR, "failed: power_info %pK", a_ctrl, power_info);
+			CAM_ERR(CAM_ACTUATOR, "failed: a_ctrl %pK, power_info %pK", a_ctrl, power_info);
 			return -EINVAL;
 		}
 	}
@@ -197,5 +253,63 @@ free_power_settings:
 
 void oplus_cam_actuator_parklens_power_down(struct cam_actuator_ctrl_t *a_ctrl)
 {
+	int rc = 0;
+	struct cam_actuator_soc_private  *soc_private =
+		(struct cam_actuator_soc_private *)a_ctrl->soc_info.soc_private;
+	struct cam_sensor_power_ctrl_t *power_info =
+		&soc_private->power_info;
+
 	a_ctrl->actuator_parklens_thread = kthread_run(actuator_power_down_thread, a_ctrl, "actuator_power_down_thread");
+	if (IS_ERR(a_ctrl->actuator_parklens_thread)) {
+		down(&a_ctrl->actuator_sem);
+		CAM_ERR(CAM_CRM, "create actuator_power_down_thread failed");
+		rc = oplus_cam_actuator_power_down(a_ctrl);
+
+		if (rc < 0) {
+			CAM_ERR(CAM_ACTUATOR, "Actuator Power down failed");
+		} else {
+			kfree(power_info->power_setting);
+			kfree(power_info->power_down_setting);
+			power_info->power_setting = NULL;
+			power_info->power_down_setting = NULL;
+			power_info->power_setting_size = 0;
+			power_info->power_down_setting_size = 0;
+		}
+		up(&a_ctrl->actuator_sem);
+	}
+}
+
+int oplus_cam_actuator_reactive_setting_apply(struct cam_actuator_ctrl_t *a_ctrl)
+{
+	int rc = 0;
+
+	if (!(a_ctrl->reactive_ctrl_support)) {
+		CAM_ERR(CAM_ACTUATOR,
+			"Reactive actuator not config!");
+		return -EPERM;
+	}
+
+	rc = camera_io_dev_write(
+		&(a_ctrl->io_master_info),
+		&(a_ctrl->reactive_setting));
+
+	CAM_DBG(CAM_ACTUATOR,
+		"Reactive setting[addr data delay]:[0x%x(%d) 0x%x(%d) %d]",
+		a_ctrl->reactive_setting.reg_setting->reg_addr,
+		a_ctrl->reactive_setting.addr_type,
+		a_ctrl->reactive_setting.reg_setting->reg_data,
+		a_ctrl->reactive_setting.data_type,
+		a_ctrl->reactive_setting.reg_setting->delay);
+
+	if (rc < 0) {
+		CAM_ERR(CAM_ACTUATOR,
+			"Reactive actuator failed! rc %d",
+			rc);
+	} else {
+		CAM_INFO(CAM_ACTUATOR,
+			"Reactive actuator success. rc %d",
+			rc);
+	}
+
+	return rc;
 }

@@ -1,7 +1,6 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #include <linux/of.h>
@@ -232,11 +231,6 @@ int cam_cre_deinit_hw(void *device_priv,
 	if (rc)
 		CAM_ERR(CAM_CRE, "soc disable is failed : %d", rc);
 	core_info->clk_enable = false;
-
-	if (cam_cpas_stop(core_info->cpas_handle))
-		CAM_ERR(CAM_CRE, "cpas stop is failed");
-	else
-		core_info->cpas_start = false;
 
 	return rc;
 }

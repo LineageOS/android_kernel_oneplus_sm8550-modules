@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2023, Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #include <linux/mutex.h>
@@ -209,17 +209,9 @@ static int cam_cre_mgr_process_cmd_io_buf_req(struct cam_cre_hw_mgr *hw_mgr,
 
 				/* Width for WE has to be updated in number of pixels */
 				if (acq_io_buf->direction == CAM_BUF_OUTPUT) {
-					if (plane_info->format == CAM_FORMAT_PLAIN16_10) {
-						plane_info->width =
-							io_cfg_ptr[j].planes[k].plane_stride/2;
-					} else if (plane_info->format == CAM_FORMAT_PLAIN128) {
-						/* PLAIN 128/8 = 16 Bytes per pixel */
-						plane_info->width =
-							io_cfg_ptr[j].planes[k].plane_stride/16;
-					} else {
-						plane_info->width =
-							io_cfg_ptr[j].planes[k].width;
-					}
+					/* PLAIN 128/8 = 16 Bytes per pixel */
+					plane_info->width =
+						io_cfg_ptr[j].planes[k].plane_stride/16;
 				} else {
 					/* FE width should be in bytes */
 					plane_info->width     =
@@ -1562,12 +1554,6 @@ static int cam_cre_validate_acquire_res_info(
 					cre_acquire->in_res[i].format);
 				return -EINVAL;
 		}
-
-		if (!cre_acquire->in_res[i].width || !cre_acquire->in_res[i].height) {
-			CAM_ERR(CAM_CRE, "Invalid width %d height %d for in res %d",
-				cre_acquire->in_res[i].width, cre_acquire->in_res[i].height, i);
-			return -EINVAL;
-		}
 	}
 
 	for (i = 0; i < cre_acquire->num_out_res; i++) {
@@ -2015,7 +2001,7 @@ static int cam_cre_mgr_release_hw(void *hw_priv, void *hw_release_args)
 	mutex_lock(&hw_mgr->hw_mgr_mutex);
 	rc = cam_cre_mgr_release_ctx(hw_mgr, ctx_id);
 	if (!hw_mgr->cre_ctx_cnt) {
-		CAM_DBG(CAM_CRE, "Last Release #of CRE %d", cre_hw_mgr->num_cre);
+		CAM_DBG(CAM_CRE, "Last Release");
 		for (i = 0; i < cre_hw_mgr->num_cre; i++) {
 			dev_intf = hw_mgr->cre_dev_intf[i];
 			irq_cb.cre_hw_mgr_cb = NULL;
