@@ -28,10 +28,10 @@ KBUILD_OPTIONS += \
     CONFIG_CNSS_GENL=m \
     CONFIG_WCNSS_MEM_PRE_ALLOC=m \
     CONFIG_CNSS_UTILS=m \
-    WLAN_PROFILE=kiwi_v2 \
-    DYNAMIC_SINGLE_CHIP=kiwi_v2 \
-    MODNAME=qca_cld3_kiwi_v2 \
-    DEVNAME=kiwi_v2 \
+    WLAN_PROFILE=qca6750  \
+    DYNAMIC_SINGLE_CHIP=qca6750  \
+    MODNAME=qca_cld3_qca6750 \
+    DEVNAME=qca6750 \
     BOARD_PLATFORM=crow \
     WLAN_CTRL_NAME=wlan
 else
