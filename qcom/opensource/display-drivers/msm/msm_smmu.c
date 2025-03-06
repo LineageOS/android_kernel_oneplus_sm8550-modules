@@ -27,6 +27,10 @@
 
 #include <soc/qcom/secure_buffer.h>
 
+#ifdef OPLUS_FEATURE_DISPLAY
+#include <soc/oplus/boot/oplus_project.h>
+#endif /* OPLUS_FEATURE_DISPLAY */
+
 #include "msm_drv.h"
 #include "msm_gem.h"
 #include "msm_mmu.h"
@@ -465,7 +469,12 @@ static int msm_smmu_fault_handler(struct iommu_domain *domain,
 	DRM_ERROR("trigger dump, iova=0x%08lx, flags=0x%x\n", iova, flags);
 	DRM_ERROR("SMMU device:%s", client->dev ? client->dev->kobj.name : "");
 #ifdef OPLUS_FEATURE_DISPLAY
-	oplus_sde_evtlog_dump_all();
+	if (get_eng_version() == AGING) {
+		SDE_EVT32(0x11, 0x22, 0x33);
+		SDE_DBG_DUMP(SDE_DBG_BUILT_IN_ALL, "panic");
+	} else {
+		oplus_sde_evtlog_dump_all();
+	}
 #endif /* OPLUS_FEATURE_DISPLAY */
 
 	/*

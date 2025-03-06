@@ -52,6 +52,8 @@ int oplus_panel_process_dimming_v3(struct dsi_panel *panel, int brightness);
 
 int oplus_interpolate(int x, int xa, int xb, int ya, int yb);
 
+int oplus_display_panel_switch_gamma_mode(struct dsi_panel *panel, u32 bl_lvl);
+
 int oplus_display_set_power(struct drm_connector *connector, int power_mode, void *disp);
 
 bool oplus_is_support_panel_dither(const char *panel_name);

@@ -470,7 +470,7 @@ int oplus_adfr_get_panel_high_precision_state(void *dsi_display)
 	struct oplus_adfr_params *p_oplus_adfr_params = NULL;
 
 	if (!display || !display->panel || !display->panel->cur_mode) {
-		ADFR_ERR("invalid display or panel params\n");
+		ADFR_WARN("invalid display or panel params\n");
 		return -EINVAL;
 	}
 
@@ -497,8 +497,15 @@ int oplus_adfr_get_panel_high_precision_state(void *dsi_display)
 
 static int oplus_adfr_panel_cmd_switch(struct dsi_panel *panel, enum dsi_cmd_set_type *type)
 {
+	struct oplus_adfr_params *p_oplus_adfr_params = NULL;
 	enum dsi_cmd_set_type type_store = *type;
 	u32 count;
+
+	p_oplus_adfr_params = oplus_adfr_get_params(panel);
+	if (!p_oplus_adfr_params) {
+		ADFR_ERR("invalid p_oplus_adfr_params param\n");
+		return -EINVAL;
+	}
 
 	/* switch the command when switch to hpwm state */
 	if (oplus_panel_pwm_turbo_switch_state(panel) != PWM_SWITCH_DC_STATE) {
@@ -529,6 +536,89 @@ static int oplus_adfr_panel_cmd_switch(struct dsi_panel *panel, enum dsi_cmd_set
 		}
 	}
 
+	if (p_oplus_adfr_params->panel_high_precision_state == OPLUS_ADFR_HIGH_PRECISION_FPS_60) {
+		switch (*type) {
+		case DSI_CMD_ADFR_MIN_FPS_0:
+			*type = DSI_CMD_ADFR_MIN_FPS_FRTC60_0;
+			break;
+		case DSI_CMD_ADFR_MIN_FPS_1:
+			*type = DSI_CMD_ADFR_MIN_FPS_FRTC60_1;
+			break;
+		case DSI_CMD_ADFR_MIN_FPS_2:
+			*type = DSI_CMD_ADFR_MIN_FPS_FRTC60_2;
+			break;
+		case DSI_CMD_ADFR_MIN_FPS_3:
+			*type = DSI_CMD_ADFR_MIN_FPS_FRTC60_3;
+			break;
+		case DSI_CMD_ADFR_MIN_FPS_4:
+			*type = DSI_CMD_ADFR_MIN_FPS_FRTC60_4;
+			break;
+		case DSI_CMD_ADFR_MIN_FPS_5:
+			*type = DSI_CMD_ADFR_MIN_FPS_FRTC60_5;
+			break;
+		case DSI_CMD_ADFR_MIN_FPS_6:
+			*type = DSI_CMD_ADFR_MIN_FPS_FRTC60_6;
+			break;
+		case DSI_CMD_HPWM_ADFR_MIN_FPS_0:
+			*type = DSI_CMD_HPWM_ADFR_MIN_FPS_FRTC60_0;
+			break;
+		case DSI_CMD_HPWM_ADFR_MIN_FPS_1:
+			*type = DSI_CMD_HPWM_ADFR_MIN_FPS_FRTC60_1;
+			break;
+		case DSI_CMD_HPWM_ADFR_MIN_FPS_2:
+			*type = DSI_CMD_HPWM_ADFR_MIN_FPS_FRTC60_2;
+			break;
+		case DSI_CMD_HPWM_ADFR_MIN_FPS_3:
+			*type = DSI_CMD_HPWM_ADFR_MIN_FPS_FRTC60_3;
+			break;
+		case DSI_CMD_HPWM_ADFR_MIN_FPS_4:
+			*type = DSI_CMD_HPWM_ADFR_MIN_FPS_FRTC60_4;
+			break;
+		case DSI_CMD_HPWM_ADFR_MIN_FPS_5:
+			*type = DSI_CMD_HPWM_ADFR_MIN_FPS_FRTC60_5;
+			break;
+		case DSI_CMD_HPWM_ADFR_MIN_FPS_6:
+			*type = DSI_CMD_HPWM_ADFR_MIN_FPS_FRTC60_6;
+			break;
+		default:
+			break;
+		}
+	}
+
+	if (oplus_panel_pwm_onepulse_is_enabled(panel)) {
+		switch (*type) {
+		case DSI_CMD_ADFR_HIGH_PRECISION_FPS_0:
+			*type = DSI_CMD_HPWM_ADFR_HIGH_PRECISION_FPS_FRTC60_0;
+			break;
+		case DSI_CMD_ADFR_HIGH_PRECISION_FPS_1:
+			*type = DSI_CMD_HPWM_ADFR_HIGH_PRECISION_FPS_FRTC60_1;
+			break;
+		case DSI_CMD_ADFR_HIGH_PRECISION_FPS_2:
+			*type = DSI_CMD_HPWM_ADFR_HIGH_PRECISION_FPS_FRTC60_2;
+			break;
+		case DSI_CMD_ADFR_HIGH_PRECISION_FPS_3:
+			*type = DSI_CMD_HPWM_ADFR_HIGH_PRECISION_FPS_FRTC60_3;
+			break;
+		case DSI_CMD_HPWM_ADFR_HIGH_PRECISION_FPS_0:
+			if (panel->oplus_pwm_switch_state == PWM_SWITCH_ONEPULSE_STATE)
+				*type = DSI_CMD_HPWM_ADFR_HIGH_PRECISION_FPS_FRTC60_0;
+			break;
+		case DSI_CMD_HPWM_ADFR_HIGH_PRECISION_FPS_1:
+			if (panel->oplus_pwm_switch_state == PWM_SWITCH_ONEPULSE_STATE)
+				*type = DSI_CMD_HPWM_ADFR_HIGH_PRECISION_FPS_FRTC60_1;
+			break;
+		case DSI_CMD_HPWM_ADFR_HIGH_PRECISION_FPS_2:
+			if (panel->oplus_pwm_switch_state == PWM_SWITCH_ONEPULSE_STATE)
+				*type = DSI_CMD_HPWM_ADFR_HIGH_PRECISION_FPS_FRTC60_2;
+			break;
+		case DSI_CMD_HPWM_ADFR_HIGH_PRECISION_FPS_3:
+			if (panel->oplus_pwm_switch_state == PWM_SWITCH_ONEPULSE_STATE)
+				*type = DSI_CMD_HPWM_ADFR_HIGH_PRECISION_FPS_FRTC60_3;
+			break;
+		default:
+			break;
+		}
+	}
 	count = panel->cur_mode->priv_info->cmd_sets[*type].count;
 	if (count == 0) {
 		ADFR_DEBUG("[%s] %s is undefined, restore to %s\n",
@@ -1776,7 +1866,9 @@ int oplus_adfr_status_reset(void *dsi_panel)
 
 		if (oplus_adfr_high_precision_sa_mode_is_enabled(p_oplus_adfr_params)) {
 			p_oplus_adfr_params->sa_high_precision_fps = refresh_rate;
-			ADFR_INFO("sa status reset: auto_mode:%u,fakeframe:%u,sa_min_fps:%u,sa_high_precision_fps:%u\n",
+			p_oplus_adfr_params->panel_high_precision_state = 0;
+			p_oplus_adfr_params->high_precision_state = 0;
+			ADFR_INFO("hp_sa status reset: auto_mode:%u,fakeframe:%u,sa_min_fps:%u,sa_high_precision_fps:%u\n",
 					p_oplus_adfr_params->auto_mode, p_oplus_adfr_params->fakeframe, p_oplus_adfr_params->sa_min_fps, p_oplus_adfr_params->sa_high_precision_fps);
 		} else {
 			ADFR_INFO("sa status reset: auto_mode:%u,fakeframe:%u,sa_min_fps:%u\n",
@@ -1819,11 +1911,6 @@ int oplus_adfr_fakeframe_check(void *sde_encoder_virt)
 	struct oplus_adfr_params *p_oplus_adfr_params = NULL;
 
 	ADFR_DEBUG("start\n");
-
-	if (!sde_enc || !sde_enc->crtc || !sde_enc->cur_master || !sde_enc->cur_master->connector) {
-		ADFR_ERR("invalid sde_enc params\n");
-		return -EINVAL;
-	}
 
 	c_conn = to_sde_connector(sde_enc->cur_master->connector);
 	if (!c_conn) {
@@ -5292,6 +5379,8 @@ int oplus_adfr_high_precision_handle(void *sde_enc_v)
 
 			if (p_oplus_adfr_params->sa_high_precision_fps_updated) {
 				/* update sa high precision fps */
+				if (p_oplus_adfr_params->panel_high_precision_state == OPLUS_ADFR_HIGH_PRECISION_FPS_60)
+					oplus_need_to_sync_te(display->panel);
 				oplus_adfr_high_precision_fps_update(display, p_oplus_adfr_params->sa_high_precision_fps);
 				p_oplus_adfr_params->sa_high_precision_fps_updated = false;
 				ADFR_DEBUG("sa_high_precision_fps_updated:%d\n", p_oplus_adfr_params->sa_high_precision_fps_updated);

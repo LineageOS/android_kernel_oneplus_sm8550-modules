@@ -24,6 +24,7 @@ enum {
 	CODEC_VENDOR_NXP = 0,
 	CODEC_VENDOR_MAXIM,
 	CODEC_VENDOR_AKM,
+	CODEC_VENDOR_AWINIC,
 	CODEC_VENDOR_END,
 	CODEC_VENDOR_MAX = CODEC_VENDOR_END,
 };
@@ -41,6 +42,7 @@ static const char *extend_codec_vendor[CODEC_VENDOR_MAX] = {
 	[CODEC_VENDOR_NXP] = "nxp",
 	[CODEC_VENDOR_MAXIM] = "maxim",
 	[CODEC_VENDOR_AKM] = "akm",
+	[CODEC_VENDOR_AWINIC] = "awinic",
 };
 
 static const char *extend_speaker_prop[CODEC_PROP_MAX] = {
@@ -230,6 +232,11 @@ static void extend_codec_be_dailink(struct device *dev, struct codec_prop_info *
 		}
 		if (!strcmp(codec_info->codec_vendor, extend_codec_vendor[CODEC_VENDOR_AKM])) {
 			dailink[i2s_id*2].init = ak4376_audrx_init;
+		}
+		if (!strcmp(codec_info->codec_vendor, extend_codec_vendor[CODEC_VENDOR_AWINIC])) {
+			/* TX dailink */
+			dailink[i2s_id*2+1].codecs = codecs_comp;
+			dailink[i2s_id*2+1].num_codecs = codec_info->dev_cnt;
 		}
 	}
 }

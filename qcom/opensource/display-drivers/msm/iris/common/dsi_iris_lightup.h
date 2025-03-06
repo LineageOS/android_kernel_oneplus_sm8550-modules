@@ -88,6 +88,18 @@ enum IRIS_PARAM_VALID {
 	PARAM_PREPARED,
 };
 
+/* memc demo window info */
+enum IRIS_DEMO_WINDOW {
+	DEMO_WINDOW_NONE = 0,
+	DEMO_WINDOW_LEFT,
+	DEMO_WINDOW_RIGHT,
+	DEMO_WINDOW_DOWN,
+	DEMO_WINDOW_UP,
+	DEMO_WINDOW_FULL_OEM, /* OEM only distingiush imemc/ememc */
+	DEMO_WINDOW_FULL, /* PW distingiush memc */
+	DEMO_WINDOW_MAX,
+};
+
 /* iris lightup configure commands */
 struct iris_cfg {
 	struct dsi_display *display;
@@ -221,6 +233,7 @@ struct iris_cfg {
 	int osd_label;
 	int frc_label;
 	int frc_demo_window;
+	bool frc_trilateral;
 
 	/* emv info */
 	struct extmv_frc_meta emv_info;
