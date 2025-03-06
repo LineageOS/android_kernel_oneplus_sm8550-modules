@@ -1109,10 +1109,10 @@ static int __cam_req_mgr_send_req(struct cam_req_mgr_core_link *link,
 	struct cam_req_mgr_link_evt_data     evt_data;
 	struct cam_req_mgr_tbl_slot          *slot = NULL;
 	struct cam_req_mgr_apply             *apply_data = NULL;
-	bool                                 prev_dual_trigger_status = false;
 #ifdef OPLUS_FEATURE_CAMERA_COMMON
 	char trace[64] = {0};
 #endif
+	bool                                 prev_dual_trigger_status = false;
 
 	apply_req.link_hdl = link->link_hdl;
 	apply_req.report_if_bubble = 0;
@@ -5026,7 +5026,7 @@ int cam_req_mgr_schedule_request_v2(
 
 	if (sched_req->req_id <= link->last_flush_id) {
 		CAM_INFO(CAM_CRM,
-			"request %lld is flushed, last_flush_id to flush %d",
+			"request %lld is flushed, last_flush_id to flush %lld",
 			sched_req->req_id, link->last_flush_id);
 		rc = -EBADR;
 		goto end;

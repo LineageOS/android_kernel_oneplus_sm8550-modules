@@ -225,14 +225,14 @@ struct cam_flash_ctrl {
 	struct camera_io_master             io_master_info;
 	struct i2c_data_settings            i2c_data;
 	uint32_t                            last_flush_req;
-	uint32_t                            streamoff_count;
-	int32_t                             apply_streamoff;
 #ifdef OPLUS_FEATURE_CAMERA_COMMON
 	const char *                        flash_name;
 	/*Add by Fangyan @ Camera 2020/08/17 for flash current*/
 	uint32_t                            flash_current;
 	uint32_t                            flash_max_current;
 #endif
+	uint32_t                            streamoff_count;
+	int32_t                             apply_streamoff;
 };
 
 int cam_flash_pmic_pkt_parser(struct cam_flash_ctrl *fctrl, void *arg);

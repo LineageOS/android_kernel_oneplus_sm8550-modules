@@ -41,7 +41,7 @@ int oplus_panel_cmd_print(struct dsi_panel *panel, enum dsi_cmd_set_type type)
 	case DSI_CMD_ESD_SWITCH_PAGE:
 	case DSI_CMD_SKIPFRAME_DBV:
 	case DSI_CMD_DEFAULT_SWITCH_PAGE:
-#ifdef OPLUS_FEATURE_DISPLAY_ADFR_IGNORE
+#ifdef OPLUS_FEATURE_DISPLAY_ADFR
 	case DSI_CMD_ADFR_MIN_FPS_0:
 	case DSI_CMD_ADFR_MIN_FPS_1:
 	case DSI_CMD_ADFR_MIN_FPS_2:
@@ -57,6 +57,21 @@ int oplus_panel_cmd_print(struct dsi_panel *panel, enum dsi_cmd_set_type type)
 	case DSI_CMD_ADFR_MIN_FPS_12:
 	case DSI_CMD_ADFR_MIN_FPS_13:
 	case DSI_CMD_ADFR_MIN_FPS_14:
+	case DSI_CMD_ADFR_MIN_FPS_FRTC60_0:
+	case DSI_CMD_ADFR_MIN_FPS_FRTC60_1:
+	case DSI_CMD_ADFR_MIN_FPS_FRTC60_2:
+	case DSI_CMD_ADFR_MIN_FPS_FRTC60_3:
+	case DSI_CMD_ADFR_MIN_FPS_FRTC60_4:
+	case DSI_CMD_ADFR_MIN_FPS_FRTC60_5:
+	case DSI_CMD_ADFR_MIN_FPS_FRTC60_6:
+	case DSI_CMD_ADFR_MIN_FPS_FRTC60_7:
+	case DSI_CMD_ADFR_MIN_FPS_FRTC60_8:
+	case DSI_CMD_ADFR_MIN_FPS_FRTC60_9:
+	case DSI_CMD_ADFR_MIN_FPS_FRTC60_10:
+	case DSI_CMD_ADFR_MIN_FPS_FRTC60_11:
+	case DSI_CMD_ADFR_MIN_FPS_FRTC60_12:
+	case DSI_CMD_ADFR_MIN_FPS_FRTC60_13:
+	case DSI_CMD_ADFR_MIN_FPS_FRTC60_14:
 	case DSI_CMD_HPWM_ADFR_MIN_FPS_0:
 	case DSI_CMD_HPWM_ADFR_MIN_FPS_1:
 	case DSI_CMD_HPWM_ADFR_MIN_FPS_2:
@@ -248,24 +263,22 @@ int oplus_panel_cmd_switch(struct dsi_panel *panel, enum dsi_cmd_set_type *type)
 	return 0;
 }
 
-void oplus_ctrl_print_cmd_desc(struct dsi_ctrl *dsi_ctrl, const struct mipi_dsi_msg *msg)
+void oplus_ctrl_print_cmd_desc(struct dsi_ctrl *dsi_ctrl, struct dsi_cmd_desc *cmd)
 {
 	char buf[512];
 	int len = 0;
 	size_t i;
+	const struct mipi_dsi_msg *msg = &cmd->msg;
 	char *tx_buf = (char*)msg->tx_buf;
 
 	memset(buf, 0, sizeof(buf));
 
 	/* Packet Info */
 	len += snprintf(buf, sizeof(buf) - len,  "%02X ", msg->type);
-	/* Last bit */
-	/* len += snprintf(buf + len, sizeof(buf) - len, "%02X ", (msg->flags & MIPI_DSI_MSG_LASTCOMMAND) ? 1 : 0); */
-	len += snprintf(buf + len, sizeof(buf) - len, "%02X ", (msg->flags) ? 1 : 0);
+	len += snprintf(buf + len, sizeof(buf) - len, "%02X ", 0x00);
 	len += snprintf(buf + len, sizeof(buf) - len, "%02X ", msg->channel);
 	len += snprintf(buf + len, sizeof(buf) - len, "%02X ", (unsigned int)msg->flags);
-	/* Delay */
-	/* len += snprintf(buf + len, sizeof(buf) - len, "%02X ", msg->wait_ms); */
+	len += snprintf(buf + len, sizeof(buf) - len, "%02X ", cmd->post_wait_ms);
 	len += snprintf(buf + len, sizeof(buf) - len, "%02X %02X ", msg->tx_len >> 8, msg->tx_len & 0x00FF);
 
 	/* Packet Payload */
@@ -275,7 +288,6 @@ void oplus_ctrl_print_cmd_desc(struct dsi_ctrl *dsi_ctrl, const struct mipi_dsi_
 		if (i > 160)
 			break;
 	}
-
 	/* DSI_CTRL_ERR(dsi_ctrl, "%s\n", buf); */
 	LCD_DEBUG_CMD("dsi_cmd: %s\n", buf);
 }
@@ -305,12 +317,14 @@ int oplus_panel_gpio_request(struct dsi_panel *panel)
 {
 	int rc = 0;
 	struct dsi_panel_reset_config *r_config;
+	struct drm_panel_esd_config *esd_config;
 	if (!panel) {
 		LCD_ERR("Oplus Features config No panel device\n");
 		return -ENODEV;
 	}
 
 	r_config = &panel->reset_config;
+	esd_config = &panel->esd_config;
 
 	if (gpio_is_valid(r_config->panel_vout_gpio)) {
 		rc = gpio_request(r_config->panel_vout_gpio, "panel_vout_gpio");
@@ -328,6 +342,14 @@ int oplus_panel_gpio_request(struct dsi_panel *panel)
 				gpio_free(r_config->panel_vddr_aod_en_gpio);
 		}
 	}
+	if (gpio_is_valid(esd_config->mipi_err_flag_gpio)) {
+		rc = gpio_request(esd_config->mipi_err_flag_gpio , "mipi_err_flag_gpio");
+		if (rc) {
+			LCD_ERR("request for mipi_err_irp_gpio failed, rc=%d\n", rc);
+			if (gpio_is_valid(esd_config->mipi_err_flag_gpio))
+				gpio_free(esd_config->mipi_err_flag_gpio);
+		}
+	}
 
 	return rc;
 }
@@ -335,17 +357,21 @@ int oplus_panel_gpio_request(struct dsi_panel *panel)
 int oplus_panel_gpio_release(struct dsi_panel *panel)
 {
 	struct dsi_panel_reset_config *r_config;
+	struct drm_panel_esd_config *esd_config;
 	if (!panel) {
 		LCD_ERR("Oplus Features config No panel device\n");
 		return -ENODEV;
 	}
 
 	r_config = &panel->reset_config;
+	esd_config = &panel->esd_config;
 
 	if (gpio_is_valid(r_config->panel_vout_gpio))
 		gpio_free(r_config->panel_vout_gpio);
 	if (gpio_is_valid(r_config->panel_vddr_aod_en_gpio))
 		gpio_free(r_config->panel_vddr_aod_en_gpio);
+	if (gpio_is_valid(esd_config->mipi_err_flag_gpio))
+			gpio_free(esd_config->mipi_err_flag_gpio);
 
 #ifdef OPLUS_FEATURE_DISPLAY_ADFR
 	oplus_adfr_gpio_release(panel);
@@ -443,12 +469,14 @@ int oplus_panel_gpio_parse(struct dsi_panel *panel)
 {
 	struct dsi_parser_utils *utils;
 	struct dsi_panel_reset_config *r_config;
+	struct drm_panel_esd_config *esd_config;
 	if (!panel) {
 		LCD_ERR("Oplus Features config No panel device\n");
 		return -ENODEV;
 	}
 	utils = &panel->utils;
 	r_config = &panel->reset_config;
+	esd_config = &panel->esd_config;
 
 	panel->reset_config.panel_vout_gpio = utils->get_named_gpio(utils->data,
 								"qcom,platform-panel-vout-gpio", 0);
@@ -462,6 +490,11 @@ int oplus_panel_gpio_parse(struct dsi_panel *panel)
 	if (!gpio_is_valid(panel->reset_config.panel_vddr_aod_en_gpio)) {
 		LCD_ERR("[%s] failed get panel_vddr_aod_en_gpio\n", panel->oplus_priv.vendor_name);
 	}
+	esd_config->mipi_err_flag_gpio = utils->get_named_gpio(utils->data,
+									"oplus,esd_mipi_err_gpio", 0);
+		if (!gpio_is_valid(esd_config->mipi_err_flag_gpio)) {
+			LCD_ERR("[%s] failed get oplus,esd_mipi_err_gpio\n", panel->oplus_priv.vendor_name);
+		}
 
 	return 0;
 }

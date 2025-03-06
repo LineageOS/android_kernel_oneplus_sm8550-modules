@@ -3,5 +3,6 @@ $(warning "AUDIO_ROOT value is $(AUDIO_ROOT)")
 ifneq ($(findstring audio-kernel,$(AUDIO_ROOT)),)
 #Qcom Platform
 obj-y += qcom/ codecs/
-obj-$(CONFIG_ARCH_QCOM) += codecs/tfa98xx-v6/
+obj-$(CONFIG_ARCH_CROW) += codecs/aw882xx/
+obj-$(CONFIG_ARCH_KALAMA) += codecs/tfa98xx-v6/
 endif

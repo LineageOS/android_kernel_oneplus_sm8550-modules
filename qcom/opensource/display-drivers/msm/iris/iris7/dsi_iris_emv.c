@@ -577,6 +577,8 @@ void iris_emv_efifo_enable_ctrl_i7(bool enable)
 	u32 *payload = NULL;
 
 	payload = iris_get_ipopt_payload_data(IRIS_IP_PWIL, 0xf0, 4);
+	if (!payload)
+		return;
 	reg_val = payload[0];
 
 	if (enable)
@@ -712,7 +714,7 @@ void iris_emv_resize_osd_buffer_ctrl_i7(bool extend, bool lli, bool batch)
 		//psr_mif: init<=psr_mif: init emv
 		payload3 = iris_get_ipopt_payload_data(IRIS_IP_PSR_MIF, 0xF0, 2);
 		payload4 = iris_get_ipopt_payload_data(IRIS_IP_PSR_MIF, 0xF1, 2);
-		if (payload && payload2) {
+		if (payload3 && payload4) {
 			ctrl[2] = payload4[7];
 			ctrl[3] = payload4[8];
 			ctrl[4] = payload4[10];
@@ -796,7 +798,8 @@ void iris_emv_pwil_1_capt_enable_ctrl_i7(bool enable, bool lli, bool batch)
 		/* update cmdlist */
 		//PWIL_CAPT_CTRL
 		payload = iris_get_ipopt_payload_data(IRIS_IP_PWIL_2, 0xF1, 4);
-		payload[0] = value;
+		if (payload)
+			payload[0] = value;
 		iris_init_update_ipopt_t(IRIS_IP_PWIL, 0xF1, 0xF1, 0);
 		iris_update_pq_opt(PATH_DSI, iris_emv_instant_send);
 		if (!iris_emv_instant_send)
@@ -2993,7 +2996,7 @@ bool iris_esd_check_ignored_i7(void)
 
 void onConfigureMvdMeta_i7(u32 count, u32 *values)
 {
-	struct extmv_frc_meta meta;
+	struct extmv_frc_meta meta = {0};
 
 	if (count < 17 || values == NULL)
 		return;
