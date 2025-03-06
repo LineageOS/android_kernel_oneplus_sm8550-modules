@@ -6906,7 +6906,6 @@ static int cam_icp_mgr_create_wq(void)
 {
 	int rc;
 	int i;
-
 	rc = cam_req_mgr_workq_create("icp_command_queue", ICP_WORKQ_NUM_TASK,
 		&icp_hw_mgr.cmd_work, CRM_WORKQ_USAGE_NON_IRQ, 0,
 		cam_req_mgr_process_workq_icp_command_queue);
@@ -7158,7 +7157,6 @@ int cam_icp_hw_mgr_init(struct device_node *of_node, uint64_t *hw_mgr_hdl,
 		CAM_ERR(CAM_ICP, "get secure mmu handle failed: %d", rc);
 		goto secure_hdl_failed;
 	}
-
 	rc = cam_icp_mgr_create_wq();
 	if (rc) {
 		CAM_ERR(CAM_ICP, "cam_icp_mgr_create_wq fail: rc=%d", rc);

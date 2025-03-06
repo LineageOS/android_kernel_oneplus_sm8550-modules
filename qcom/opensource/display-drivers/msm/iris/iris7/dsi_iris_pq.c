@@ -268,9 +268,11 @@ static void iris_hdr_datapath_set(void)
 		power_level = HDR_POWER_ON;
 
 	payload = iris_get_ipopt_payload_data(IRIS_IP_PWIL, 0xf0, 4);
+	if (payload) {
 	payload[0] = ((payload[0] & ~0x00000008) | (power_level << 3));
 	iris_set_ipopt_payload_data(IRIS_IP_PWIL, 0xf0, 4, payload[0]);
 	iris_init_update_ipopt_t(IRIS_IP_PWIL, 0xf0, 0xf0, 0x01);
+	}
 }
 
 static void iris_sdr2hdr_ai_enable(bool enable, bool update)
@@ -283,12 +285,14 @@ static void iris_sdr2hdr_ai_enable(bool enable, bool update)
 	if (update)
 		last = 0;
 	payload = iris_get_ipopt_payload_data(IRIS_IP_AI, 0x10, 2);
+	if (payload) {
 	payload[0] &= ~0x40000000;
 	if (enable == true)
 		payload[0] |= 0x40000000;
 	iris_init_update_ipopt_t(IRIS_IP_AI, 0x10, 0x10, last);
 	if (update == true)
 		iris_update_pq_opt(iris_pq_update_path, true);
+	}
 
 	IRIS_LOGW("AI enable =%d, sdr2hdr_level = %d", enable, pqlt_cur_setting->pq_setting.sdr2hdr);
 }

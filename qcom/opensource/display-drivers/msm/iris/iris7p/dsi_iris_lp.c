@@ -203,11 +203,17 @@ void iris_pwil_update_i7p(void)
 
 	payload = iris_get_ipopt_payload_data(IRIS_IP_PWIL, 0xe3, 2);
 	cmd[0] = IRIS_PWIL_ADDR + EMPTY_FRAME_TIMEOUT_CNT;
-	cmd[1] = payload[0];
+	if (payload)
+		cmd[1] = payload[0];
+	else
+		cmd[1] = 0;
 
 	payload = iris_get_ipopt_payload_data(IRIS_IP_PWIL, 0xe5, 2);
 	cmd[2] = IRIS_PWIL_ADDR + BUSY_DOMAIN_DLY;
-	cmd[3] = payload[0];
+	if (payload)
+		cmd[3] = payload[0];
+	else
+		cmd[3] = 0;
 
 	cmd[4] = IRIS_PWIL_ADDR + PWIL_REG_UPDATE;
 	cmd[5] = 0x00000100;

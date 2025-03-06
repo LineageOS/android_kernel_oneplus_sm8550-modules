@@ -227,7 +227,7 @@ int cam_req_mgr_workq_enqueue_task(struct crm_workq_task *task,
 		queue_work(workq->job, &workq->work);
 	}
 #else
-	queue_work(workq->job, &workq->work);
+		queue_work(workq->job, &workq->work);
 #endif
 	WORKQ_RELEASE_LOCK(workq, flags);
 

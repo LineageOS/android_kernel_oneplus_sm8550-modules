@@ -83,8 +83,11 @@ clk_option:
 	rc = cam_soc_util_get_option_clk_by_name(soc_info, CAM_TFE_DSP_CLK_NAME,
 		&soc_private->dsp_clk_index);
 	if (rc)
+#ifdef OPLUS_FEATURE_CAMERA_COMMON
+		CAM_INFO(CAM_ISP, "Option clk get failed with rc %d", rc);
+#else
 		CAM_WARN(CAM_ISP, "Option clk get failed with rc %d", rc);
-
+#endif
 	rc = cam_soc_util_request_platform_resource(soc_info, tfe_irq_handler,
 		irq_data);
 

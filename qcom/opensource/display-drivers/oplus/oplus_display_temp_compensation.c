@@ -110,9 +110,9 @@ int oplus_temp_compensation_init(void *dsi_panel)
 	unsigned char *data2 = NULL;
 	int rc = 0;
 	int length = 0;
-	unsigned int i = 0;
-	unsigned int j = 0;
-	unsigned int k = 0;
+	int i = 0;
+	int j = 0;
+	int k = 0;
 	unsigned int value = 0;
 	static unsigned int failure_count = 0;
 	struct dsi_panel *panel = dsi_panel;

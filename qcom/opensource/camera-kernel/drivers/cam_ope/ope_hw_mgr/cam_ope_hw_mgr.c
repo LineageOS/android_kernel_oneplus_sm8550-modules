@@ -2323,8 +2323,8 @@ static int cam_ope_mgr_process_cmd_desc(struct cam_ope_hw_mgr *hw_mgr,
 		if (cmd_desc[i].type != CAM_CMD_BUF_GENERIC ||
 			cmd_desc[i].meta_data == OPE_CMD_META_GENERIC_BLOB)
 			continue;
-		rc = cam_mem_get_cpu_buf(cmd_desc[i].mem_handle,
-			&cpu_addr, &len);
+
+		rc = cam_mem_get_cpu_buf(cmd_desc[i].mem_handle, &cpu_addr, &len);
 		if (rc || !cpu_addr) {
 			CAM_ERR(CAM_OPE, "get cmd buf failed %x",
 				hw_mgr->iommu_hdl);
