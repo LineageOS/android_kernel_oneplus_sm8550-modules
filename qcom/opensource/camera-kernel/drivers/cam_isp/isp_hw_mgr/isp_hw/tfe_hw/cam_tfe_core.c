@@ -24,6 +24,9 @@
 #include "cam_tfe_csid_hw_intf.h"
 
 static const char drv_name[] = "tfe";
+#ifdef OPLUS_FEATURE_CAMERA_COMMON
+static uint8_t s_epoch_factor_override = 50;
+#endif
 
 #define CAM_TFE_HW_RESET_HW_AND_REG_VAL       0x1
 #define CAM_TFE_HW_RESET_HW_VAL               0x10000
@@ -2503,6 +2506,12 @@ static int cam_tfe_camif_resource_start(
 	if ((rsrc_data->epoch_factor) && (rsrc_data->epoch_factor <= 100))
 		epoch_factor = rsrc_data->epoch_factor;
 
+#ifdef OPLUS_FEATURE_CAMERA_COMMON
+	if (s_epoch_factor_override != 50) {
+		epoch_factor = s_epoch_factor_override;
+	}
+#endif
+
 	epoch0_irq_mask = (((rsrc_data->last_line + rsrc_data->vbi_value) -
 		rsrc_data->first_line) * epoch_factor / 100);
 
@@ -2950,8 +2959,13 @@ int cam_tfe_top_init(
 			rdi_priv->reg_data =
 				hw_info->rdi_hw_info[j++].reg_data;
 		}  else {
+#ifdef OPLUS_FEATURE_CAMERA_COMMON
+			CAM_ERR(CAM_ISP, "TFE:%d Invalid inport type: %u at i = %d. j = %d",
+				core_info->core_index, hw_info->in_port[i], i, j);
+#else
 			CAM_WARN(CAM_ISP, "TFE:%d Invalid inport type: %u at i = %d. j = %d",
 				core_info->core_index, hw_info->in_port[i], i, j);
+#endif
 		}
 	}
 
@@ -3195,6 +3209,9 @@ int cam_tfe_deinit_hw(void *hw_priv, void *deinit_hw_args, uint32_t arg_size)
 					CAM_TFE_HW_RESET_HW_AND_REG;
 
 	CAM_DBG(CAM_ISP, "Enter");
+#ifdef OPLUS_FEATURE_CAMERA_COMMON
+	s_epoch_factor_override = 50;
+#endif
 	if (!hw_priv) {
 		CAM_ERR(CAM_ISP, "Invalid arguments");
 		return -EINVAL;
@@ -3488,6 +3505,13 @@ int cam_tfe_process_cmd(void *hw_priv, uint32_t cmd_type,
 	case CAM_ISP_HW_CMD_SET_SYNC_HW_IDX:
 		rc = cam_tfe_set_sync_hw_idx(core_info, cmd_args, arg_size);
 		break;
+#ifdef OPLUS_FEATURE_CAMERA_COMMON
+	case CAM_ISP_HW_CMD_EPOCH_FACTOR_UPDATE:
+		s_epoch_factor_override = (*(uint8_t *)cmd_args);
+		CAM_INFO(CAM_ISP, "s_epoch_factor_override update to %d",
+			s_epoch_factor_override);
+		break;
+#endif
 	default:
 		CAM_ERR(CAM_ISP, "TFE:%d Invalid cmd type:%d",
 			core_info->core_index, cmd_type);

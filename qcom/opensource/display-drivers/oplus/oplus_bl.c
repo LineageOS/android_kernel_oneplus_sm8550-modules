@@ -26,6 +26,7 @@ static u32 pwm_switch_cmd_restore = 0;
 static u32 pwm_switch_next_cmdq = 0;
 static int backlight_onepulse_normal_buf[];
 static int backlight_onepulse_max_buf[];
+extern bool is_evt_panel;
 ktime_t aod_off_te_timestamp;
 ktime_t lhbm_off_te_timestamp;
 
@@ -425,6 +426,7 @@ static void oplus_panel_directional_onepulse_status_judge(struct dsi_panel *pane
 	u32 *pwm_switch_state_last,
 	u32 *pwm_switch_cmd,
 	int *pulse) {
+
 	if (bl_lvl > panel->bl_config.pwm_bl_threshold) {
 		if (oplus_panel_pwm_onepulse_is_enabled(panel)) {
 			/* on 1 pulse */

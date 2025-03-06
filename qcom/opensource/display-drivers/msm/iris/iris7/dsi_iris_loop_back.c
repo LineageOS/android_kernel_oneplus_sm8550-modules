@@ -41,13 +41,7 @@ enum SMT_PT_EFIFO_TYPE {
 #define BIT_SRAM_BIST_SQ        (1 << 6)
 #define BIT_SRAM_BIST_NPLL      (1 << 7)
 
-
-#ifdef IRIS_HDK_DEV
-static uint32_t iris_loop_back_flag_i7 = 0xffffffff;
-#else
-//these cases need release to customer
 static uint32_t iris_loop_back_flag_i7 = (BIT_SMT_EFIFO_PT_SQ | BIT_DUAL_PT);
-#endif
 
 void iris_set_loopback_flag_i7(uint32_t val)
 {
@@ -554,7 +548,7 @@ static int _iris_reg_check(uint32_t (*p1)[2], uint32_t cnt1, uint32_t (*p2)[2], 
 	}
 
 	for (i = 0; i < cnt2; i++) {
-		iris_ioctl_i2c_read(p2[i][0], &val);
+		ret = iris_ioctl_i2c_read(p2[i][0], &val);
 		if (val != p2[i][1]) {
 			ret = i + 1;
 			goto end;

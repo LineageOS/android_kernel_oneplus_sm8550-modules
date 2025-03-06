@@ -206,6 +206,11 @@ struct dsi_panel_oplus_privite {
 	bool pwm_switch_restore_support;
 	bool need_sync;
 	u32 disable_delay_bl_count;
+	bool gamma_switch_enable;
+	bool vid_timming_switch_enabled;
+	bool dimming_setting_before_bl_0_enable;
+	bool vidmode_backlight_async_wait_enable;
+	bool set_backlight_not_do_esd_reg_read_enable;
 };
 
 struct dsi_panel_oplus_serial_number {
@@ -215,6 +220,8 @@ struct dsi_panel_oplus_serial_number {
 	u32 serial_number_reg;
 	int serial_number_index;
 	int serial_number_conut;
+	bool is_multi_reg;
+	u32 *serial_number_multi_regs;
 };
 #endif /* OPLUS_FEATURE_DISPLAY */
 
@@ -301,6 +308,10 @@ enum esd_check_status_mode {
 	ESD_MODE_REG_READ,
 	ESD_MODE_SW_BTA,
 	ESD_MODE_PANEL_TE,
+#ifdef OPLUS_FEATURE_DISPLAY
+	/* add for esd check MIPI ERR flag mode */
+	ESD_MODE_PANEL_MIPI_ERR_FLAG,
+#endif /* OPLUS_FEATURE_DISPLAY */
 	ESD_MODE_SW_SIM_SUCCESS,
 	ESD_MODE_SW_SIM_FAILURE,
 	ESD_MODE_MAX
@@ -320,6 +331,8 @@ struct drm_panel_esd_config {
 #ifdef OPLUS_FEATURE_DISPLAY
 	u32 status_match_modes;
 	bool esd_debug_enabled;
+	/* add for esd check MIPI ERR flag mode, add gpio as irq*/
+	int mipi_err_flag_gpio;
 #endif /* OPLUS_FEATURE_DISPLAY */
 };
 
@@ -413,6 +426,7 @@ struct dsi_panel {
 	struct dsi_panel_oplus_serial_number oplus_ser;
 	int panel_id2;
 	atomic_t esd_pending;
+	atomic_t vidmode_backlight_async_wait;
 	struct mutex panel_tx_lock;
 	struct mutex oplus_ffc_lock;
 	u32 oplus_pwm_switch_state;
@@ -431,6 +445,7 @@ struct dsi_panel {
 	u32 last_vsync_width;
 	u32 last_refresh_rate;
 	u32 work_frame;
+	int power_state;
 #endif /* OPLUS_FEATURE_DISPLAY */
 
 #if defined(CONFIG_PXLW_IRIS)
