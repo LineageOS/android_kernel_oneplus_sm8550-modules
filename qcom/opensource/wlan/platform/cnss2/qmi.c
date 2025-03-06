@@ -35,18 +35,28 @@
 
 #ifdef OPLUS_FEATURE_WIFI_BDF
 //Modify for: multi projects using different bdf
+/*8550 common define*/
 #define BDF_FILE_IN		"bdwlan.b0i"
 #define BDF_FILE_EU		"bdwlan.b0e"
 #define BDF_FILE_NA		"bdwlan.b0a"
+#define BDF_FILE_IN_EU		"bdwlan.b0ie"
 #define BDF_FILE_IN_GF		"bdwlang.b0i"
 #define BDF_FILE_EU_GF		"bdwlang.b0e"
 #define BDF_FILE_NA_GF		"bdwlang.b0a"
 #define BDF_FILE_SEC            "bdwlansec.elf"
 #define BDF_FILE_SEC_GF         "bdwlangsec.elf"
+
+/*salami 22861 regin_id define*/
 #define REG_ID_IN		21
 #define REG_ID_EU		22
 #define REG_ID_NA		23
+
+/*salami 22811 wifisar hw_id define*/
 #define HW_ID_MP1               48
+
+/*aston 23861 define*/
+#define ASTON_RF_ID_IN_EU	1
+#define ASTON_RF_ID_NA		2
 #endif /* OPLUS_FEATURE_WIFI_BDF */
 
 #define QDSS_TRACE_CONFIG_FILE		"qdss_trace_config"
@@ -728,7 +738,8 @@ static bool is_prj_support_region_id(void) {
 	if (project_id == 22861 ||
 		project_id == 22862 ||
 		project_id == 22863 ||
-		project_id == 22864) {
+		project_id == 22864 ||
+		project_id == 23861) {
 		return true;
 	}
 	return false;
@@ -747,7 +758,8 @@ static bool is_prj_support_second_bdf(void) {
 static void cnss_get_oplus_bdf_file_name(struct cnss_plat_data *plat_priv, char* file_name, u32 filename_len) {
 	int reg_id = get_Operator_Version();
 	int hw_id = get_PCB_Version();
-	cnss_pr_dbg("region id: %d pcb version: %d\n", reg_id, hw_id);
+	int rf_id = get_Modem_Version();
+	cnss_pr_info("region id: %d pcb version: %d rf_id: %d\n", reg_id, hw_id, rf_id);
 
 	if (plat_priv->chip_info.chip_id & CHIP_ID_GF_MASK) {
 		if (is_prj_support_region_id()) {
@@ -775,8 +787,10 @@ static void cnss_get_oplus_bdf_file_name(struct cnss_plat_data *plat_priv, char*
 				snprintf(file_name, filename_len, BDF_FILE_IN);
 			} else if (reg_id == REG_ID_EU) {
 				snprintf(file_name, filename_len, BDF_FILE_EU);
-			} else if (reg_id == REG_ID_NA) {
+			} else if (reg_id == REG_ID_NA || rf_id == ASTON_RF_ID_NA) {
 				snprintf(file_name, filename_len, BDF_FILE_NA);
+			} else if (rf_id == ASTON_RF_ID_IN_EU) {
+				snprintf(file_name, filename_len, BDF_FILE_IN_EU);
 			} else {
 				snprintf(file_name, filename_len, ELF_BDF_FILE_NAME);
 			}

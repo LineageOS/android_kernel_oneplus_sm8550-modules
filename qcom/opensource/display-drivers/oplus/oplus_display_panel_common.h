@@ -20,6 +20,7 @@
 #include "dsi_pwr.h"
 #include "sde_dbg.h"
 #include "oplus_display_private_api.h"
+#include "oplus_display_panel_cabc.h"
 
 #define PANEL_IOCTL_BUF_MAX 41
 #define PANEL_REG_MAX_LENS 28
@@ -157,5 +158,6 @@ int oplus_display_panel_gamma_update(void);
 void oplus_panel_switch_to_sync_te(struct dsi_panel *panel);
 void oplus_save_last_mode(struct dsi_display *display);
 void oplus_set_pwm_switch_cmd_te_flag(struct sde_connector *c_conn);
+int oplus_display_set_shutdown_flag(void *buf);
 #endif /* _OPLUS_DISPLAY_PANEL_COMMON_H_ */
 

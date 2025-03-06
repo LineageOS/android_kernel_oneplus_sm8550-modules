@@ -5966,7 +5966,6 @@ end:
 	return 0;
 }
 
-#ifdef OPLUS_FEATURE_CAMERA_COMMON
 static int cam_ife_csid_ver2_reset_out_of_sync_cnt(
 	struct cam_ife_csid_ver2_hw  *csid_hw, void *args)
 {
@@ -5989,7 +5988,6 @@ static int cam_ife_csid_ver2_reset_out_of_sync_cnt(
 
 	return 0;
 }
-#endif
 
 static int cam_ife_csid_ver2_drv_config(
 	struct cam_ife_csid_ver2_hw  *csid_hw, void *cmd_args)
@@ -6156,11 +6154,9 @@ static int cam_ife_csid_ver2_process_cmd(void *hw_priv,
 	case CAM_ISP_HW_CMD_DRV_CONFIG:
 		rc = cam_ife_csid_ver2_drv_config(csid_hw, cmd_args);
 		break;
-#ifdef OPLUS_FEATURE_CAMERA_COMMON
 	case CAM_IFE_CSID_RESET_OUT_OF_SYNC_CNT:
 		rc = cam_ife_csid_ver2_reset_out_of_sync_cnt(csid_hw, cmd_args);
 		break;
-#endif
 	default:
 		CAM_ERR(CAM_ISP, "CSID:%d unsupported cmd:%d",
 			csid_hw->hw_intf->hw_idx, cmd_type);

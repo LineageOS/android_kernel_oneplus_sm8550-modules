@@ -890,7 +890,7 @@ static int cam_ois_pkt_parse(struct cam_ois_ctrl_t *o_ctrl, void *arg)
 				} else {
 					CAM_ERR(CAM_OIS, "ois type=%d,cam_ois_power_up failed",o_ctrl->ois_type);
 					mutex_unlock(&(o_ctrl->ois_power_down_mutex));
-					return rc;
+					goto end;
 				}
 			} else {
 				if(o_ctrl->ois_switch_spi_mode) {
@@ -1156,42 +1156,42 @@ static int cam_ois_pkt_parse(struct cam_ois_ctrl_t *o_ctrl, void *arg)
 			if (rc < 0) {
 				CAM_ERR(CAM_OIS, "cannot read data rc: %d", rc);
 				delete_request(&i2c_read_settings);
-				return rc;
+				goto end;
 			}
 		}else if(o_ctrl->ois_eis_function == 2) {
 			rc = OIS_READ_HALL_DATA_TO_UMD_NEW(o_ctrl,&i2c_read_settings);
 			if (rc < 0) {
 				CAM_ERR(CAM_OIS, "cannot read data rc: %d", rc);
 				delete_request(&i2c_read_settings);
-				return rc;
+				goto end;
 			}
 		}else if(o_ctrl->ois_eis_function == 3) {
 			rc = OIS_READ_HALL_DATA_TO_UMD_129(o_ctrl,&i2c_read_settings);
 			if (rc < 0) {
 				CAM_ERR(CAM_OIS, "cannot read data rc: %d", rc);
 				delete_request(&i2c_read_settings);
-				return rc;
+				goto end;
 			}
 		}else if(o_ctrl->ois_eis_function == 4) {
 			rc = OIS_READ_HALL_DATA_TO_UMD_TELE124(o_ctrl,&i2c_read_settings);
 			if (rc < 0) {
 				CAM_ERR(CAM_OIS, "cannot read data rc: %d", rc);
 				delete_request(&i2c_read_settings);
-				return rc;
+				goto end;
 			}
 		}else if(o_ctrl->ois_eis_function == 5) {
 			rc = OIS_READ_HALL_DATA_TO_UMD_Bu24721(o_ctrl,&i2c_read_settings);
 			if (rc < 0) {
 				CAM_ERR(CAM_OIS, "cannot read data rc: %d", rc);
 				delete_request(&i2c_read_settings);
-				return rc;
+				goto end;
 			}
 		}else if(o_ctrl->ois_eis_function == 6) {
 			rc = OIS_READ_HALL_DATA_TO_UMD_SEM1217S(o_ctrl,&i2c_read_settings);
 			if (rc < 0) {
 				CAM_ERR(CAM_OIS, "cannot read data rc: %d", rc);
 				delete_request(&i2c_read_settings);
-				return rc;
+				goto end;
 			}
 		}else {
 			rc = cam_sensor_i2c_read_data(
@@ -1200,7 +1200,7 @@ static int cam_ois_pkt_parse(struct cam_ois_ctrl_t *o_ctrl, void *arg)
 			if (rc < 0) {
 				CAM_ERR(CAM_OIS, "cannot read data rc: %d", rc);
 				delete_request(&i2c_read_settings);
-				return rc;
+				goto end;
 			}
 		}
 #else
@@ -1242,12 +1242,13 @@ static int cam_ois_pkt_parse(struct cam_ois_ctrl_t *o_ctrl, void *arg)
 		}
 #ifdef OPLUS_FEATURE_CAMERA_COMMON
 		if(o_ctrl->ois_eis_function == 1 || o_ctrl->ois_eis_function == 5) {
+			cam_mem_put_cpu_buf(dev_config.packet_handle);
 			return 0;
 		}else if(o_ctrl->ois_eis_function == 2 || o_ctrl->ois_eis_function == 4) {
 			rc = WRITE_QTIMER_TO_OIS(o_ctrl);
 			if (rc < 0) {
 				CAM_ERR(CAM_OIS, "Cannot update time");
-				return rc;
+				goto end;
 			}
 			break;
 		}
