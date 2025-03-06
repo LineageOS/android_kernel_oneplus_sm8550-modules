@@ -3800,12 +3800,10 @@ static int cam_ife_csid_ver1_process_cmd(void *hw_priv,
 		/* Not supported for V1 */
 		rc = 0;
 		break;
-#ifdef OPLUS_FEATURE_CAMERA_COMMON
 	case CAM_IFE_CSID_RESET_OUT_OF_SYNC_CNT:
 		/* Not supported for V1 */
 		rc = 0;
 		break;
-#endif
 	default:
 		CAM_ERR(CAM_ISP, "CSID:%d unsupported cmd:%d",
 			csid_hw->hw_intf->hw_idx, cmd_type);
