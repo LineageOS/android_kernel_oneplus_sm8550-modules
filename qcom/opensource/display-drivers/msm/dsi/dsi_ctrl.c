@@ -1534,7 +1534,7 @@ static int dsi_message_tx(struct dsi_ctrl *dsi_ctrl, struct dsi_cmd_desc *cmd_de
 	msg = &cmd_desc->msg;
 	flags = &cmd_desc->ctrl_flags;
 #ifdef OPLUS_FEATURE_DISPLAY
-		oplus_ctrl_print_cmd_desc(dsi_ctrl, msg);
+	oplus_ctrl_print_cmd_desc(dsi_ctrl, cmd_desc);
 #endif /* OPLUS_FEATURE_DISPLAY */
 
 #if defined(CONFIG_PXLW_IRIS)

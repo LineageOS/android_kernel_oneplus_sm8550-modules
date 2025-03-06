@@ -13,7 +13,7 @@ int cam_sensor_core_power_up_vio(struct cam_sensor_power_setting *power_setting,
 {
 	int rc = 0, i = 0;
 	if(power_setting->seq_type == SENSOR_VIO && power_setting->config_val == 3){
-		CAM_DBG(CAM_SENSOR, "seq_type:%d config_val:%d rgltr_delay = %d",
+		CAM_DBG(CAM_SENSOR, "seq_type:%d config_val:%ld rgltr_delay = %d",
 				power_setting->seq_type,
 				power_setting->config_val, soc_info->rgltr_delay[vreg_idx]);
 		for(i = 0 ; i < 2 ; i++) {
