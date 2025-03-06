@@ -39,10 +39,10 @@ int oplus_panel_cmd_switch(struct dsi_panel *panel, enum dsi_cmd_set_type *type)
 /**
  * oplus_ctrl_print_cmd_desc() - oplus command desc printf
  * @dsi_ctrl: Dsi ctrl
- * @msg:      Mipi dsi msg
+ * @cmd: Dsi command set
  * Return: void
  */
-void oplus_ctrl_print_cmd_desc(struct dsi_ctrl *dsi_ctrl, const struct mipi_dsi_msg *msg);
+void oplus_ctrl_print_cmd_desc(struct dsi_ctrl *dsi_ctrl, struct dsi_cmd_desc *cmd);
 
 /**
  * oplus_panel_event_data_notifier_trigger() - oplus panel event notification with data

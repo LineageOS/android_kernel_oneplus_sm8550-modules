@@ -449,6 +449,7 @@ int32_t cam_sensor_util_write_qtimer_to_io_buffer(
 			io_cfg->direction);
 		rc = -EINVAL;
 	}
+
 	return rc;
 }
 

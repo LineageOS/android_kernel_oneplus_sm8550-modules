@@ -22,6 +22,21 @@
 #define AK7316_ID_DATA 0x1C
 #define AK7316_PID_LENGTH 44
 
+#define DW9827C_SLAVE_ADDR 0x18
+#define DW9827C_STATE_ADDR 0x02
+#define DW9827C_PT_ADDR 0x34
+#define DW9827C_PT_OFF_STATE 0x85
+#define DW9827C_PID_VER_ADDR 0x7E
+#define DW9827C_STANDBY_STATE 0x40
+#define DW9827C_WRITE_CONTROL_ADDR 0xAE
+#define DW9827C_STORE_ADDR 0x03
+#define DW9827C_RESET_ADDR 0x04
+#define DW9827C_DATA_CHECK_ADDR 0x4B
+#define DW9827C_DATA_CHECK_BIT 0x04
+#define DW9827C_ID_ADDR 0x03
+#define DW9827C_ID_DATA 0x1C
+#define DW9827C_PID_LENGTH 44
+
 void oplus_cam_actuator_sds_enable(struct cam_actuator_ctrl_t *a_ctrl);
 int32_t oplus_cam_actuator_lock(struct cam_actuator_ctrl_t *a_ctrl);
 int32_t oplus_cam_actuator_unlock(struct cam_actuator_ctrl_t *a_ctrl);
@@ -39,7 +54,6 @@ int oplus_cam_actuator_ram_read_extend(struct cam_actuator_ctrl_t *a_ctrl,
 	uint32_t addr, uint32_t *data,
 	enum camera_sensor_i2c_type addr_type,
 	enum camera_sensor_i2c_type data_type);
-
 
 #endif /* _CAM_ACTUATOR_CORE_H_ */
 
