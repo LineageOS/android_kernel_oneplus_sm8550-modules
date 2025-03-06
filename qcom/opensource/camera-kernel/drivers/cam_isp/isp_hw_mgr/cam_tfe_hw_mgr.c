@@ -4199,7 +4199,7 @@ static int cam_isp_tfe_blob_update_out_resource_config(
 
 		hw_mgr_res = &ctx->res_list_tfe_out[res_id_out];
 
-		rc = cam_isp_add_cmd_buf_update(
+	    rc = cam_isp_add_cmd_buf_update_crow(
 			hw_mgr_res, blob_type,
 			CAM_ISP_HW_CMD_WM_CONFIG_UPDATE,
 			blob_info->base_info->idx,
@@ -4293,7 +4293,7 @@ static int cam_isp_tfe_blob_hfr_update(
 			total_used_bytes/4;
 		hw_mgr_res = &ctx->res_list_tfe_out[res_id_out];
 
-		rc = cam_isp_add_cmd_buf_update(
+		rc = cam_isp_add_cmd_buf_update_crow(
 			hw_mgr_res, blob_type, CAM_ISP_HW_CMD_GET_HFR_UPDATE,
 			blob_info->base_info->idx,
 			(void *)cmd_buf_addr,
@@ -4552,7 +4552,7 @@ static int cam_isp_tfe_blob_bw_limit_update(
 
 		hw_mgr_res = &ctx->res_list_tfe_out[res_id_out];
 
-		rc = cam_isp_add_cmd_buf_update(
+		rc = cam_isp_add_cmd_buf_update_crow(
 			hw_mgr_res, blob_type,
 			CAM_ISP_HW_CMD_WM_BW_LIMIT_CONFIG,
 			blob_info->base_info->idx,
@@ -4560,6 +4560,7 @@ static int cam_isp_tfe_blob_bw_limit_update(
 			kmd_buf_remain_size,
 			(void *)wm_bw_limit_cfg,
 			&bytes_used);
+
 		if (rc < 0) {
 			CAM_ERR(CAM_ISP,
 				"Failed to update %s BW limiter config for res:0x%x enable:%d [0x%x:0x%x] base_idx:%d bytes_used:%u rc:%d",
@@ -4680,6 +4681,35 @@ static int cam_isp_tfe_blob_csid_discard_init_frame_update(
 
 	return rc;
 }
+#ifdef OPLUS_FEATURE_CAMERA_COMMON
+static int cam_isp_tfe_blob_update_epoch_factor(struct cam_isp_generic_blob_info *blob_info, uint8_t epoch_factor, struct cam_hw_prepare_update_args *prepare)
+{
+	struct cam_hw_intf *hw_if = NULL;
+	struct cam_isp_resource_node *res = NULL;
+	int i;
+
+	for (i = 0; i < CAM_TFE_HW_NUM_MAX; i++) {
+		if (!g_tfe_hw_mgr.tfe_devices[i]) {
+			continue;
+		}
+		hw_if = g_tfe_hw_mgr.tfe_devices[i]->hw_intf;
+		if (!hw_if) {
+			CAM_ERR_RATE_LIMIT(CAM_ISP, "hw_intf is null");
+			return -EINVAL;
+		}
+		if (hw_if->hw_ops.process_cmd) {
+			CAM_INFO(CAM_ISP, "updating epoch factor %d cfg for res: %s on CSID[%u]", epoch_factor,
+					res->res_name, blob_info->base_info->idx);
+			hw_if->hw_ops.process_cmd(hw_if->hw_priv,
+				CAM_ISP_HW_CMD_EPOCH_FACTOR_UPDATE,
+				&epoch_factor,
+				sizeof(uint8_t));
+		}
+	}
+
+	return 0;
+}
+#endif
 
 static int cam_isp_tfe_packet_generic_blob_handler(void *user_data,
 	uint32_t blob_type, uint32_t blob_size, uint8_t *blob_data)
@@ -5068,6 +5098,18 @@ static int cam_isp_tfe_packet_generic_blob_handler(void *user_data,
 				rc, prepare->packet->header.request_id);
 	}
 		break;
+#ifdef OPLUS_FEATURE_CAMERA_COMMON
+	case CAM_ISP_TFE_GENERIC_BLOB_TYPE_UPDATE_EPOCH_FACTOR: {
+		uint8_t* epoch_factor = (uint8_t *)blob_data;
+
+		if ((*epoch_factor <= 0) && ((*epoch_factor > 100))) {
+			CAM_ERR(CAM_ISP, "epoch factor %d out of range [1, 100]", *epoch_factor);
+			return -EINVAL;
+		}
+		cam_isp_tfe_blob_update_epoch_factor(blob_info, *epoch_factor, prepare);
+	}
+		break;
+#endif
 	default:
 		CAM_WARN(CAM_ISP, "Invalid blob type %d ctx %d", blob_type,
 			tfe_mgr_ctx->ctx_index);
@@ -5448,14 +5490,14 @@ static int cam_tfe_mgr_prepare_hw_update(void *hw_mgr_priv,
 		prepare_hw_data->wm_bitmask = ctx->acquired_wm_mask;
 
 		/* get IO buffers */
-		rc = cam_isp_add_io_buffers(hw_mgr->mgr_common.img_iommu_hdl,
-			hw_mgr->mgr_common.img_iommu_hdl_secure,
-			prepare, ctx->base[i].idx,
-			&prepare_hw_data->kmd_cmd_buff_info, ctx->res_list_tfe_out,
-			NULL, CAM_ISP_TFE_OUT_RES_BASE,
-			CAM_TFE_HW_OUT_RES_MAX, fill_fence,
-			CAM_ISP_HW_TYPE_TFE,
-			&frame_header_info, &check_for_scratch);
+		rc = cam_isp_add_io_buffers_crow(hw_mgr->mgr_common.img_iommu_hdl,
+				hw_mgr->mgr_common.img_iommu_hdl_secure,
+				prepare, ctx->base[i].idx,
+				&prepare_hw_data->kmd_cmd_buff_info, ctx->res_list_tfe_out,
+				NULL, CAM_ISP_TFE_OUT_RES_BASE,
+				CAM_TFE_HW_OUT_RES_MAX, fill_fence,
+				CAM_ISP_HW_TYPE_TFE,
+				&frame_header_info, &check_for_scratch);
 
 		if (rc) {
 			CAM_ERR(CAM_ISP,
@@ -5756,8 +5798,7 @@ static void cam_tfe_mgr_dump_pf_data(
 
 	pf_cmd_args = hw_cmd_args->u.pf_cmd_args;
 	rc = cam_packet_util_get_packet_addr(&packet,
-		pf_cmd_args->pf_req_info->packet_handle,
-		pf_cmd_args->pf_req_info->packet_offset);
+		pf_cmd_args->pf_req_info->packet_handle, pf_cmd_args->pf_req_info->packet_offset);
 	if (rc)
 		return;
 	ctx_found = &pf_cmd_args->pf_args->pf_context_info.ctx_found;

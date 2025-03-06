@@ -132,4 +132,49 @@ bool oplus_panel_validate_reg_read(struct dsi_panel *panel)
 
 	return false;
 }
+int oplus_display_status_check_mipi_err_gpio(struct dsi_display *display)
+{
+	unsigned int mipi_err_gpio_value = 1;
+	struct dsi_panel *panel;
 
+	if (!display || !display->panel) {
+		LCD_INFO("Invalid display or panel params!\n");
+		return 1;
+	}
+
+	panel = display->panel;
+
+	if (!gpio_is_valid(panel->esd_config.mipi_err_flag_gpio)) {
+		LCD_INFO("mipi err flag GPIO's are valid\n");
+		goto error;
+	}
+
+	mipi_err_gpio_value = gpio_get_value(panel->esd_config.mipi_err_flag_gpio);
+
+	LCD_INFO("esd mipi err flag status : %d\n", mipi_err_gpio_value);
+	if (mipi_err_gpio_value == 0) {
+		LCD_ERR("esd mipi err flag check failed, mipi_err_gpio_value = %d\n", mipi_err_gpio_value);
+		return -EINVAL;
+	}
+
+	return 1;
+
+error:
+	LCD_ERR("mipi err flag GPIO's are valid, disable mipi err flag check\n");
+	if (display->panel->esd_config.status_mode == ESD_MODE_PANEL_MIPI_ERR_FLAG)
+		display->panel->esd_config.esd_enabled = false;
+
+	return 1;
+}
+
+void oplus_panel_esd_set_page(struct dsi_panel *panel, int cmd_index)
+{
+	if(!strcmp(panel->name, "AC147 P 7 A0012 dsc cmd mode panel") ||
+		!strcmp(panel->name, "AC246 P 7 A0012 dsc cmd mode panel")) {
+		if (cmd_index == 0) {
+			dsi_panel_tx_cmd_set(panel, DSI_CMD_DEFAULT_SWITCH_PAGE);
+		} else if (cmd_index == 1) {
+			dsi_panel_tx_cmd_set(panel, DSI_CMD_ESD_SWITCH_PAGE);
+		}
+	}
+}
