@@ -90,6 +90,7 @@ static int _iris_configure(u32 display, u32 type, u32 value)
 	bool dpp_precsc_enable;
 	u32 regval;
 	bool gamut_update = false;
+	int ret = 0;
 
 	switch (type) {
 	case IRIS_CM_COLOR_TEMP_MODE:
@@ -381,7 +382,7 @@ static int _iris_configure(u32 display, u32 type, u32 value)
 	case IRIS_CLEAR_FRC_MIF_INT:
 		break;
 	case IRIS_SET_DPP_APL_ABS:
-		iris_ioctl_i2c_read(0xF0040038, &regval);
+		ret = iris_ioctl_i2c_read(0xF0040038, &regval);
 		regval &= ~0x000003ff;
 		value &= 0x000003ff;
 		regval |= value;
@@ -391,7 +392,7 @@ static int _iris_configure(u32 display, u32 type, u32 value)
 		iris_ioctl_i2c_write(0x00003008, value);
 		break;
 	case IRIS_ENABLE_DPP_APL:
-		iris_ioctl_i2c_read(0xF0040038, &regval);
+		ret = iris_ioctl_i2c_read(0xF0040038, &regval);
 		if (value == 1)
 			regval |= 0x80000000;
 		else
@@ -403,6 +404,7 @@ static int _iris_configure(u32 display, u32 type, u32 value)
 			uint32_t  *payload = NULL;
 
 			payload = iris_get_ipopt_payload_data(IRIS_IP_BLEND, 0xF0, 9);
+			if (payload) {
 			IRIS_LOGI("%s(), blending csr ctrl = 0x%08x\n", __func__, payload[0]);
 			if (value == 0)
 				payload[0] = 0;
@@ -411,6 +413,7 @@ static int _iris_configure(u32 display, u32 type, u32 value)
 			iris_sync_current_ipopt(IRIS_IP_BLEND, 0xF0);
 
 			iris_send_ipopt_cmds(IRIS_IP_BLEND, 0xF0);
+			}
 		}
 		break;
 	case IRIS_MODE_SET:

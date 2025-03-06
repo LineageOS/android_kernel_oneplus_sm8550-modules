@@ -518,7 +518,7 @@ void iris_dsi_ctrl_dump_desc_cmd(struct dsi_ctrl *dsi_ctrl,
 		//len += snprintf(buf + len, sizeof(buf) - len, "%02X ", msg->wait_ms);
 
 		len += snprintf(buf + len, sizeof(buf) - len, "%02X %02X ",
-				(msg->tx_len >> 8) & 0xFF, msg->tx_len & 0xFF);
+				(unsigned int)((msg->tx_len >> 8) & 0xFF), (unsigned int)(msg->tx_len & 0xFF));
 
 		/* Packet Payload */
 		for (i = 0; i < data_len; i++) {

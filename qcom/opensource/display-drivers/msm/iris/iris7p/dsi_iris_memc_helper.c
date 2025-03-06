@@ -990,7 +990,7 @@ static void _iris_dsc_generate_pps(struct iris_memc_dsc_info *iris_dsc,
 {
 	uint8_t pps_buf[PPS_SIZE];
 	uint32_t pps_reg[IRIS_PPS_REG_COUNT];
-	struct msm_display_dsc_info dsc;
+	struct msm_display_dsc_info dsc = {0};
 	int32_t intf_width = 0;
 	int32_t i = 0;
 	int32_t j = 0;
@@ -2717,7 +2717,7 @@ static void _iris_scl_ptsr_switch(uint32_t count, uint32_t *values)
 
 static bool _iris_sr2d_valid_level(uint32_t level)
 {
-	if (level >= 0 && level <= 15)
+	if (level <= 15)
 		return true;
 
 	return false;

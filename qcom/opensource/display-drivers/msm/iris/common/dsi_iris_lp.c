@@ -1563,12 +1563,6 @@ int iris_status_get(struct dsi_display_ctrl *ctrl, struct dsi_panel *panel)
 		rc = 2;
 	else
 		rc = 1;
-#if defined(IRIS_HDK_DEV)
-	if ((mode == ANALOG_BYPASS_MODE) && (iris_platform_get() == IRIS_FPGA)) {
-		IRIS_LOGD("Ignore esd check in FPGA ABYP mode!");
-		rc = 1;
-	}
-#endif
 
 exit:
 	if (rc <= 0) {
