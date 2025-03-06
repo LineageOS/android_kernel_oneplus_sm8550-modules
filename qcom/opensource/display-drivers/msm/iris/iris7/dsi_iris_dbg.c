@@ -70,7 +70,7 @@ int iris_debug_display_mode_get_i7(char *kbuf, int size, bool debug)
 			"%-20s:\t%d\n", "AP mipi1 refresh", pcfg->iris_osd_autorefresh_enabled);
 
 	len += snprintf(kbuf + len, size - len,
-			"%-20s:\t%d\n", "AP video wo osd", pcfg->video_update_wo_osd);
+			"%-20s:\t%d\n", "AP video wo osd", atomic_read(&pcfg->video_update_wo_osd));
 
 	len += snprintf(kbuf + len, size - len,
 			"%-20s:\t%d\n", "Iris mipi1 power", pcfg->iris_mipi1_power_st);
@@ -85,7 +85,7 @@ int iris_debug_display_mode_get_i7(char *kbuf, int size, bool debug)
 			"%-20s:\t%d\n", "Iris osd overflow", pcfg->iris_osd_overflow_st);
 
 	len += snprintf(kbuf + len, size - len,
-			"%-20s:\t%d\n", "Iris osd irq count", pcfg->osd_irq_cnt);
+			"%-20s:\t%d\n", "Iris osd irq count", atomic_read(&pcfg->osd_irq_cnt));
 
 	len += snprintf(kbuf + len, size - len,
 			"%-20s:\t%d\n", "Iris frc vfr state", pcfg->iris_frc_vfr_st);

@@ -273,14 +273,14 @@ struct cam_hw_soc_info {
 	int32_t                         cam_cx_ipeak_bit;
 
 	void                           *soc_private;
-
-	int32_t                         aggregate_clk[CAM_SOC_MAX_CLK][2];
-	uint32_t                        aggregate_clk_mask;
-
 #ifdef OPLUS_FEATURE_CAMERA_COMMON
 	bool                            lock_cci_during_up;
 	bool                            lock_cci_during_down;
 #endif
+
+	int32_t                         aggregate_clk[CAM_SOC_MAX_CLK][2];
+	uint32_t                        aggregate_clk_mask;
+
 };
 
 /**

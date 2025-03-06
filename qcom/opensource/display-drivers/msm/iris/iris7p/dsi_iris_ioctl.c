@@ -370,6 +370,8 @@ int iris_configure_i7p(u32 display, u32 type, u32 value)
 	case IRIS_PT_SR_LUT_SET:
 		/* don't lock panel_lock */
 		return _iris_configure(display, type, value);
+	default:
+		break;
 	}
 
 	if (IRIS_IF_LOGI())

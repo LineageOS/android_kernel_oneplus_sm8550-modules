@@ -846,7 +846,7 @@ int cam_isp_add_io_buffers(
 			found = false;
 			if (!res_list_in_rd) {
 				CAM_DBG(CAM_ISP,
-				"No BUS Read supported hw_type %d io_cfg %d %d req:%d type:%d fence:%d",
+				"No BUS Read supported hw_type %d io_cfg %d %d req:%llu type:%d fence:%d",
 					hw_type,
 					prepare->packet->num_io_configs, i,
 					prepare->packet->header.request_id,
@@ -967,7 +967,7 @@ int cam_isp_add_io_buffers(
 					io_cfg[i].mem_handle[plane_id]);
 
 				CAM_DBG(CAM_ISP,
-					"mmu_hdl=0x%x, size=%d, end=0x%x",
+					"mmu_hdl=0x%x, size=%d, end=0x%llx",
 					mmu_hdl, (int)size,
 					io_addr[plane_id]+size);
 
@@ -1039,7 +1039,7 @@ int cam_isp_add_io_buffers(
 				frame_header_info->frame_header_res_id =
 					res->res_id;
 				CAM_DBG(CAM_ISP,
-					"Frame header enabled for res: 0x%x iova: %pK",
+					"Frame header enabled for res: 0x%x iova: %lluK",
 					frame_header_info->frame_header_res_id,
 					wm_update.frame_header);
 			}
@@ -1192,13 +1192,13 @@ int cam_isp_add_io_buffers(
 				disabled_wm_mask, &io_cfg_used_bytes);
 			if (rc) {
 				CAM_ERR_RATE_LIMIT(CAM_ISP, "Disable out res %d failed",
-					i, rc);
+					i);
 				return rc;
 			}
 		}
 	}
 
-	CAM_DBG(CAM_ISP, "io_cfg_used_bytes %d, fill_fence %d acuired mask %x cfg mask %x",
+	CAM_DBG(CAM_ISP, "io_cfg_used_bytes %d, fill_fence %d acuired mask %lluK cfg mask %lluK",
 		io_cfg_used_bytes, fill_fence, prepare_hw_data->wm_bitmask, cfg_io_mask);
 	if (io_cfg_used_bytes) {
 		/* Update the HW entries */

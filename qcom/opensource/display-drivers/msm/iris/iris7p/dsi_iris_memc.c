@@ -142,12 +142,14 @@ void iris_dtg_eco_i7p(bool enable, bool chain)
 	IRIS_LOGI("%s: %d", __func__, enable);
 
 	payload = iris_get_ipopt_payload_data(IRIS_IP_PWIL, 0x10, 2);
-	if (enable) {
-		payload[0] &= ~0x100;
-		payload[0] |= 0x800;
-	} else {
-		payload[0] |= 0x100;
-		payload[0] &= ~0x800;
+	if (payload) {
+		if (enable) {
+			payload[0] &= ~0x100;
+			payload[0] |= 0x800;
+		} else {
+			payload[0] |= 0x100;
+			payload[0] &= ~0x800;
+		}
 	}
 	iris_init_update_ipopt_t(IRIS_IP_PWIL, 0x10, 0x10, 1);
 	if (chain) {
@@ -724,13 +726,17 @@ u32 iris_fi_demo_win_color_get_i7p(void)
 {
 	u32 val = 0x51ef5a;
 	struct iris_cfg *pcfg = iris_get_cfg();
+	IRIS_LOGE("FEI_MEMC %s:  pcfg:[0x%x, 0x%x]", __func__, pcfg->frc_trilateral, pcfg->frc_demo_window);
 
 	switch (pcfg->memc_info.memc_mode) {
 	case MEMC_SINGLE_VIDEO_ENABLE:
 		val = 0x51ef5a;  /* red */
 		break;
 	case MEMC_SINGLE_GAME_ENABLE:
-		val = 0xd29210;  /* yellow */
+		if ((pcfg->frc_demo_window == DEMO_WINDOW_FULL_OEM) && pcfg->frc_trilateral)
+			val = 0x286def;  /* ememc single blue */
+		else
+			val = 0xd29210;  /* yellow */
 		break;
 	case MEMC_SINGLE_EXTMV_ENABLE:
 		val = 0x286def;  /* blue */
@@ -776,25 +782,26 @@ void iris_fi_reg_set_i7p(void)
 	demo_win_yuv = iris_fi_demo_win_color_get_i7p();
 	iris_frc_reg_add_i7p(IRIS_FI_ADDR + FI_DEMO_YUV_VALUE, demo_win_yuv, 0);
 
-	if (pcfg->frc_demo_window == 1) {
+	if (pcfg->frc_demo_window == DEMO_WINDOW_LEFT) {
 		iris_frc_reg_add_i7p(IRIS_FI_ADDR + FI_DEMO_WIN_SIZE_0, 0, 0);
 		iris_frc_reg_add_i7p(IRIS_FI_ADDR + FI_DEMO_WIN_SIZE_1,
 				frc_setting->mv_vres << 15 | frc_setting->mv_hres, 0);
-	} else if (pcfg->frc_demo_window == 2) {
+	} else if (pcfg->frc_demo_window == DEMO_WINDOW_RIGHT) {
 		iris_frc_reg_add_i7p(IRIS_FI_ADDR + FI_DEMO_WIN_SIZE_0,
 				frc_setting->mv_vres << 15, 0);
 		iris_frc_reg_add_i7p(IRIS_FI_ADDR + FI_DEMO_WIN_SIZE_1,
 				frc_setting->mv_vres << 16 | frc_setting->mv_hres, 0);
-	} else if (pcfg->frc_demo_window == 3) {
+	} else if (pcfg->frc_demo_window == DEMO_WINDOW_DOWN) {
 		iris_frc_reg_add_i7p(IRIS_FI_ADDR + FI_DEMO_WIN_SIZE_0, 0, 0);
 		iris_frc_reg_add_i7p(IRIS_FI_ADDR + FI_DEMO_WIN_SIZE_1,
 			frc_setting->mv_vres << 16 | frc_setting->mv_hres >> 1, 0);
-	} else if (pcfg->frc_demo_window == 4) {
+	} else if (pcfg->frc_demo_window == DEMO_WINDOW_UP) {
 		iris_frc_reg_add_i7p(IRIS_FI_ADDR + FI_DEMO_WIN_SIZE_0,
 			frc_setting->mv_hres >> 1, 0);
 		iris_frc_reg_add_i7p(IRIS_FI_ADDR + FI_DEMO_WIN_SIZE_1,
 			frc_setting->mv_vres << 16 | frc_setting->mv_hres, 0);
-	} else if (pcfg->frc_demo_window == 5) {
+	} else if (pcfg->frc_demo_window == DEMO_WINDOW_FULL ||
+				pcfg->frc_demo_window == DEMO_WINDOW_FULL_OEM) {
 		iris_frc_reg_add_i7p(IRIS_FI_ADDR + FI_DEMO_WIN_SIZE_0,  0, 0);
 		iris_frc_reg_add_i7p(IRIS_FI_ADDR + FI_DEMO_WIN_SIZE_1,
 			frc_setting->mv_vres << 16 | frc_setting->mv_hres, 0);
@@ -828,7 +835,12 @@ void iris_fi_demo_window_set_i7p(u32 mode)
 	struct iris_cfg *pcfg = iris_get_cfg();
 
 	pcfg->frc_label = (mode >> 4) & 0x01;
+	pcfg->frc_trilateral = (mode >> 7) & 0x01;
 	pcfg->frc_demo_window = mode & 0xf;
+	if (pcfg->frc_demo_window >= DEMO_WINDOW_MAX)
+		pcfg->frc_demo_window = DEMO_WINDOW_NONE;
+	IRIS_LOGE("FEI_MEMC %s, [0x%x,%d,%d,%d,%d].", __func__, mode, pcfg->osd_label, pcfg->frc_label,
+											pcfg->frc_trilateral, pcfg->frc_demo_window);
 }
 
 static void iris_download_mcu_code_i7p(void)
@@ -2128,26 +2140,32 @@ void iris_dsi_rx_mode_switch_i7p(u8 rx_mode)
 	IRIS_LOGI("%s: %d", __func__, rx_mode);
 
 	payload = iris_get_ipopt_payload_data(IRIS_IP_PWIL, 0x01, 3);
+	if (payload) {
 	if (rx_mode == DSI_OP_CMD_MODE)
 		payload[0] |= 0x20001;
 	else
 		payload[0] &= ~0x20001;
 	iris_init_update_ipopt_t(IRIS_IP_PWIL, 0x01, 0x01, 1);
+	}
 
 	payload = iris_get_ipopt_payload_data(IRIS_IP_PWIL, 0x04, 3);
+	if (payload) {
 	if (rx_mode == DSI_OP_CMD_MODE)
 		payload[0] &= ~0x4000;
 	else
 		payload[0] |= 0x4000;
 	iris_init_update_ipopt_t(IRIS_IP_PWIL, 0x04, 0x04, 1);
+	}
 
 	payload = iris_get_ipopt_payload_data(IRIS_IP_PWIL, 0x10, 2);
+	if (payload) {
 	if (rx_mode == DSI_OP_CMD_MODE)
 		payload[0] &= ~0x800;
 	else
 		payload[0] |= 0x800;
 	iris_init_update_ipopt_t(IRIS_IP_PWIL, 0x10, 0x10, 1);
 	iris_dma_trig(DMA_CH9, 1);
+	}
 
 	regval.ip = IRIS_IP_DTG;
 	regval.opt_id = ID_DTG_TE_SEL;
@@ -2160,9 +2178,11 @@ void iris_dsi_rx_mode_switch_i7p(u8 rx_mode)
 		iris_init_update_ipopt_t(IRIS_IP_DTG, 0xf3, 0xf3, 0x01);
 	else {
 		payload = iris_get_ipopt_payload_data(IRIS_IP_DTG, 0xf5, 2);
-		ovs_dly_rfb = payload[0];
+		if (payload)
+			ovs_dly_rfb = payload[0];
 		payload = iris_get_ipopt_payload_data(IRIS_IP_DTG, 0xf8, 2);
-		payload[3] = ovs_dly_rfb;
+		if (payload)
+			payload[3] = ovs_dly_rfb;
 		iris_init_update_ipopt_t(IRIS_IP_DTG, 0xf8, 0xf8, 0x01);
 	}
 
