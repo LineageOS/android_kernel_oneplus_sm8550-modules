@@ -63,6 +63,13 @@ int32_t cam_actuator_parse_dt(struct cam_actuator_ctrl_t *a_ctrl,
 		a_ctrl->is_update_pid = false;
 		CAM_INFO(CAM_ACTUATOR, "get is_update_pid failed rc:%d, default %d", rc, a_ctrl->is_update_pid);
 	}
+	rc = of_property_read_string_index(of_node, "actuator,name", 0, (const char **)&p);
+	if (rc) {
+		CAM_ERR(CAM_OIS, "get actuator,name failed rc:%d", rc);
+	} else {
+		memcpy(a_ctrl->actuator_name, p, sizeof(a_ctrl->actuator_name));
+		CAM_ERR(CAM_OIS, "read actuator,name success, value:%s", a_ctrl->actuator_name);
+	}
 #endif
 
 	if (a_ctrl->io_master_info.master_type == CCI_MASTER) {

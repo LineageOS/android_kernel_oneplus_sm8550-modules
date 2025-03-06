@@ -762,6 +762,7 @@ static int _iris_write_cmd_payload(struct dsi_cmd_desc *pdesc,
 				}
 			}
 
+			if (ptr) {
 			iris_set_ocp_base_addr(ptr, base_addr + i * pkt_size);
 			iris_set_ocp_type(ptr, ocp_type);
 			_iris_create_cmd_payload(hdr, payload,
@@ -771,6 +772,7 @@ static int _iris_write_cmd_payload(struct dsi_cmd_desc *pdesc,
 			/* add payload */
 			payload += (dlen - IRIS_OCP_HEADER_ADDR_LEN);
 			pdesc[i].msg.tx_buf = ptr;
+			}
 		}
 	}
 

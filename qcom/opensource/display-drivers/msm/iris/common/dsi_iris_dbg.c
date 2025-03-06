@@ -590,6 +590,7 @@ int iris_dbgfs_status_init(struct dsi_display *display)
 		}
 	}
 
+	if (pcfg->dbg_root) {
 	if (debugfs_create_file(IRIS_DBG_FUNCSTATUS_FILE, 0644,
 				pcfg->dbg_root, display,
 				&iris_dbg_fstatus_fops) == NULL)
@@ -619,7 +620,7 @@ int iris_dbgfs_status_init(struct dsi_display *display)
 				pcfg->dbg_root, display,
 				&iris_cmd_list_fops) == NULL)
 		IRIS_LOGE("create file cmd_list_status failed");
-
+	}
 
 	return 0;
 }

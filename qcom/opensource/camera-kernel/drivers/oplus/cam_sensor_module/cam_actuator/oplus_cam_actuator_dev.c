@@ -691,6 +691,170 @@ error_hand:
 	return rc;
 }
 
+int oplus_cam_actuator_update_pid_dw9827c(struct cam_actuator_ctrl_t *a_ctrl)
+{
+	struct device_node *of_node = NULL;
+	struct cam_hw_soc_info *soc_info = &a_ctrl->soc_info;
+	bool is_update_pid = false;
+	int32_t rc = 0, i = 0, pid_register_size = 0;
+	uint8_t* pid_register = NULL;
+	uint32_t ic_id = 0, pid_version = 0;
+	uint32_t register_value = 0;
+	//uint32_t data_check_value = 0;
+
+	if (a_ctrl == NULL) {
+		CAM_ERR(CAM_ACTUATOR, "oplus_cam_actuator_update_pid Invalid Args");
+		return -EINVAL;
+	}
+
+	a_ctrl->io_master_info.cci_client->cci_i2c_master = a_ctrl->cci_i2c_master;
+	a_ctrl->io_master_info.cci_client->i2c_freq_mode = I2C_FAST_PLUS_MODE;
+	a_ctrl->io_master_info.cci_client->sid = (DW9827C_SLAVE_ADDR >> 1);
+	a_ctrl->io_master_info.cci_client->retries = 0;
+	a_ctrl->io_master_info.cci_client->id_map = 0;
+
+	rc = oplus_cam_actuator_power_up(a_ctrl);
+	if (rc < 0) {
+		CAM_ERR(CAM_ACTUATOR, "Failed for Actuator Power up failed: %d", rc);
+		return rc;
+	}
+	msleep(10);
+	rc = oplus_cam_actuator_ram_write(a_ctrl, DW9827C_STATE_ADDR, DW9827C_STANDBY_STATE);
+	if (rc < 0) {
+		CAM_ERR(CAM_ACTUATOR, "Failed write standby state: %d", rc);
+		goto error_hand;
+	}
+	msleep(5);
+	rc = oplus_cam_actuator_ram_write(a_ctrl, DW9827C_PT_ADDR, DW9827C_PT_OFF_STATE);
+	if (rc < 0) {
+		CAM_ERR(CAM_ACTUATOR, "Failed write pt off: %d", rc);
+		goto error_hand;
+	}
+
+	/*rc = oplus_cam_actuator_ram_read(a_ctrl, DW9827C_ID_ADDR, &ic_id);*/
+	if (!strstr(a_ctrl->actuator_name,"dw9827c")) {
+		CAM_INFO(CAM_ACTUATOR, "not dw9827c, no need update pid, id:0x%x", ic_id);
+		goto error_hand;
+	}
+
+	of_node = soc_info->dev->of_node;
+	rc = of_property_read_u32(of_node, "pid_version", &pid_version);
+	if (rc < 0) {
+		CAM_ERR(CAM_ACTUATOR, "Failed to get pid version: %d, exit", rc);
+		goto error_hand;
+	}
+
+	rc = oplus_cam_actuator_ram_read(a_ctrl, DW9827C_PID_VER_ADDR, &register_value);
+	if (rc < 0) {
+		CAM_ERR(CAM_ACTUATOR, "Failed to read dw9827c pid version: %d, exit", rc);
+		goto error_hand;
+	}
+
+	if(register_value != pid_version) {
+		is_update_pid = true;
+		CAM_ERR(CAM_ACTUATOR, "before updating, pid ver:0x%x, need update to ver:0x%x", register_value,pid_version);
+	}
+	else{
+		CAM_ERR(CAM_ACTUATOR, "It's newest pid ver:0x%x,no need to update", register_value);
+	}
+
+	if(is_update_pid) {
+		//1.get pid register
+		pid_register_size = of_property_count_u8_elems(of_node, "pid_register");
+		if (pid_register_size < 1) {
+			CAM_ERR(CAM_ACTUATOR, "pid_register_size < 1, is %d, return", pid_register_size);
+			goto error_hand;
+		}
+
+		pid_register = (uint8_t*)kzalloc(pid_register_size, GFP_KERNEL);
+		if (pid_register == NULL) {
+			CAM_ERR(CAM_ACTUATOR, "allocate pid register buffer failed");
+			goto error_hand;
+		}
+
+		rc = of_property_read_u8_array(of_node, "pid_register", pid_register, pid_register_size);
+		if (rc < 0) {
+			CAM_ERR(CAM_ACTUATOR, "Invalid fw_data params");
+			goto error_hand;
+		}
+
+		/*2.change to setting mode
+		rc = oplus_cam_actuator_ram_write(a_ctrl, DW9827C_WRITE_CONTROL_ADDR, 0x3B);
+		if (rc < 0) {
+			CAM_ERR(CAM_ACTUATOR, "write setting mode failed");
+			goto error_hand;
+		}*/
+
+		//3.write pid register
+		for (i = 0; i < pid_register_size; i = i + 2)
+		{
+			rc = oplus_cam_actuator_ram_write(a_ctrl, pid_register[i], pid_register[i + 1]);
+			if (rc < 0) {
+				CAM_ERR(CAM_ACTUATOR, "write pid setting failed");
+				goto error_hand;
+			}
+		}
+
+		//4.write store instruction
+		rc = oplus_cam_actuator_ram_write(a_ctrl, DW9827C_STORE_ADDR, 0x01);
+		if (rc < 0) {
+			CAM_ERR(CAM_ACTUATOR, "store pid setting failed");
+			goto error_hand;
+		}
+		msleep(50);
+
+		rc = oplus_cam_actuator_ram_write(a_ctrl, DW9827C_RESET_ADDR, 0x01);
+		if (rc < 0) {
+			CAM_ERR(CAM_ACTUATOR, "reset failed");
+			goto error_hand;
+		}
+		msleep(50);
+
+		/*rc = oplus_cam_actuator_ram_read(a_ctrl, DW9827C_DATA_CHECK_ADDR, &data_check_value);
+		CAM_ERR(CAM_ACTUATOR, "check pid setting 0x%x", data_check_value);
+		if (rc < 0 || (data_check_value & DW9827C_DATA_CHECK_BIT) != 0) {
+			CAM_ERR(CAM_ACTUATOR, "check pid setting failed");
+			goto error_hand;
+		}
+
+		4.go to release mode
+		rc = oplus_cam_actuator_ram_write(a_ctrl, DW9827C_WRITE_CONTROL_ADDR, 0x00);
+		if (rc < 0) {
+			CAM_ERR(CAM_ACTUATOR, "write release mode setting failed");
+			goto error_hand;
+		}*/
+
+		rc = oplus_cam_actuator_ram_read(a_ctrl, DW9827C_PID_VER_ADDR, &register_value);
+		if (rc < 0) {
+			CAM_ERR(CAM_ACTUATOR, "Failed to read dw9827c pid version, rc: %d", rc);
+			goto error_hand;
+		}
+		CAM_INFO(CAM_ACTUATOR, "after updating, pid ver:0x%x", register_value);
+		if (register_value != pid_version) {
+			CAM_ERR(CAM_ACTUATOR, "Failed to update dw9827c pid, version: %d", register_value);
+			goto error_hand;
+		} else {
+			CAM_ERR(CAM_ACTUATOR, "update dw9827c pid successfully");
+		}
+	} else {
+		CAM_ERR(CAM_ACTUATOR, "no need to update dw9827c pid");
+		rc = oplus_cam_actuator_power_down(a_ctrl);
+		return rc;
+	}
+
+	kfree(pid_register);
+	pid_register = NULL;
+	rc = oplus_cam_actuator_power_down(a_ctrl);
+	return rc;
+
+error_hand:
+	kfree(pid_register);
+	pid_register = NULL;
+	CAM_ERR(CAM_ACTUATOR, "update pid failed, rc: %d", rc);
+	rc = oplus_cam_actuator_power_down(a_ctrl);
+	return rc;
+}
+
 int oplus_cam_actuator_update_pid(void *arg)
 {
 	int rc = 0;
@@ -703,6 +867,8 @@ int oplus_cam_actuator_update_pid(void *arg)
 
 	if (strstr(a_ctrl->actuator_name, "ak7316")) {
 		rc = oplus_cam_actuator_update_pid_ak7316(a_ctrl);
+	} else if (strstr(a_ctrl->actuator_name, "dw9827c")) {
+		rc = oplus_cam_actuator_update_pid_dw9827c(a_ctrl);
 	} else {
 		CAM_ERR(CAM_ACTUATOR, "no actuator pid need update");
 	}
