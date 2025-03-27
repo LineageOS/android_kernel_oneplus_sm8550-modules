@@ -123,6 +123,14 @@
 #define FDE_FLAG_POS    4
 #define ENABLE_KEY_WRAP_IN_KS    (1 << FDE_FLAG_POS)
 
+/**
+ * For requests that get TZ busy, qseecom will
+ * put them on hold and re-send them after TZ
+ * free. The timeout for waiting TZ free is
+ * 30 seconds.
+ */
+#define TZ_BUSY_TIMEOUT_MSECS (30*1000)
+
 #define K_COPY_FROM_USER(err, dst, src, size) \
 	do {\
 		if (!(is_compat_task()))\
@@ -519,7 +527,7 @@ static void __qseecom_free_coherent_buf(uint32_t size,
 static int __qseecom_scm_call2_locked(uint32_t smc_id, struct qseecom_scm_desc *desc)
 {
 	int ret = 0;
-	int retry_count = 0;
+	unsigned long tz_busy_timeout = msecs_to_jiffies(TZ_BUSY_TIMEOUT_MSECS);
 
 	if (desc == NULL) {
 		pr_err("The value of desc is NULL.\n");
@@ -528,15 +536,45 @@ static int __qseecom_scm_call2_locked(uint32_t smc_id, struct qseecom_scm_desc *
 
 	do {
 		ret = qcom_scm_qseecom_call(smc_id, desc, false);
-		if ((ret == -EBUSY) || (desc && (desc->ret[0] == -QSEE_RESULT_FAIL_APP_BUSY))) {
+		if (ret != -EBUSY && desc->ret[0] != -QSEE_RESULT_FAIL_APP_BUSY) {
+			break;
+		}
+		if(qseecom.app_block_ref_cnt == 0){
 			mutex_unlock(&app_access_lock);
 			msleep(QSEECOM_SCM_EBUSY_WAIT_MS);
 			mutex_lock(&app_access_lock);
+			if(tz_busy_timeout >= msecs_to_jiffies(QSEECOM_SCM_EBUSY_WAIT_MS)){
+				tz_busy_timeout -= msecs_to_jiffies(QSEECOM_SCM_EBUSY_WAIT_MS);
+			} else {
+				tz_busy_timeout = 0;
+			}
+		} else {
+			mutex_unlock(&app_access_lock);
+			/* wait until no listener is active, or timeout/interrupted */
+			ret = wait_event_interruptible_timeout(qseecom.app_block_wq,
+				(!qseecom.app_block_ref_cnt), tz_busy_timeout);
+			mutex_lock(&app_access_lock);
+			/* no listner is active: re-send */
+			if(ret > 0){
+				tz_busy_timeout = ret;
+			}
+			/* interrupted or error */
+			else if (ret < 0){
+				pr_err("Waiting for TZ free is interrupted");
+				return ret;
+			} else {
+				/* timed out */
+				tz_busy_timeout = 0;
+			}
 		}
-		if (retry_count == 33)
-			pr_warn("secure world has been busy for 1 second!\n");
-	} while (((ret == -EBUSY) || (desc && (desc->ret[0] == -QSEE_RESULT_FAIL_APP_BUSY))) &&
-			(retry_count++ < QSEECOM_SCM_EBUSY_MAX_RETRY));
+		if(tz_busy_timeout == 0){
+			pr_err("Secure World has been busy for 30 seconds!");
+			ret = -EBUSY;
+			desc->ret[0] = -QSEE_RESULT_FAIL_APP_BUSY;
+			break;
+		}
+		pr_info_ratelimited("re-sending syscall with TZ busy");
+	} while (true);
 	return ret;
 }
 

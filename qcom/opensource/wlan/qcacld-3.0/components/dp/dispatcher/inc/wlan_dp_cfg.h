@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -338,7 +338,7 @@
 /*
  * <ini>
  * gTcpAdvWinScaleEnable - Control to enable  TCP adv window scaling
- * @Default: true
+ * @Default: false
  *
  * This ini is used to enable dynamic configuration of TCP adv window scaling
  * system parameter.
@@ -352,7 +352,7 @@
 #define CFG_DP_ENABLE_TCP_ADV_WIN_SCALE \
 		CFG_INI_BOOL( \
 		"gTcpAdvWinScaleEnable", \
-		true, \
+		false, \
 		"Control to enable  TCP adv window scaling")
 
 /*
