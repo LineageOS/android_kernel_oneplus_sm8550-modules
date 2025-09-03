@@ -2762,7 +2762,8 @@ void oplus_save_last_mode(struct dsi_display *display)
 		return;
 	}
 
-	if (!strcmp(display->panel->name, "AA551 P 3 A0004 dsc cmd mode panel")) {
+	if ((!strcmp(display->panel->name, "AA551 P 3 A0004 dsc cmd mode panel"))
+		|| (!strcmp(display->panel->name, "AC052 S 3 A0001 dsc cmd mode panel"))) {
 		display->panel->last_us_per_frame = display->panel->cur_mode->priv_info->vsync_period;
 		display->panel->last_vsync_width = display->panel->cur_mode->priv_info->vsync_width;
 		display->panel->last_refresh_rate = display->panel->cur_mode->timing.refresh_rate;
@@ -2850,6 +2851,45 @@ void oplus_panel_switch_to_sync_te(struct dsi_panel *panel)
 		}
 	}
 	SDE_ATRACE_END("oplus_panel_switch_to_sync_te");
+
+	return;
+}
+
+void oplus_panel_switch_to_sync_cur_te(struct dsi_panel *panel)
+{
+	s64 us_per_frame;
+	u32 vsync_width;
+	ktime_t last_te_timestamp;
+	int delay;
+	u32 vsync_cost = 0;
+
+	if (panel->power_mode != SDE_MODE_DPMS_ON || !panel->panel_initialized) {
+		LCD_INFO("display panel in off status\n");
+		return;
+	}
+
+	us_per_frame = panel->last_us_per_frame;
+	vsync_width = panel->last_vsync_width;
+	last_te_timestamp = panel->te_timestamp;
+
+	vsync_cost = ktime_to_us(ktime_sub(ktime_get(), last_te_timestamp)) % us_per_frame;
+	delay = vsync_width - vsync_cost;
+
+	SDE_ATRACE_BEGIN("oplus_need_to_sync_cur_te");
+	oplus_sde_early_wakeup(panel);
+	oplus_wait_for_vsync(panel);
+	DSI_INFO("%s,%d\n", __func__, __LINE__);
+	if (delay >= 0) {
+		if (panel->last_refresh_rate == 120) {
+			usleep_range(delay + 200, delay + 300);
+		} else if (panel->last_refresh_rate == 90) {
+			usleep_range(delay + 3000, delay + 3200);
+		} else if (panel->last_refresh_rate == 60) {
+			usleep_range(delay + 4000, delay + 4500);
+		}
+	}
+	DSI_INFO("%s,%d\n", __func__, __LINE__);
+	SDE_ATRACE_END("oplus_need_to_sync_cur_te");
 
 	return;
 }
