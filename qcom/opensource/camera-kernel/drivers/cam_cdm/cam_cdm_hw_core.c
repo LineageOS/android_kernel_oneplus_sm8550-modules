@@ -2363,9 +2363,15 @@ static int cam_hw_cdm_component_bind(struct device *dev,
 		len = strlcpy(work_q_name, cdm_hw->soc_info.label_name,
 				sizeof(work_q_name));
 		snprintf(work_q_name + len, sizeof(work_q_name) - len, "%d_%d", cdm_hw->soc_info.index, i);
+#ifdef OPLUS_FEATURE_CAMERA_COMMON
+		cdm_core->bl_fifo[i].work_queue = alloc_workqueue(work_q_name,
+                                WQ_UNBOUND | WQ_MEM_RECLAIM | WQ_SYSFS | WQ_HIGHPRI,
+                                CAM_CDM_INFLIGHT_WORKS);
+#else
 		cdm_core->bl_fifo[i].work_queue = alloc_workqueue(work_q_name,
 				WQ_UNBOUND | WQ_MEM_RECLAIM | WQ_SYSFS,
 				CAM_CDM_INFLIGHT_WORKS);
+#endif
 		if (!cdm_core->bl_fifo[i].work_queue) {
 			CAM_ERR(CAM_CDM,
 				"Workqueue allocation failed for FIFO %d, cdm %s",
