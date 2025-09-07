@@ -88,7 +88,6 @@ clk_option:
 #else
 		CAM_WARN(CAM_ISP, "Option clk get failed with rc %d", rc);
 #endif
-
 	rc = cam_soc_util_request_platform_resource(soc_info, tfe_irq_handler,
 		irq_data);
 
