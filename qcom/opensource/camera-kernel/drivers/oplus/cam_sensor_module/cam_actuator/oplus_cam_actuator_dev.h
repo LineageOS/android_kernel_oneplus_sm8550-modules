@@ -56,4 +56,3 @@ int oplus_cam_actuator_ram_read_extend(struct cam_actuator_ctrl_t *a_ctrl,
 	enum camera_sensor_i2c_type data_type);
 
 #endif /* _CAM_ACTUATOR_CORE_H_ */
-
