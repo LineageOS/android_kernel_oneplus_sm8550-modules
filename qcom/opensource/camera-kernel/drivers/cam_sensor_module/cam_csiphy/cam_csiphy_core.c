@@ -687,6 +687,7 @@ static int __cam_csiphy_parse_lane_info_cmd_buf(
 	uint32_t *cmd_buf = NULL;
 	struct cam_csiphy_info *cam_cmd_csiphy_info = NULL;
 	size_t len;
+
 	rc = cam_mem_get_cpu_buf(cmd_desc->mem_handle,
 		&generic_ptr, &len);
 	if (rc < 0) {
