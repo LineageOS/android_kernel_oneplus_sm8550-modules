@@ -1068,6 +1068,7 @@ int cam_flash_i2c_pkt_parser(struct cam_flash_ctrl *fctrl, void *arg)
 	if (!csl_packet->num_cmd_buf) {
 		CAM_ERR(CAM_FLASH, "Invalid num_cmd_buffer = %d",
 			csl_packet->num_cmd_buf);
+		cam_mem_put_cpu_buf(config.packet_handle);
 		return -EINVAL;
 	}
 
@@ -1091,6 +1092,7 @@ int cam_flash_i2c_pkt_parser(struct cam_flash_ctrl *fctrl, void *arg)
 	rc = cam_packet_util_validate_cmd_desc(cmd_desc);
 	if (rc) {
 		CAM_ERR(CAM_FLASH, "Invalid cmd desc ret: %d", rc);
+		cam_mem_put_cpu_buf(config.packet_handle);
 		return rc;
 	}
 
@@ -1301,8 +1303,10 @@ int cam_flash_i2c_pkt_parser(struct cam_flash_ctrl *fctrl, void *arg)
 			rc = fctrl->func_tbl.apply_setting(fctrl, csl_req_id);
 			if (rc) {
 				CAM_ERR(CAM_FLASH, "cannot apply fire settings rc = %d", rc);
+				cam_mem_put_cpu_buf(config.packet_handle);
 				return rc;
 			}
+			cam_mem_put_cpu_buf(config.packet_handle);
 			return rc;
 		}
 		break;
@@ -1329,6 +1333,7 @@ int cam_flash_i2c_pkt_parser(struct cam_flash_ctrl *fctrl, void *arg)
 		if (rc) {
 			CAM_ERR(CAM_FLASH,
 			"Failed in parsing i2c packets");
+			cam_mem_put_cpu_buf(config.packet_handle);
 			return rc;
 		}
 
@@ -1336,6 +1341,7 @@ int cam_flash_i2c_pkt_parser(struct cam_flash_ctrl *fctrl, void *arg)
 		rc = fctrl->func_tbl.apply_setting(fctrl, csl_req_id);
 		if (rc)
 			CAM_ERR(CAM_FLASH, "cannot apply init fire cmd rc = %d", rc);
+		cam_mem_put_cpu_buf(config.packet_handle);
 		return rc;
 	}
 	case CAM_FLASH_PACKET_OPCODE_NON_REALTIME_SET_OPS: {
@@ -1394,8 +1400,10 @@ int cam_flash_i2c_pkt_parser(struct cam_flash_ctrl *fctrl, void *arg)
 		goto update_req_mgr;
 	}
 	case CAM_FLASH_PACKET_OPCODE_STREAM_OFF: {
-		if (fctrl->streamoff_count > 0)
+		if (fctrl->streamoff_count > 0) {
+			cam_mem_put_cpu_buf(config.packet_handle);
 			return rc;
+		}
 
 		CAM_DBG(CAM_FLASH, "Received Stream off Settings");
 		i2c_data = &(fctrl->i2c_data);
@@ -1412,6 +1420,7 @@ int cam_flash_i2c_pkt_parser(struct cam_flash_ctrl *fctrl, void *arg)
 		if (rc) {
 			CAM_ERR(CAM_FLASH,
 			"Failed in parsing i2c Stream off packets");
+			cam_mem_put_cpu_buf(config.packet_handle);
 			return rc;
 		}
 		break;
