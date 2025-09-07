@@ -4199,7 +4199,7 @@ static int cam_isp_tfe_blob_update_out_resource_config(
 
 		hw_mgr_res = &ctx->res_list_tfe_out[res_id_out];
 
-		rc = cam_isp_add_cmd_buf_update(
+		rc = cam_isp_add_cmd_buf_update_crow(
 			hw_mgr_res, blob_type,
 			CAM_ISP_HW_CMD_WM_CONFIG_UPDATE,
 			blob_info->base_info->idx,
@@ -4293,7 +4293,7 @@ static int cam_isp_tfe_blob_hfr_update(
 			total_used_bytes/4;
 		hw_mgr_res = &ctx->res_list_tfe_out[res_id_out];
 
-		rc = cam_isp_add_cmd_buf_update(
+		rc = cam_isp_add_cmd_buf_update_crow(
 			hw_mgr_res, blob_type, CAM_ISP_HW_CMD_GET_HFR_UPDATE,
 			blob_info->base_info->idx,
 			(void *)cmd_buf_addr,
@@ -4552,7 +4552,7 @@ static int cam_isp_tfe_blob_bw_limit_update(
 
 		hw_mgr_res = &ctx->res_list_tfe_out[res_id_out];
 
-		rc = cam_isp_add_cmd_buf_update(
+		rc = cam_isp_add_cmd_buf_update_crow(
 			hw_mgr_res, blob_type,
 			CAM_ISP_HW_CMD_WM_BW_LIMIT_CONFIG,
 			blob_info->base_info->idx,
@@ -4560,6 +4560,7 @@ static int cam_isp_tfe_blob_bw_limit_update(
 			kmd_buf_remain_size,
 			(void *)wm_bw_limit_cfg,
 			&bytes_used);
+
 		if (rc < 0) {
 			CAM_ERR(CAM_ISP,
 				"Failed to update %s BW limiter config for res:0x%x enable:%d [0x%x:0x%x] base_idx:%d bytes_used:%u rc:%d",
@@ -5489,14 +5490,14 @@ static int cam_tfe_mgr_prepare_hw_update(void *hw_mgr_priv,
 		prepare_hw_data->wm_bitmask = ctx->acquired_wm_mask;
 
 		/* get IO buffers */
-		rc = cam_isp_add_io_buffers(hw_mgr->mgr_common.img_iommu_hdl,
-			hw_mgr->mgr_common.img_iommu_hdl_secure,
-			prepare, ctx->base[i].idx,
-			&prepare_hw_data->kmd_cmd_buff_info, ctx->res_list_tfe_out,
-			NULL, CAM_ISP_TFE_OUT_RES_BASE,
-			CAM_TFE_HW_OUT_RES_MAX, fill_fence,
-			CAM_ISP_HW_TYPE_TFE,
-			&frame_header_info, &check_for_scratch);
+		rc = cam_isp_add_io_buffers_crow(hw_mgr->mgr_common.img_iommu_hdl,
+				hw_mgr->mgr_common.img_iommu_hdl_secure,
+				prepare, ctx->base[i].idx,
+				&prepare_hw_data->kmd_cmd_buff_info, ctx->res_list_tfe_out,
+				NULL, CAM_ISP_TFE_OUT_RES_BASE,
+				CAM_TFE_HW_OUT_RES_MAX, fill_fence,
+				CAM_ISP_HW_TYPE_TFE,
+				&frame_header_info, &check_for_scratch);
 
 		if (rc) {
 			CAM_ERR(CAM_ISP,
@@ -5797,8 +5798,7 @@ static void cam_tfe_mgr_dump_pf_data(
 
 	pf_cmd_args = hw_cmd_args->u.pf_cmd_args;
 	rc = cam_packet_util_get_packet_addr(&packet,
-		pf_cmd_args->pf_req_info->packet_handle,
-		pf_cmd_args->pf_req_info->packet_offset);
+		pf_cmd_args->pf_req_info->packet_handle, pf_cmd_args->pf_req_info->packet_offset);
 	if (rc)
 		return;
 	ctx_found = &pf_cmd_args->pf_args->pf_context_info.ctx_found;
