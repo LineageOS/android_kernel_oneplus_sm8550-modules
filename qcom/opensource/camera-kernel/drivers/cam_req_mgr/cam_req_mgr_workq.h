@@ -31,6 +31,10 @@
  */
 #define CAM_WORKQ_FLAG_SERIAL                    (1 << 1)
 
+#ifdef OPLUS_FEATURE_CAMERA_COMMON
+#define CAM_WORKQ_FLAG_UX                        (1 << 2)
+#endif
+
 /* Task priorities, lower the number higher the priority*/
 enum crm_task_priority {
 	CRM_TASK_PRIORITY_0,
