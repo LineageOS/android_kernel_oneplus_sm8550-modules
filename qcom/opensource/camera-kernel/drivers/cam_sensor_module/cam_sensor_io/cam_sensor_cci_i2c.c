@@ -98,11 +98,9 @@ int32_t cam_camera_cci_i2c_read_seq(struct cam_sensor_cci_client *cci_client,
 	kfree(buf);
 	return rc;
 }
-
 #ifdef OPLUS_FEATURE_CAMERA_COMMON
 #define MAX_IIC_REGISTER_COUNT 10
 #endif
-
 static int32_t cam_cci_i2c_write_table_cmd(
 	struct camera_io_master *client,
 	struct cam_sensor_i2c_reg_setting *write_setting,
