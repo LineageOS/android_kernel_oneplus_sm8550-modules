@@ -1906,6 +1906,9 @@ static int cam_sync_component_bind(struct device *dev,
 	int rc;
 	int idx;
 	struct platform_device *pdev = to_platform_device(dev);
+#ifdef OPLUS_FEATURE_CAMERA_COMMON
+	unsigned int flags = (WQ_HIGHPRI | WQ_UNBOUND);
+#endif
 
 	sync_dev = kzalloc(sizeof(*sync_dev), GFP_KERNEL);
 	if (!sync_dev)
@@ -1961,8 +1964,20 @@ static int cam_sync_component_bind(struct device *dev,
 	 */
 	set_bit(0, sync_dev->bitmap);
 
+#ifdef OPLUS_FEATURE_CAMERA_COMMON
+
+	if (of_property_read_bool(pdev->dev.of_node, "sync-workq-setUX"))
+	{
+		flags = (WQ_HIGHPRI | WQ_UNBOUND);
+		CAM_INFO(CAM_UTIL, "sync workq create flag: WQ_HIGHPRI | WQ_UNBOUND");
+	}
+	sync_dev->work_queue = alloc_workqueue(CAM_SYNC_WORKQUEUE_NAME,
+		flags, 1);
+#else
+
 	sync_dev->work_queue = alloc_workqueue(CAM_SYNC_WORKQUEUE_NAME,
 		WQ_HIGHPRI | WQ_UNBOUND, 1);
+#endif
 
 	if (!sync_dev->work_queue) {
 		CAM_ERR(CAM_SYNC,
