@@ -1352,7 +1352,6 @@ static void __cam_isp_ctx_send_unified_timestamp(
 #ifdef OPLUS_FEATURE_CAMERA_COMMON
 	req_msg.reserved = 0;
 #endif
-
 	CAM_DBG(CAM_ISP,
 		"link hdl 0x%x request id:%lld frame number:%lld SOF time stamp:0x%llx ctx %d\
 		boot time stamp:0x%llx", ctx_isp->base->link_hdl, request_id,
