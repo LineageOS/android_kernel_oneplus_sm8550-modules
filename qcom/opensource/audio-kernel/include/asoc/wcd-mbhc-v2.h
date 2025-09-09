@@ -683,6 +683,7 @@ struct wcd_mbhc {
 	/* headset detect mode, 0:cc detect, 1:gpio detect */
 	unsigned int headset_detect_mode;
 	#endif /* OPLUS_ARCH_EXTENDS */
+
 };
 
 void wcd_mbhc_find_plug_and_report(struct wcd_mbhc *mbhc,
