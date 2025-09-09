@@ -40,6 +40,11 @@
 #define TZ_PIL_CLEAR_PROTECT_MEM_SUBSYS_ID 0x0D
 #define MSM_AUDIO_ION_DRIVER_NAME "msm_audio_ion"
 #define MINOR_NUMBER_COUNT 1
+
+#undef pr_debug
+#define pr_debug pr_err
+#undef dev_dbg
+#define dev_dbg dev_err
 struct msm_audio_ion_private {
 	bool smmu_enabled;
 	struct device *cb_dev;
@@ -860,6 +865,7 @@ static int msm_audio_ion_reg_chrdev(struct msm_audio_ion_private *ion_data)
 		pr_err("%s cdev add failed, ret : %d\n", __func__, ret);
 		goto err_cdev;
 	}
+	pr_err("%s success ret : %d\n", __func__, ret);
 	return ret;
 
 err_cdev:
@@ -868,6 +874,7 @@ err_device:
 	class_destroy(ion_data->ion_class);
 err_class:
 	unregister_chrdev_region(0, MINOR_NUMBER_COUNT);
+	pr_err("%s failed ret : %d\n", __func__, ret);
 	return ret;
 }
 
@@ -968,6 +975,7 @@ static int msm_audio_ion_probe(struct platform_device *pdev)
 			smmu_sid << MSM_AUDIO_SMMU_SID_OFFSET;
 	} else {
 		msm_audio_ion_data->driver_name = "msm_audio_ion_cma";
+		dev_err(dev, "%s: SMMU is not Enabled \n", __func__);
 	}
 
 	if (!rc)
@@ -987,6 +995,7 @@ static int msm_audio_ion_probe(struct platform_device *pdev)
 		pr_err("%s register char dev failed, rc : %d", __func__, rc);
 		return rc;
 	}
+	pr_err("%s success, rc : %d", __func__, rc);
 	return rc;
 }
 
