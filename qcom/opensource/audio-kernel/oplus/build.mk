@@ -29,7 +29,6 @@ include $(DLKM_DIR)/Build_external_kernelmodule.mk
 ###########################################################
 
 ########################### TFA98xx-v6 CODEC  ###########################
-#ifdef OPLUS_ARCH_EXTENDS
 #add for tfa98xx bringup
 include $(CLEAR_VARS)
 LOCAL_SRC_FILES           := $(OPLUS_AUDIO_SRC_FILES)
@@ -39,7 +38,18 @@ LOCAL_MODULE_TAGS         := optional
 LOCAL_MODULE_DEBUG_ENABLE := true
 LOCAL_MODULE_PATH         := $(KERNEL_MODULES_OUT)
 include $(DLKM_DIR)/Build_external_kernelmodule.mk
-#endif /* OPLUS_ARCH_EXTENDS */
+###########################################################
+
+########################### AW882XX CODEC  ###########################
+#add for aw882xx bringup
+include $(CLEAR_VARS)
+LOCAL_SRC_FILES           := $(OPLUS_AUDIO_SRC_FILES)
+LOCAL_MODULE              := oplus_audio_aw882xx.ko
+LOCAL_MODULE_KBUILD_NAME  := oplus/codecs/aw882xx/oplus_audio_aw882xx.ko
+LOCAL_MODULE_TAGS         := optional
+LOCAL_MODULE_DEBUG_ENABLE := true
+LOCAL_MODULE_PATH         := $(KERNEL_MODULES_OUT)
+include $(DLKM_DIR)/Build_external_kernelmodule.mk
 ###########################################################
 
 endif # audio-kernel
