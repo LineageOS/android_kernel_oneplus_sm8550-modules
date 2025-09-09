@@ -31,7 +31,12 @@
 #define APM_CMD_RSP_GET_SPF_STATE 0x02001007
 #define APM_MODULE_INSTANCE_ID   0x00000001
 #define GPR_SVC_ADSP_CORE 0x3
+#ifndef OPLUS_ARCH_EXTENDS
+/* fix sound card register fail when apm is not up, CR3674086 */
 #define ADD_CHILD_DEVICES_APM_TIMEOUT_MS 5000
+#else /* OPLUS_ARCH_EXTENDS */
+#define ADD_CHILD_DEVICES_APM_TIMEOUT_MS 10000
+#endif /* OPLUS_ARCH_EXTENDS */
 
 struct spf_core {
 	struct gpr_device *adev;
@@ -174,6 +179,10 @@ bool spf_core_is_apm_ready(int timeout_ms)
 
 	timeout = jiffies + msecs_to_jiffies(timeout_ms);
 	mutex_lock(&core->lock);
+
+	/* sleep for 100ms before querying AVS up */
+	msleep(100);
+
 	for (;;) {
 		if (__spf_core_is_apm_ready(core)) {
 			ret = true;
