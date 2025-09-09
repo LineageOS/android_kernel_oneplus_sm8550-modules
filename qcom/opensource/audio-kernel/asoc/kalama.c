@@ -161,7 +161,12 @@ static bool msm_usbc_swap_gnd_mic(struct snd_soc_component *component, bool acti
 		return ret;
 
 	if (pdata->fsa_handle) {
+		#ifndef OPLUS_ARCH_EXTENDS
+		/* fsa4480_switch_event will return 0 when excute success */
 		ret = fsa4480_switch_event(pdata->fsa_handle, FSA_MIC_GND_SWAP);
+		#else /* OPLUS_ARCH_EXTENDS */
+		ret = (0 == fsa4480_switch_event(pdata->fsa_handle, FSA_MIC_GND_SWAP));
+		#endif /* OPLUS_ARCH_EXTENDS */
 	} else {
 #if IS_ENABLED(CONFIG_QCOM_WCD_USBSS_I2C)
 		ret = wcd_usbss_switch_update(WCD_USBSS_GND_MIC_SWAP_AATC,
