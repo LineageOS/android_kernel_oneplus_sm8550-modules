@@ -155,7 +155,9 @@ static void tfa98xx_interrupt_enable(struct tfa98xx *tfa98xx, bool enable);
 
 static int get_profile_from_list(char *buf, int id);
 static int get_profile_id_for_sr(int id, unsigned int rate);
+#ifdef OPLUS_FEATURE_TFA98XX_VI_FEEDBACK
 static enum Tfa98xx_Error tfa9874_calibrate(struct tfa98xx *tfa98xx, int *speakerImpedance);
+#endif /* OPLUS_FEATURE_TFA98XX_VI_FEEDBACK */
 
 #ifdef OPLUS_ARCH_EXTENDS
 /*Add for calibration range*/
@@ -604,6 +606,7 @@ static const struct proc_ops tfa98xx_debug_ops =
 };
 #endif /* OPLUS_ARCH_EXTENDS */
 
+#ifdef OPLUS_FEATURE_TFA98XX_VI_FEEDBACK
 static enum Tfa98xx_Error tfa9874_calibrate(struct tfa98xx *tfa98xx_cal, int *speakerImpedance)
 {
 	enum Tfa98xx_Error err;
@@ -826,6 +829,8 @@ static enum Tfa98xx_Error tfa9874_calibrate(struct tfa98xx *tfa98xx_cal, int *sp
 
 	return Tfa98xx_Error_Ok;
 }
+#endif /* OPLUS_FEATURE_TFA98XX_VI_FEEDBACK */
+
 /* Wrapper for tfa start */
 static enum tfa_error tfa98xx_tfa_start(struct tfa98xx *tfa98xx, int next_profile, int vstep)
 {
@@ -1327,6 +1332,7 @@ static ssize_t tfa98xx_dbgfs_start_set(struct file *file,
 	return count;
 }
 
+#ifdef OPLUS_FEATURE_TFA98XX_VI_FEEDBACK
 #ifdef OPLUS_ARCH_EXTENDS
 /*Add for speaker resistance*/
 static int tfa98xx_speaker_recalibration_v6(struct tfa_device *tfa, int *speakerImpedance)
@@ -1362,6 +1368,7 @@ static int tfa98xx_speaker_recalibration_v6(struct tfa_device *tfa, int *speaker
 	return error;
 }
 #endif /* OPLUS_ARCH_EXTENDS */
+#endif /* OPLUS_FEATURE_TFA98XX_VI_FEEDBACK */
 
 
 static ssize_t tfa98xx_fres_write(struct file *file,
@@ -1480,6 +1487,7 @@ fres_err:
 	return ret;
 }
 
+#ifdef OPLUS_FEATURE_TFA98XX_VI_FEEDBACK
 static ssize_t tfa98xx_dbgfs_r_read(struct file *file,
 				     char __user *user_buf, size_t count,
 				     loff_t *ppos)
@@ -1581,6 +1589,15 @@ r_c_err:
 	mutex_unlock(&tfa98xx->dsp_lock);
 	return ret;
 }
+#else /* OPLUS_FEATURE_TFA98XX_VI_FEEDBACK */
+static ssize_t tfa98xx_dbgfs_r_read(struct file *file,
+				     char __user *user_buf, size_t count,
+				     loff_t *ppos)
+{
+	pr_info("tfa98xx driver does not support calibration\n");
+	return -EINVAL;
+}
+#endif /* OPLUS_FEATURE_TFA98XX_VI_FEEDBACK */
 
 #ifdef OPLUS_ARCH_EXTENDS
 /*Add for calibration range*/
@@ -5662,12 +5679,7 @@ static int tfa98xx_i2c_remove(struct i2c_client *i2c)
 	}
 	#endif /* OPLUS_ARCH_EXTENDS */
 
-#if (LINUX_VERSION_CODE >= KERNEL_VERSION(6, 1, 0))
-	if (gpio_is_valid(tfa98xx->irq_gpio))
-		gpio_free(tfa98xx->irq_gpio);
-	if (gpio_is_valid(tfa98xx->reset_gpio))
-		gpio_free(tfa98xx->reset_gpio);
-#else /* KERNEL_VERSION(6, 1, 0) */
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(6, 1, 0))
 	if (gpio_is_valid(tfa98xx->irq_gpio))
 		devm_gpio_free(&i2c->dev, tfa98xx->irq_gpio);
 	if (gpio_is_valid(tfa98xx->reset_gpio))
