@@ -3686,11 +3686,14 @@ enum Tfa98xx_Error tfa_dsp_get_resonance_frequency(struct tfa_device *tfa, uint1
 enum Tfa98xx_Error tfa_dsp_get_calibration_impedance_v6(struct tfa_device *tfa)
 {
 	enum Tfa98xx_Error error = Tfa98xx_Error_Ok;
+	int i=0, spkr_count=0;
+#ifdef OPLUS_FEATURE_TFA98XX_VI_FEEDBACK
 	char *bytes = NULL;
 	int *data = NULL;
-	int nr_bytes, i, calibrateDone, spkr_count=0, cal_idx=0;
+	int nr_bytes, calibrateDone, cal_idx=0;
 	unsigned int scaled_data;
 	int tries=0;
+#endif /* OPLUS_FEATURE_TFA98XX_VI_FEEDBACK */
 
 	error = tfa_supported_speakers(tfa, &spkr_count);
 
@@ -3713,6 +3716,7 @@ enum Tfa98xx_Error tfa_dsp_get_calibration_impedance_v6(struct tfa_device *tfa)
 			tfa->mohm[0] = tfa_dev_mtp_get(tfa, TFA_MTP_RE25);
 		}
 	} else {
+#ifdef OPLUS_FEATURE_TFA98XX_VI_FEEDBACK
 		pr_debug("Getting calibration values from Speakerboost\n");
 
 		/* Make sure the calibrateDone bit is set before getting the values from speakerboost!
@@ -3782,6 +3786,10 @@ enum Tfa98xx_Error tfa_dsp_get_calibration_impedance_v6(struct tfa_device *tfa)
 		}
 		kfree(bytes);
 		kfree(data);
+#else /* OPLUS_FEATURE_TFA98XX_VI_FEEDBACK */
+		pr_info("%s: MTP_OTC value is %d\n", __func__, tfa_dev_mtp_get(tfa, TFA_MTP_OTC));
+		error = Tfa98xx_Error_Fail;
+#endif /* OPLUS_FEATURE_TFA98XX_VI_FEEDBACK */
 	}
 
 	return error;

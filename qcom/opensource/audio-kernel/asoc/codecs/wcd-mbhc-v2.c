@@ -2048,6 +2048,10 @@ static int wcd_mbhc_usbc_ana_event_handler(struct notifier_block *nb,
 		return -EINVAL;
 
 	#ifndef OPLUS_ARCH_EXTENDS
+	/* Modify for log */
+	dev_dbg(mbhc->component->dev, "%s: mode = %lu\n", __func__, mode);
+	#else /* OPLUS_ARCH_EXTENDS */
+	dev_info(mbhc->component->dev, "%s: mode = %lu\n", __func__, mode);
 	/* Fix the l_det status when plug out after insertion */
 	mbhc->usbc_mode = mode;
 	#endif /* OPLUS_ARCH_EXTENDS */
@@ -2072,19 +2076,6 @@ static int wcd_mbhc_usbc_ana_event_handler(struct notifier_block *nb,
 		if (mbhc->mbhc_cb->clk_setup)
 			mbhc->mbhc_cb->clk_setup(mbhc->component, true);
 		WCD_MBHC_REG_UPDATE_BITS(WCD_MBHC_L_DET_EN, 1);
-		#ifdef OPLUS_ARCH_EXTENDS
-		/* Fix the l_det status when plug out after insertion */
-		mbhc->usbc_l_det_en = true;
-		#endif /* OPLUS_ARCH_EXTENDS */
-	#ifdef OPLUS_ARCH_EXTENDS
-	/* Add for fix headset not correct after ssr */
-		wcd_mbhc_plug_fix_after_ssr(mbhc);
-		/* for gpio detect, donot close L_det */
-		if (mbhc->headset_detect_mode != 1) {
-			/* Fix the l_det status when plug out after insertion */
-			wcd_mbhc_usbc_ana_remove_handler(mbhc);
-		}
-	#endif /* OPLUS_ARCH_EXTENDS */
 #if IS_ENABLED(CONFIG_QCOM_WCD_USBSS_I2C)
 		if (mbhc->wcd_aatc_dev_np) {
 			if (unlikely((mbhc->mbhc_cb->lock_sleep(mbhc, true)) == false))
@@ -2096,6 +2087,11 @@ static int wcd_mbhc_usbc_ana_event_handler(struct notifier_block *nb,
 			}
 		}
 #endif
+		#ifdef OPLUS_ARCH_EXTENDS
+		/* Fix the l_det status when plug out after insertion */
+		mbhc->usbc_l_det_en = true;
+		#endif /* OPLUS_ARCH_EXTENDS */
+
 	} else if (mode < TYPEC_MAX_ACCESSORY) {
 #if IS_ENABLED(CONFIG_QCOM_WCD_USBSS_I2C)
 		if (mbhc->wcd_aatc_dev_np) {
@@ -2114,6 +2110,16 @@ static int wcd_mbhc_usbc_ana_event_handler(struct notifier_block *nb,
 			}
 		}
 #endif
+		#ifdef OPLUS_ARCH_EXTENDS
+		/* Add for fix headset not correct after ssr */
+		wcd_mbhc_plug_fix_after_ssr(mbhc);
+		/* for gpio detect, donot close L_det */
+		if (mbhc->headset_detect_mode != 1) {
+			/* Fix the l_det status when plug out after insertion */
+			wcd_mbhc_usbc_ana_remove_handler(mbhc);
+		}
+		#endif /* OPLUS_ARCH_EXTENDS */
+
 	} else if (mode == TYPEC_MAX_ACCESSORY) {
 		if (mbhc->mbhc_cb->surge_reset_routine)
 			mbhc->mbhc_cb->surge_reset_routine(mbhc);
@@ -2182,7 +2188,6 @@ int wcd_mbhc_start(struct wcd_mbhc *mbhc, struct wcd_mbhc_config *mbhc_cfg)
 			goto err;
 		}
 	}
-
 	/* Disable moisture detect and duty cycle for WCD USB AATC HS*/
 	if (mbhc_cfg->enable_usbc_analog) {
 		mbhc_cfg->moisture_en = false;
@@ -2259,23 +2264,25 @@ int wcd_mbhc_start(struct wcd_mbhc *mbhc, struct wcd_mbhc_config *mbhc_cfg)
 		if (mbhc->wcd_aatc_dev_np)
 			rc = wcd_usbss_reg_notifier(&mbhc->aatc_dev_nb, mbhc->wcd_aatc_dev_np);
 #endif
-		if (mbhc->fsa_aatc_dev_np)
+		if (mbhc->fsa_aatc_dev_np) {
 			rc = fsa4480_reg_notifier(&mbhc->aatc_dev_nb, mbhc->fsa_aatc_dev_np);
 
-		#ifdef OPLUS_ARCH_EXTENDS
-		/* decouple mbhc register from fsa4480 states */
-		if (rc) {
-			pr_info("%s fsa4480_reg_notifier fail,rc = %d", __func__, rc);
-			rc = 0;
+			#ifdef OPLUS_ARCH_EXTENDS
+			/* decouple mbhc register from fsa4480 states */
+			if (rc) {
+				pr_info("%s fsa4480_reg_notifier fail,rc = %d", __func__, rc);
+				rc = 0;
+			}
+
+			/* if dts not enable, check switch config */
+			if (!mbhc->need_cross_conn) {
+				/* Add for dynamic check cross */
+				mbhc->need_cross_conn = fsa4480_check_cross_conn(mbhc->fsa_aatc_dev_np);
+				pr_info("%s: after switch check, need_cross_conn(%d)\n", __func__, mbhc->need_cross_conn);
+			}
+			#endif /* OPLUS_ARCH_EXTENDS */
 		}
 
-		/* if dts not enable, check switch config */
-		if (!mbhc->need_cross_conn) {
-			/* Add for dynamic check cross */
-			mbhc->need_cross_conn = fsa4480_check_cross_conn(mbhc->fsa_aatc_dev_np);
-			pr_info("%s: after switch check, need_cross_conn(%d)\n", __func__, mbhc->need_cross_conn);
-		}
-		#endif /* OPLUS_ARCH_EXTENDS */
 	}
 
 	#ifdef OPLUS_ARCH_EXTENDS
@@ -2317,6 +2324,7 @@ void wcd_mbhc_stop(struct wcd_mbhc *mbhc)
 		mbhc->mbhc_fw = NULL;
 		mbhc->mbhc_cal = NULL;
 	}
+
 #if IS_ENABLED(CONFIG_QCOM_WCD_USBSS_I2C)
 	if (mbhc->mbhc_cfg->enable_usbc_analog && mbhc->wcd_aatc_dev_np)
 		wcd_usbss_unreg_notifier(&mbhc->aatc_dev_nb, mbhc->wcd_aatc_dev_np);
@@ -2415,11 +2423,6 @@ int wcd_mbhc_init(struct wcd_mbhc *mbhc, struct snd_soc_component *component,
 		mbhc->moist_rref = hph_moist_config[2];
 	}
 
-	mbhc->wcd_aatc_dev_np = of_parse_phandle(card->dev->of_node,
-					"wcd939x-i2c-handle", 0);
-	mbhc->fsa_aatc_dev_np = of_parse_phandle(card->dev->of_node,
-					"fsa4480-i2c-handle", 0);
-
 	#ifdef OPLUS_ARCH_EXTENDS
 	/* Add for mbhc cross connection */
 	ret = of_property_read_u32(card->dev->of_node, mbhc_cross_conn,
@@ -2456,7 +2459,7 @@ int wcd_mbhc_init(struct wcd_mbhc *mbhc, struct snd_soc_component *component,
 	}
 	#endif /* OPLUS_ARCH_EXTENDS */
 
-	 #ifdef OPLUS_ARCH_EXTENDS
+	#ifdef OPLUS_ARCH_EXTENDS
 	/* workaround to fix headset recording pop noise */
 	ret = of_property_read_u32(card->dev->of_node, mbhc_headset_micbias_alwayon,
 				&headset_micbias_alwayon);
@@ -2491,6 +2494,11 @@ int wcd_mbhc_init(struct wcd_mbhc *mbhc, struct snd_soc_component *component,
 		}
 	}
 	#endif /* OPLUS_ARCH_EXTENDS */
+
+	mbhc->wcd_aatc_dev_np = of_parse_phandle(card->dev->of_node,
+					"wcd939x-i2c-handle", 0);
+	mbhc->fsa_aatc_dev_np = of_parse_phandle(card->dev->of_node,
+					"fsa4480-i2c-handle", 0);
 
 	mbhc->in_swch_irq_handler = false;
 	mbhc->current_plug = MBHC_PLUG_TYPE_NONE;
