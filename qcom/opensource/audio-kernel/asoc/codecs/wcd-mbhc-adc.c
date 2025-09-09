@@ -383,7 +383,7 @@ static int wcd_check_cross_conn(struct wcd_mbhc *mbhc)
 	hphr_cross_conn_thr = (mbhc->hphr_cross_conn_thr * micbias_mv) / WCD_MBHC_ADC_MICBIAS_MV;
 	pr_debug("%s: hphl_cross_conn_thr = %d\n", __func__, hphl_cross_conn_thr);
 	pr_debug("%s: hphr_cross_conn_thr = %d\n", __func__, hphr_cross_conn_thr);
-	if (hphl_adc_res > hphl_cross_conn_thr ||
+	if (hphl_adc_res > hphl_cross_conn_thr &&
 	    hphr_adc_res > hphr_cross_conn_thr) {
 		plug_type = MBHC_PLUG_TYPE_GND_MIC_SWAP;
 		pr_debug("%s: Cross connection identified\n", __func__);
