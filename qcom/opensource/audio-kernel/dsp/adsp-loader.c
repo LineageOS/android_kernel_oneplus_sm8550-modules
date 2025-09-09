@@ -20,7 +20,6 @@
 #include <linux/remoteproc.h>
 #include <linux/remoteproc/qcom_rproc.h>
 
-
 #define Q6_PIL_GET_DELAY_MS 100
 #define BOOT_CMD 1
 #define SSR_RESET_CMD 1
@@ -174,6 +173,10 @@ static ssize_t adsp_ssr_store(struct kobject *kobj,
 	struct platform_device *pdev = adsp_private;
 	struct adsp_loader_private *priv = NULL;
 
+	if (!pdev) {
+		pr_err("%s: Platform device null\n", __func__);
+		return -EINVAL;
+	}
 	dev_dbg(&pdev->dev, "%s: going to call adsp ssr\n ", __func__);
 
 	priv = platform_get_drvdata(pdev);
