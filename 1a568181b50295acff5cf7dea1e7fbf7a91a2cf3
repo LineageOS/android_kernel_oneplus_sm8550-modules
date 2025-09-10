@@ -1,0 +1,21 @@
+{
+  "comments": [
+    {
+      "unresolved": false,
+      "key": {
+        "uuid": "4ad2615d_f09e2044",
+        "filename": "/PATCHSET_LEVEL",
+        "patchSetId": 1
+      },
+      "lineNbr": 0,
+      "author": {
+        "id": 30975
+      },
+      "writtenOn": "2025-09-10T08:37:10Z",
+      "side": 1,
+      "message": "May be follow the similar changes like did in sm8650.\n\nhttps://github.com/LineageOS/android_kernel_oneplus_sm8650-modules/commit/87ff79869cc2a033a3ff1b51420571dfa8e43f04",
+      "revId": "1a568181b50295acff5cf7dea1e7fbf7a91a2cf3",
+      "serverId": "1ec6b3db-b2c1-4fa4-84a2-4c7efe89ba71"
+    }
+  ]
+}
