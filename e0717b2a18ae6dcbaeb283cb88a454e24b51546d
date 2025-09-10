@@ -1,0 +1,38 @@
+{
+  "comments": [
+    {
+      "unresolved": true,
+      "key": {
+        "uuid": "fc88991d_bf2a1b27",
+        "filename": "qcom/opensource/wlan/qcacld-3.0/Kbuild",
+        "patchSetId": 1
+      },
+      "lineNbr": 182,
+      "author": {
+        "id": 30975
+      },
+      "writtenOn": "2025-09-10T08:32:08Z",
+      "side": 1,
+      "message": "Do we need this?",
+      "revId": "e0717b2a18ae6dcbaeb283cb88a454e24b51546d",
+      "serverId": "1ec6b3db-b2c1-4fa4-84a2-4c7efe89ba71"
+    },
+    {
+      "unresolved": true,
+      "key": {
+        "uuid": "f5e11329_eceea096",
+        "filename": "qcom/opensource/wlan/qcacld-3.0/configs/qca6750_defconfig",
+        "patchSetId": 1
+      },
+      "lineNbr": 5,
+      "author": {
+        "id": 30975
+      },
+      "writtenOn": "2025-09-10T08:32:08Z",
+      "side": 1,
+      "message": "It seems like this is not an Oplus-specific change.",
+      "revId": "e0717b2a18ae6dcbaeb283cb88a454e24b51546d",
+      "serverId": "1ec6b3db-b2c1-4fa4-84a2-4c7efe89ba71"
+    }
+  ]
+}
