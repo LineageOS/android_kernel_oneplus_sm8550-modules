@@ -51,6 +51,24 @@
       "message": "It seems like this is not an Oplus-specific change.",
       "revId": "e0717b2a18ae6dcbaeb283cb88a454e24b51546d",
       "serverId": "1ec6b3db-b2c1-4fa4-84a2-4c7efe89ba71"
+    },
+    {
+      "unresolved": true,
+      "key": {
+        "uuid": "5169b092_199e6bb1",
+        "filename": "qcom/opensource/wlan/qcacld-3.0/configs/qca6750_defconfig",
+        "patchSetId": 1
+      },
+      "lineNbr": 5,
+      "author": {
+        "id": 30975
+      },
+      "writtenOn": "2025-09-10T09:04:24Z",
+      "side": 1,
+      "message": "As this is a Qualcomm change, it\u0027s preferable to use the following commit:\n\nhttps://git.codelinaro.org/clo/la/platform/vendor/qcom-opensource/wlan/qcacld-3.0/-/commit/bee4e7589e99d3a9e8dab1751fea976204d2ead5",
+      "parentUuid": "f5e11329_eceea096",
+      "revId": "e0717b2a18ae6dcbaeb283cb88a454e24b51546d",
+      "serverId": "1ec6b3db-b2c1-4fa4-84a2-4c7efe89ba71"
     }
   ]
 }
