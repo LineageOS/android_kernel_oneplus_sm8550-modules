@@ -69,6 +69,24 @@
       "parentUuid": "f5e11329_eceea096",
       "revId": "e0717b2a18ae6dcbaeb283cb88a454e24b51546d",
       "serverId": "1ec6b3db-b2c1-4fa4-84a2-4c7efe89ba71"
+    },
+    {
+      "unresolved": false,
+      "key": {
+        "uuid": "25ef4c93_748b3360",
+        "filename": "qcom/opensource/wlan/qcacld-3.0/configs/qca6750_defconfig",
+        "patchSetId": 1
+      },
+      "lineNbr": 5,
+      "author": {
+        "id": 32811
+      },
+      "writtenOn": "2025-09-10T09:12:05Z",
+      "side": 1,
+      "message": "Acknowledged",
+      "parentUuid": "5169b092_199e6bb1",
+      "revId": "e0717b2a18ae6dcbaeb283cb88a454e24b51546d",
+      "serverId": "1ec6b3db-b2c1-4fa4-84a2-4c7efe89ba71"
     }
   ]
 }
