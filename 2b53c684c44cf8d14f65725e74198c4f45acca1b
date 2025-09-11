@@ -16,6 +16,24 @@
       "message": "Here in this repo I would like to keep the full history. Since the initial import, clang fixes and all patches that we add on top of oplus drivers.\n\nThe idea is to force-push only kernel.",
       "revId": "2b53c684c44cf8d14f65725e74198c4f45acca1b",
       "serverId": "1ec6b3db-b2c1-4fa4-84a2-4c7efe89ba71"
+    },
+    {
+      "unresolved": false,
+      "key": {
+        "uuid": "8fa268fc_c3671e97",
+        "filename": "/PATCHSET_LEVEL",
+        "patchSetId": 1
+      },
+      "lineNbr": 0,
+      "author": {
+        "id": 32811
+      },
+      "writtenOn": "2025-09-11T18:26:44Z",
+      "side": 1,
+      "message": "Can\u0027t we add the HEAD in the commit message like\n\noplus: Add oplus modules from kernel tree\n\nImported from \u003csha\u003e",
+      "parentUuid": "200fed66_a9fe9fed",
+      "revId": "2b53c684c44cf8d14f65725e74198c4f45acca1b",
+      "serverId": "1ec6b3db-b2c1-4fa4-84a2-4c7efe89ba71"
     }
   ]
 }
