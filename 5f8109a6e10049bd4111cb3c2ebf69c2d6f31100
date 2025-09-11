@@ -1,0 +1,21 @@
+{
+  "comments": [
+    {
+      "unresolved": false,
+      "key": {
+        "uuid": "b6f4a98c_85e3f95a",
+        "filename": "/PATCHSET_LEVEL",
+        "patchSetId": 9
+      },
+      "lineNbr": 0,
+      "author": {
+        "id": 13648
+      },
+      "writtenOn": "2025-09-11T23:26:44Z",
+      "side": 1,
+      "message": "I don\u0027t think we need the WIFI_MAC additions from oplus. See: https://github.com/LineageOS/android_kernel_oneplus_sm8550-modules/commit/dd7a47977e6f462614e7997847398f30c75c1e19",
+      "revId": "5f8109a6e10049bd4111cb3c2ebf69c2d6f31100",
+      "serverId": "1ec6b3db-b2c1-4fa4-84a2-4c7efe89ba71"
+    }
+  ]
+}
