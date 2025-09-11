@@ -1,0 +1,21 @@
+{
+  "comments": [
+    {
+      "unresolved": false,
+      "key": {
+        "uuid": "200fed66_a9fe9fed",
+        "filename": "/PATCHSET_LEVEL",
+        "patchSetId": 1
+      },
+      "lineNbr": 0,
+      "author": {
+        "id": 13648
+      },
+      "writtenOn": "2025-09-11T18:15:39Z",
+      "side": 1,
+      "message": "Here in this repo I would like to keep the full history. Since the initial import, clang fixes and all patches that we add on top of oplus drivers.\n\nThe idea is to force-push only kernel.",
+      "revId": "2b53c684c44cf8d14f65725e74198c4f45acca1b",
+      "serverId": "1ec6b3db-b2c1-4fa4-84a2-4c7efe89ba71"
+    }
+  ]
+}
