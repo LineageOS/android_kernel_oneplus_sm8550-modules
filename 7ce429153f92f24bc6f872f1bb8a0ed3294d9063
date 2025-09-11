@@ -1,0 +1,21 @@
+{
+  "comments": [
+    {
+      "unresolved": false,
+      "key": {
+        "uuid": "b6ecc189_21066d1b",
+        "filename": "/PATCHSET_LEVEL",
+        "patchSetId": 4
+      },
+      "lineNbr": 0,
+      "author": {
+        "id": 32811
+      },
+      "writtenOn": "2025-09-11T06:26:52Z",
+      "side": 1,
+      "message": "This has to be rebased after I70c2a91c23fbb107ae62b9bc68079b0ad5d86dc6 and I4e682e74c96630f150022d6ab513415e345f22f5 are merged.",
+      "revId": "7ce429153f92f24bc6f872f1bb8a0ed3294d9063",
+      "serverId": "1ec6b3db-b2c1-4fa4-84a2-4c7efe89ba71"
+    }
+  ]
+}
