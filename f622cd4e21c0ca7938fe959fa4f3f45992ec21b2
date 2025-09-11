@@ -16,6 +16,24 @@
       "message": "Should this go to common kernel?",
       "revId": "f622cd4e21c0ca7938fe959fa4f3f45992ec21b2",
       "serverId": "1ec6b3db-b2c1-4fa4-84a2-4c7efe89ba71"
+    },
+    {
+      "unresolved": false,
+      "key": {
+        "uuid": "1c3504a1_abb95888",
+        "filename": "/PATCHSET_LEVEL",
+        "patchSetId": 1
+      },
+      "lineNbr": 0,
+      "author": {
+        "id": 32811
+      },
+      "writtenOn": "2025-09-11T07:41:49Z",
+      "side": 1,
+      "message": "i wonder, our latest tag (LA.VENDOR.13.2.0.r1-27000-KAILUA.QSSI16.0) doesn\u0027t seem to have this change. CC: @chandudyavanapelli03@gmail.com",
+      "parentUuid": "5ac2a429_3d82db61",
+      "revId": "f622cd4e21c0ca7938fe959fa4f3f45992ec21b2",
+      "serverId": "1ec6b3db-b2c1-4fa4-84a2-4c7efe89ba71"
     }
   ]
 }
