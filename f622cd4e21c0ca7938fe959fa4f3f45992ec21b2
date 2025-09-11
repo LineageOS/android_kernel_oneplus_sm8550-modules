@@ -34,6 +34,23 @@
       "parentUuid": "5ac2a429_3d82db61",
       "revId": "f622cd4e21c0ca7938fe959fa4f3f45992ec21b2",
       "serverId": "1ec6b3db-b2c1-4fa4-84a2-4c7efe89ba71"
+    },
+    {
+      "unresolved": false,
+      "key": {
+        "uuid": "54c1cb92_1ce43fa9",
+        "filename": "/PATCHSET_LEVEL",
+        "patchSetId": 1
+      },
+      "lineNbr": 0,
+      "author": {
+        "id": 32811
+      },
+      "writtenOn": "2025-09-11T07:48:37Z",
+      "side": 1,
+      "message": "https://github.com/MotorolaMobilityLLC/vendor-qcom-opensource-wlan-qcacld-3.0/blob/MMI-V1UM35H.10-38-1/configs/qca6750_defconfig\n\nMotorola sm7550 doesn\u0027t seem to have it either.",
+      "revId": "f622cd4e21c0ca7938fe959fa4f3f45992ec21b2",
+      "serverId": "1ec6b3db-b2c1-4fa4-84a2-4c7efe89ba71"
     }
   ]
 }
