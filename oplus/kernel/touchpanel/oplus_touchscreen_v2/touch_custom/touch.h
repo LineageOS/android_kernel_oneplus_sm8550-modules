@@ -14,8 +14,8 @@
 
 #include <linux/kernel.h>
 #include <linux/module.h>
-#include "../oplus_touchscreen_v2/tp_devices.h"
-#include "../oplus_touchscreen_v2/touchpanel_common.h"
+#include "../tp_devices.h"
+#include "../touchpanel_common.h"
 
 
 extern bool tp_judge_ic_match(char *tp_ic_name);
