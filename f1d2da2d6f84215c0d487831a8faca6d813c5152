@@ -16,6 +16,24 @@
       "message": "Restore PS5",
       "revId": "f1d2da2d6f84215c0d487831a8faca6d813c5152",
       "serverId": "1ec6b3db-b2c1-4fa4-84a2-4c7efe89ba71"
+    },
+    {
+      "unresolved": false,
+      "key": {
+        "uuid": "3e26f390_01099cb4",
+        "filename": "/PATCHSET_LEVEL",
+        "patchSetId": 6
+      },
+      "lineNbr": 0,
+      "author": {
+        "id": 13648
+      },
+      "writtenOn": "2025-09-13T17:24:05Z",
+      "side": 1,
+      "message": "You need to commit it again to upload to gerrit",
+      "parentUuid": "c173eda7_3f74e038",
+      "revId": "f1d2da2d6f84215c0d487831a8faca6d813c5152",
+      "serverId": "1ec6b3db-b2c1-4fa4-84a2-4c7efe89ba71"
     }
   ]
 }
