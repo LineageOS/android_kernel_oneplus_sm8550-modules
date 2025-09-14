@@ -34,6 +34,24 @@
       "parentUuid": "2b724817_90a38a09",
       "revId": "584a8dd5afc61cefcb5157e0296d23e589973df7",
       "serverId": "1ec6b3db-b2c1-4fa4-84a2-4c7efe89ba71"
+    },
+    {
+      "unresolved": false,
+      "key": {
+        "uuid": "920f1290_1bcd5858",
+        "filename": "qcom/opensource/wlan/platform/icnss2/qmi.c",
+        "patchSetId": 28
+      },
+      "lineNbr": 952,
+      "author": {
+        "id": 13648
+      },
+      "writtenOn": "2025-09-14T09:17:35Z",
+      "side": 1,
+      "message": "Ahh, yes. That\u0027s right.",
+      "parentUuid": "b01b9f6d_e670f35b",
+      "revId": "584a8dd5afc61cefcb5157e0296d23e589973df7",
+      "serverId": "1ec6b3db-b2c1-4fa4-84a2-4c7efe89ba71"
     }
   ]
 }
