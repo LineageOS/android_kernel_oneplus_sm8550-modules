@@ -1,0 +1,21 @@
+{
+  "comments": [
+    {
+      "unresolved": true,
+      "key": {
+        "uuid": "2b724817_90a38a09",
+        "filename": "qcom/opensource/wlan/platform/icnss2/qmi.c",
+        "patchSetId": 28
+      },
+      "lineNbr": 952,
+      "author": {
+        "id": 13648
+      },
+      "writtenOn": "2025-09-14T08:52:39Z",
+      "side": 1,
+      "message": "Do you need this to fix reversed Mac address?",
+      "revId": "584a8dd5afc61cefcb5157e0296d23e589973df7",
+      "serverId": "1ec6b3db-b2c1-4fa4-84a2-4c7efe89ba71"
+    }
+  ]
+}
