@@ -36,6 +36,24 @@
       "serverId": "1ec6b3db-b2c1-4fa4-84a2-4c7efe89ba71"
     },
     {
+      "unresolved": false,
+      "key": {
+        "uuid": "b6bc4804_3c5f5199",
+        "filename": "qcom/opensource/wlan/qcacld-3.0/Kbuild",
+        "patchSetId": 1
+      },
+      "lineNbr": 182,
+      "author": {
+        "id": 13648
+      },
+      "writtenOn": "2025-09-14T00:16:40Z",
+      "side": 1,
+      "message": "Acknowledged",
+      "parentUuid": "e42b5b1e_0aa78628",
+      "revId": "e0717b2a18ae6dcbaeb283cb88a454e24b51546d",
+      "serverId": "1ec6b3db-b2c1-4fa4-84a2-4c7efe89ba71"
+    },
+    {
       "unresolved": true,
       "key": {
         "uuid": "f5e11329_eceea096",
