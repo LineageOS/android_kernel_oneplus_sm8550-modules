@@ -16,6 +16,24 @@
       "message": "Do you need this to fix reversed Mac address?",
       "revId": "584a8dd5afc61cefcb5157e0296d23e589973df7",
       "serverId": "1ec6b3db-b2c1-4fa4-84a2-4c7efe89ba71"
+    },
+    {
+      "unresolved": true,
+      "key": {
+        "uuid": "b01b9f6d_e670f35b",
+        "filename": "qcom/opensource/wlan/platform/icnss2/qmi.c",
+        "patchSetId": 28
+      },
+      "lineNbr": 952,
+      "author": {
+        "id": 32811
+      },
+      "writtenOn": "2025-09-14T09:12:20Z",
+      "side": 1,
+      "message": "I left it there cause cnss/qmi.c also has it.\n\nhttps://github.com/LineageOS/android_kernel_oneplus_sm8550-modules/blob/lineage-22.2/qcom/opensource/wlan/platform/cnss2/qmi.c",
+      "parentUuid": "2b724817_90a38a09",
+      "revId": "584a8dd5afc61cefcb5157e0296d23e589973df7",
+      "serverId": "1ec6b3db-b2c1-4fa4-84a2-4c7efe89ba71"
     }
   ]
 }
