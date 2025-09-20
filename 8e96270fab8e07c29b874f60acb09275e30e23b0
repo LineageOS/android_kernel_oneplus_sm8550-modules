@@ -16,6 +16,23 @@
       "message": "OPLUS_FEATURE_WIFI_FTM addition can be removed. FTM means factory mode, if I am not mistaken.",
       "revId": "8e96270fab8e07c29b874f60acb09275e30e23b0",
       "serverId": "1ec6b3db-b2c1-4fa4-84a2-4c7efe89ba71"
+    },
+    {
+      "unresolved": true,
+      "key": {
+        "uuid": "b0a0da16_b51a8f28",
+        "filename": "/PATCHSET_LEVEL",
+        "patchSetId": 31
+      },
+      "lineNbr": 0,
+      "author": {
+        "id": 13648
+      },
+      "writtenOn": "2025-09-20T22:19:48Z",
+      "side": 1,
+      "message": "Please test benz without FTM part.",
+      "revId": "8e96270fab8e07c29b874f60acb09275e30e23b0",
+      "serverId": "1ec6b3db-b2c1-4fa4-84a2-4c7efe89ba71"
     }
   ]
 }
