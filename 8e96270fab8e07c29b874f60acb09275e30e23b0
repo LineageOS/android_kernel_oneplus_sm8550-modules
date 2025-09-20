@@ -1,0 +1,21 @@
+{
+  "comments": [
+    {
+      "unresolved": false,
+      "key": {
+        "uuid": "e2849553_9135318f",
+        "filename": "/PATCHSET_LEVEL",
+        "patchSetId": 31
+      },
+      "lineNbr": 0,
+      "author": {
+        "id": 13648
+      },
+      "writtenOn": "2025-09-20T22:18:12Z",
+      "side": 1,
+      "message": "OPLUS_FEATURE_WIFI_FTM addition can be removed. FTM means factory mode, if I am not mistaken.",
+      "revId": "8e96270fab8e07c29b874f60acb09275e30e23b0",
+      "serverId": "1ec6b3db-b2c1-4fa4-84a2-4c7efe89ba71"
+    }
+  ]
+}
