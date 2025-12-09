@@ -3859,6 +3859,11 @@ int sde_connector_register_custom_event(struct sde_kms *kms,
 		if (SDE_DBG_DEFAULT_DUMP_MODE != SDE_DBG_DUMP_IN_LOG_LIMITED)
 			sde_dbg_update_dump_mode(val);
 		break;
+#ifdef OPLUS_FEATURE_DISPLAY
+	case DRM_EVENT_TP_TOUCHDOWN:
+		ret = 0;
+		break;
+#endif
 	default:
 		break;
 	}
@@ -3882,6 +3887,9 @@ int sde_connector_event_notify(struct drm_connector *connector, uint32_t type,
 	case DRM_EVENT_PANEL_DEAD:
 	case DRM_EVENT_SDE_HW_RECOVERY:
 	case DRM_EVENT_MISR_SIGN:
+#ifdef OPLUS_FEATURE_DISPLAY
+	case DRM_EVENT_TP_TOUCHDOWN:
+#endif
 		ret = 0;
 		break;
 	default:

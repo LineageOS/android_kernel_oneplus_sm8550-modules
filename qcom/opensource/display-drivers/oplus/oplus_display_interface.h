@@ -163,14 +163,14 @@ int oplus_panel_pinctrl_init(struct dsi_panel *panel);
  * @panel: Display panel
  * Return: Zero on Success
  */
-int oplus_panel_vddr_on(struct dsi_display *display, const char *vreg_name);
+int oplus_panel_vddr_on(struct dsi_panel *panel, const char *vreg_name);
 
 /**
  * oplus_vddr_power_on_after_vddio() - oplus panel power off vddr as vci vddr vddio
  * @panel: Display panel
  * Return: Zero on Success
  */
-int oplus_panel_vddr_off(struct dsi_display *display, const char *vreg_name);
+int oplus_panel_vddr_off(struct dsi_panel *panel, const char *vreg_name);
 
 void oplus_sde_cp_crtc_apply_properties(struct drm_crtc *crtc, struct drm_encoder *encoder);
 int oplus_set_osc_status(struct drm_encoder *drm_enc);
@@ -185,5 +185,7 @@ int oplus_panel_cmdq_pack_handle(void *dsi_panel, enum dsi_cmd_set_type type, bo
 int oplus_panel_cmdq_pack_status_reset(void *sde_connector);
 int oplus_panel_get_id(struct dsi_display *display, char *boot_str);
 int oplus_panel_pwm_switch_cmdq_delay_handle(void *dsi_panel, enum dsi_cmd_set_type type);
+int oplus_panel_send_asynchronous_cmd(void);
+void oplus_dsi_ctrl_configure_pre(struct dsi_ctrl *dsi_ctrl, u32 *sched_line_no);
 #endif /* __OPLUS_DISPLAY_INTERFACE_H__ */
 

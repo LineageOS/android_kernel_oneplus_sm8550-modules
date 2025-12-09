@@ -86,6 +86,10 @@ int dsi_pwr_get_dt_vreg_data(struct device *dev,
  */
 int dsi_pwr_enable_regulator(struct dsi_regulator_info *regs, bool enable);
 
+#ifdef OPLUS_FEATURE_DISPLAY
+int dsi_pwr_enable_regulator_v2(void *panel, bool enable);
+#endif /* OPLUS_FEATURE_DISPLAY */
+
 /**
  * dsi_pwr_panel_regulator_mode_set()
  * set regulator mode for OLED panel

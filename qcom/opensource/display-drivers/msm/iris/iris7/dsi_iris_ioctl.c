@@ -486,6 +486,8 @@ int iris_configure_i7(u32 display, u32 type, u32 value)
 	case IRIS_LOOP_BACK_MODE:
 		/* don't lock panel_lock */
 		return _iris_configure(display, type, value);
+	default:
+		break;
 	}
 
 	if (IRIS_IF_LOGI())
@@ -639,8 +641,8 @@ static int _iris_configure_ex(u32 display, u32 type, u32 count, u32 *values)
 
 			memset(dump_buf,  0, sizeof(dump_buf));
 			len = 0;
-			for (j = 0; j < dump_reg_cnt; j++)
-				len += snprintf(dump_buf+len, DUMP_REG_BUF_SIZE,
+			//for (j = 0; j < dump_reg_cnt; j++)
+				len += snprintf(dump_buf+len, (DUMP_REG_BUF_SIZE - len),
 					", addr = 0x%08x, value = 0x%08x",
 					dump_reg_addr[j], dump_reg_val[j]);
 			IRIS_LOGI("reg dump, count: %3d%s", i, dump_buf);
@@ -901,9 +903,9 @@ static int _iris_configure_ex(u32 display, u32 type, u32 count, u32 *values)
 		break;
 	case IRIS_DEMURA_LUT_SET:
 		iris_demura_lut = iris_get_demura_info();
-		iris_demura = *(struct msmfb_iris_demura_info *)(values);
 
 		if (values != NULL) {
+			iris_demura = *(struct msmfb_iris_demura_info *)(values);
 			ret = copy_from_user(iris_demura_lut->lut_swpayload,
 				iris_demura.lut_swpayload, sizeof(uint32_t)*1683);
 			if (ret) {
@@ -915,9 +917,9 @@ static int _iris_configure_ex(u32 display, u32 type, u32 count, u32 *values)
 		break;
 	case IRIS_DEMURA_XY_LUT_SET:
 		iris_demura_lut_xy = iris_get_demura_xy();
-		iris_demura_xy = *(struct msmfb_iris_demura_xy *)(values);
 
 		if (values != NULL) {
+			iris_demura_xy = *(struct msmfb_iris_demura_xy *)(values);
 			ret = copy_from_user(iris_demura_lut_xy->lut_xypayload,
 				iris_demura_xy.lut_xypayload, sizeof(uint32_t)*2048);
 			if (ret) {

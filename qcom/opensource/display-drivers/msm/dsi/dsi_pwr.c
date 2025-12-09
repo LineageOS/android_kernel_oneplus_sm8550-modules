@@ -135,6 +135,10 @@ static int dsi_pwr_enable_vregs(struct dsi_regulator_info *regs, bool enable)
 	u32 pre_off_ms, post_off_ms;
 #ifdef OPLUS_FEATURE_DISPLAY
 	struct dsi_display *display = get_main_display();
+	if (!display) {
+		DSI_ERR("dsi_pwr_enable_vregs display panel null\n");
+		return -ENODEV;
+	}
 #endif /* OPLUS_FEATURE_DISPLAY */
 
 	if (enable) {
@@ -177,7 +181,7 @@ static int dsi_pwr_enable_vregs(struct dsi_regulator_info *regs, bool enable)
 				usleep_range((post_on_ms * 1000),
 						(post_on_ms * 1000) + 10);
 #ifdef OPLUS_FEATURE_DISPLAY
-			oplus_panel_vddr_on(display, vreg->vreg_name);
+			oplus_panel_vddr_on(display->panel, vreg->vreg_name);
 #endif /* OPLUS_FEATURE_DISPLAY */
 		}
 	} else {
@@ -205,7 +209,136 @@ static int dsi_pwr_enable_vregs(struct dsi_regulator_info *regs, bool enable)
 						regs->vregs[i].off_min_voltage,
 						regs->vregs[i].max_voltage);
 #ifdef OPLUS_FEATURE_DISPLAY
-			oplus_panel_vddr_off(display, vreg->vreg_name);
+			oplus_panel_vddr_off(display->panel, vreg->vreg_name);
+#endif /* OPLUS_FEATURE_DISPLAY */
+		}
+	}
+
+	return 0;
+error_disable_opt_mode:
+	(void)regulator_set_load(regs->vregs[i].vreg,
+				 regs->vregs[i].disable_load);
+
+error_disable_voltage:
+	if (num_of_v > 0)
+		(void)regulator_set_voltage(regs->vregs[i].vreg,
+					    0, regs->vregs[i].max_voltage);
+error:
+	for (i--; i >= 0; i--) {
+		vreg = &regs->vregs[i];
+		pre_off_ms = vreg->pre_off_sleep;
+		post_off_ms = vreg->post_off_sleep;
+
+		if (pre_off_ms)
+			usleep_range((pre_off_ms * 1000),
+					(pre_off_ms * 1000) + 10);
+
+		(void)regulator_disable(regs->vregs[i].vreg);
+
+		if (post_off_ms)
+			usleep_range((post_off_ms * 1000),
+					(post_off_ms * 1000) + 10);
+
+		(void)regulator_set_load(regs->vregs[i].vreg,
+					 regs->vregs[i].disable_load);
+
+		num_of_v = regulator_count_voltages(regs->vregs[i].vreg);
+		if (num_of_v > 0)
+			(void)regulator_set_voltage(regs->vregs[i].vreg,
+				0, regs->vregs[i].max_voltage);
+
+	}
+
+	return rc;
+}
+
+static int dsi_pwr_enable_vregs_v2(struct dsi_panel *panel, bool enable)
+{
+	int rc = 0, i = 0;
+	struct dsi_vreg *vreg;
+	int num_of_v = 0;
+	u32 pre_on_ms, post_on_ms;
+	u32 pre_off_ms, post_off_ms;
+	struct dsi_regulator_info *regs = NULL;
+
+	if (!panel) {
+		DSI_ERR("dsi_pwr_enable_vregs_v2 panel null\n");
+		return -ENODEV;
+	}
+
+	regs = &panel->power_info;
+
+	if (enable) {
+		for (i = 0; i < regs->count; i++) {
+			vreg = &regs->vregs[i];
+			pre_on_ms = vreg->pre_on_sleep;
+			post_on_ms = vreg->post_on_sleep;
+
+			if (vreg->pre_on_sleep)
+				usleep_range((pre_on_ms * 1000),
+						(pre_on_ms * 1000) + 10);
+
+			rc = regulator_set_load(vreg->vreg,
+						vreg->enable_load);
+			if (rc < 0) {
+				DSI_ERR("Setting optimum mode failed for %s\n",
+				       vreg->vreg_name);
+				goto error;
+			}
+			num_of_v = regulator_count_voltages(vreg->vreg);
+			if (num_of_v > 0) {
+				rc = regulator_set_voltage(vreg->vreg,
+							   vreg->min_voltage,
+							   vreg->max_voltage);
+				if (rc) {
+					DSI_ERR("Set voltage(%s) fail, rc=%d\n",
+						 vreg->vreg_name, rc);
+					goto error_disable_opt_mode;
+				}
+			}
+
+			rc = regulator_enable(vreg->vreg);
+			if (rc) {
+				DSI_ERR("enable failed for %s, rc=%d\n",
+				       vreg->vreg_name, rc);
+				goto error_disable_voltage;
+			}
+
+			if (vreg->post_on_sleep)
+				usleep_range((post_on_ms * 1000),
+						(post_on_ms * 1000) + 10);
+#ifdef OPLUS_FEATURE_DISPLAY
+			DSI_INFO("debug for dsi_pwr_enable_vregs_v2_vddr_on,panel=%s\n", panel->name);
+			oplus_panel_vddr_on(panel, vreg->vreg_name);
+#endif /* OPLUS_FEATURE_DISPLAY */
+		}
+	} else {
+		for (i = (regs->count - 1); i >= 0; i--) {
+			vreg = &regs->vregs[i];
+			pre_off_ms = vreg->pre_off_sleep;
+			post_off_ms = vreg->post_off_sleep;
+
+			if (pre_off_ms)
+				usleep_range((pre_off_ms * 1000),
+						(pre_off_ms * 1000) + 10);
+
+			(void)regulator_disable(regs->vregs[i].vreg);
+
+			if (post_off_ms)
+				usleep_range((post_off_ms * 1000),
+						(post_off_ms * 1000) + 10);
+
+			(void)regulator_set_load(regs->vregs[i].vreg,
+						regs->vregs[i].disable_load);
+
+			num_of_v = regulator_count_voltages(vreg->vreg);
+			if (num_of_v > 0)
+				(void)regulator_set_voltage(regs->vregs[i].vreg,
+						regs->vregs[i].off_min_voltage,
+						regs->vregs[i].max_voltage);
+#ifdef OPLUS_FEATURE_DISPLAY
+			DSI_INFO("debug for dsi_pwr_enable_vregs_v2_vddr_off,panel=%s\n", panel->name);
+			oplus_panel_vddr_off(panel, vreg->vreg_name);
 #endif /* OPLUS_FEATURE_DISPLAY */
 		}
 	}
@@ -417,6 +550,57 @@ int dsi_pwr_enable_regulator(struct dsi_regulator_info *regs, bool enable)
 
 #ifdef OPLUS_FEATURE_DISPLAY
 EXPORT_SYMBOL(dsi_pwr_enable_regulator);
+#endif /* OPLUS_FEATURE_DISPLAY */
+
+#ifdef OPLUS_FEATURE_DISPLAY
+ int dsi_pwr_enable_regulator_v2(void *panel, bool enable)
+{
+	struct dsi_panel *display_panel = (struct dsi_panel *)panel;
+	struct dsi_regulator_info *regs = NULL;
+	int rc = 0;
+
+	if (!display_panel) {
+		DSI_ERR("dsi_pwr_enable_regulator_v2 display_panel null\n");
+		return -ENODEV;
+	}
+	DSI_INFO("debug for dsi_pwr_enable_regulator_v2,display_panel=%s\n", display_panel->name);
+	regs = &display_panel->power_info;
+
+	if (regs->count == 0) {
+		DSI_DEBUG("No valid regulators to enable\n");
+		return 0;
+	}
+
+	if (!regs->vregs) {
+		DSI_ERR("Invalid params\n");
+		return -EINVAL;
+	}
+
+	if (enable) {
+		if (regs->refcount == 0) {
+			rc = dsi_pwr_enable_vregs_v2(display_panel, true);
+			if (rc)
+				DSI_ERR("failed to enable regulators\n");
+		}
+		regs->refcount++;
+	} else {
+		if (regs->refcount == 0) {
+			DSI_ERR("Unbalanced regulator off:%s\n",
+					regs->vregs->vreg_name);
+		} else {
+			regs->refcount--;
+			if (regs->refcount == 0) {
+				rc = dsi_pwr_enable_vregs_v2(display_panel, false);
+				if (rc)
+					DSI_ERR("failed to disable vregs\n");
+			}
+		}
+	}
+
+	return rc;
+}
+
+EXPORT_SYMBOL(dsi_pwr_enable_regulator_v2);
 #endif /* OPLUS_FEATURE_DISPLAY */
 
 /*

@@ -44,6 +44,9 @@
 #ifdef OPLUS_FEATURE_DISPLAY
 #include <soc/oplus/system/oplus_project.h>
 #endif /* OPLUS_FEATURE_DISPLAY */
+#ifdef OPLUS_TRACKPOINT_REPORT
+#include <soc/oplus/oplus_trackpoint_report.h>
+#endif /* OPLUS_TRACKPOINT_REPORT */
 
 #define DRMID(x) ((x) ? (x)->base.id : -1)
 

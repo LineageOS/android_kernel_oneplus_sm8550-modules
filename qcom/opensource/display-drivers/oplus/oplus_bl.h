@@ -305,6 +305,7 @@ int oplus_panel_pwm_switch_backlight(struct dsi_panel *panel, u32 bl_lvl, int *p
 int oplus_panel_pwm_switch_timing_switch(struct dsi_panel *panel);
 int oplus_panel_pwm_switch_wait_te_tx_cmd(struct dsi_panel *panel, u32 pwm_switch_cmd, u32 pwm_switch_state_last);
 int oplus_hbm_pwm_state(struct dsi_panel *panel, bool hbm_state);
+int oplus_display_panel_set_demura2_offset(void);
 void oplus_panel_backlight_demura_dbv_switch(struct dsi_panel *panel, u32 bl_lvl);
 void oplus_panel_set_aod_off_te_timestamp(struct dsi_panel *panel);
 void oplus_panel_set_pwm_switch_next_cmdq(u32 next_cmdq);

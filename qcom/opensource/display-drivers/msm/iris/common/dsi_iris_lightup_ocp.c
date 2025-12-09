@@ -222,7 +222,7 @@ static u32 _iris_ocp_read_value(u32 mode)
 		{{0, MIPI_DSI_GENERIC_READ_REQUEST_1_PARAM, MIPI_DSI_MSG_REQ_ACK,
 			 0, 0, sizeof(pi_read), pi_read, 0, NULL},
 		1, 0} };
-	struct dsi_cmd_desc pi_read_cmd[1];
+	struct dsi_cmd_desc pi_read_cmd[1] = {0};
 	u32 response_value;
 
 	remap_to_qcom_style(pi_read_cmd, pi_read_cmd_pxlw, 1);
@@ -1298,16 +1298,18 @@ void iris_sw_te_enable(void)
 	struct iris_cfg *pcfg = iris_get_cfg();
 
 	payload = iris_get_ipopt_payload_data(IRIS_IP_DTG, ID_DTG_TE_SEL, 2);
-	dtg_ctrl = payload[0];
-	cmd[0] = pcfg->iris_dtg_addr + pcfg->dtg_ctrl;
-	cmd[1] = dtg_ctrl & ~0x800;
-	cmd[2] = pcfg->iris_dtg_addr + pcfg->dtg_update;
-	cmd[3] = 0x1;
-	cmd[4] = pcfg->iris_dtg_addr + pcfg->dtg_ctrl;
-	cmd[5] = dtg_ctrl | 0x800 | 0x14;
-	cmd[6] = pcfg->iris_dtg_addr + pcfg->dtg_update;
-	cmd[7] = 0x1;
-	iris_ocp_write_mult_vals(8, cmd);
+	if (payload) {
+		dtg_ctrl = payload[0];
+		cmd[0] = pcfg->iris_dtg_addr + pcfg->dtg_ctrl;
+		cmd[1] = dtg_ctrl & ~0x800;
+		cmd[2] = pcfg->iris_dtg_addr + pcfg->dtg_update;
+		cmd[3] = 0x1;
+		cmd[4] = pcfg->iris_dtg_addr + pcfg->dtg_ctrl;
+		cmd[5] = dtg_ctrl | 0x800 | 0x14;
+		cmd[6] = pcfg->iris_dtg_addr + pcfg->dtg_update;
+		cmd[7] = 0x1;
+		iris_ocp_write_mult_vals(8, cmd);
+	}
 }
 
 void iris_ovs_dly_change(bool enable)
@@ -1318,9 +1320,11 @@ void iris_ovs_dly_change(bool enable)
 	struct iris_cfg *pcfg = iris_get_cfg();
 
 	payload = iris_get_ipopt_payload_data(IRIS_IP_DTG, 0x00, 2);
-	ovs_dly_pt = payload[15];
+	if (payload)
+		ovs_dly_pt = payload[15];
 	payload = iris_get_ipopt_payload_data(IRIS_IP_DTG, 0xf5, 2);
-	ovs_dly_rfb = payload[0];
+	if (payload)
+		ovs_dly_rfb = payload[0];
 
 	cmd[0] = pcfg->iris_dtg_addr + pcfg->ovs_dly;
 	if (enable)

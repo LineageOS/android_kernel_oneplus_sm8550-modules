@@ -31,6 +31,7 @@
 #include <linux/msm_drm_notify.h>
 #include <linux/notifier.h>
 #include "../oplus/oplus_display_private_api.h"
+#include "../oplus/oplus_display_panel_common.h"
 #include "../oplus/oplus_display_panel.h"
 #include "../oplus/oplus_display_interface.h"
 #include <soc/oplus/system/oplus_project.h>
@@ -61,6 +62,8 @@
 
 #define MAX_NAME_SIZE	64
 #define MAX_TE_RECHECKS 5
+
+#define DOZE_DISABLE_TIME_US 50000
 
 #define DSI_CLOCK_BITRATE_RADIX 10
 #define MAX_TE_SOURCE_ID  2
@@ -852,8 +855,9 @@ static void dsi_display_set_cmd_tx_ctrl_flags(struct dsi_display *display,
 			flags |= DSI_CTRL_CMD_CUSTOM_DMA_SCHED;
 #ifdef OPLUS_FEATURE_DISPLAY
 			//MIPI_DCS_SET_DISPLAY_BRIGHTNES
-			if ((display->panel->oplus_priv.vidmode_backlight_async_wait_enable)
-				&& (atomic_read(&display->panel->vidmode_backlight_async_wait))
+			if ((((display->panel->oplus_priv.vidmode_backlight_async_wait_enable)
+				&& (atomic_read(&display->panel->vidmode_backlight_async_wait)))
+				||(display->panel->oplus_priv.aod_backlight_async))
 				&& (((unsigned char*)(msg->tx_buf))[0] == 0x51)) {
 				flags |= DSI_CTRL_CMD_ASYNC_WAIT;
 			}
@@ -985,6 +989,10 @@ static int dsi_display_read_status(struct dsi_display_ctrl *ctrl,
 		oplus_panel_esd_set_page(panel, 0);
 #endif /* OPLUS_FEATURE_DISPLAY */
 	}
+
+#ifdef OPLUS_FEATURE_DISPLAY
+	dsi_panel_tx_cmd_set(panel, DSI_CMD_DEFAULT_SWITCH_PAGE);
+#endif /* OPLUS_FEATURE_DISPLAY */
 
 #if defined(CONFIG_PXLW_IRIS)
 	if (iris_is_chip_supported()) {
@@ -1145,6 +1153,7 @@ int dsi_display_check_status(struct drm_connector *connector, void *display,
 	u32 status_mode;
 	int rc = 0x1;
 	int te_rechecks = 1;
+	ktime_t time_gap = 0;
 
 	if (!dsi_display || !dsi_display->panel)
 		return -EINVAL;
@@ -1167,6 +1176,27 @@ int dsi_display_check_status(struct drm_connector *connector, void *display,
 	/* Prevent another ESD check,when ESD recovery is underway */
 	if (atomic_read(&panel->esd_recovery_pending))
 		goto release_panel_lock;
+
+        #ifdef OPLUS_FEATURE_DISPLAY
+	if (panel->oplus_priv.doze_disable_esdcheck) {
+		if (oplus_ofp_get_aod_state()) {
+			DSI_WARN("[ESD] Panel in aod state, skip esd check!\n");
+			goto release_panel_lock;
+		}
+	}
+
+#endif /* OPLUS_FEATURE_DISPLAY */
+
+#ifdef OPLUS_FEATURE_DISPLAY
+	if (panel->oplus_priv.dozedisable_esdcheck_delay) {
+		time_gap = ktime_to_us(ktime_sub(ktime_get(), oplus_get_doze_disable_time()));
+		if (time_gap > 0 && time_gap <= DOZE_DISABLE_TIME_US) {
+			DSI_WARN("[ESD] Panel in aod state, skip esd check!\n");
+			goto release_panel_lock;
+		}
+		DSI_WARN("dsi_display_check_status,time_gap=%d\n",time_gap);
+	}
+#endif /* OPLUS_FEATURE_DISPLAY */
 
 #ifdef OPLUS_FEATURE_DISPLAY
 	if (atomic_read(&panel->esd_pending)) {
@@ -4660,6 +4690,7 @@ static bool dsi_display_is_seamless_dfps_possible(
 		DSI_DEBUG("timing.h_back_porch differs %d %d\n",
 				cur->timing.h_back_porch,
 				tgt->timing.h_back_porch);
+		if (dfps_type != DSI_DFPS_IMMEDIATE_HV_P)
 		return false;
 	}
 
@@ -4674,7 +4705,7 @@ static bool dsi_display_is_seamless_dfps_possible(
 		DSI_DEBUG("timing.h_front_porch differs %d %d\n",
 				cur->timing.h_front_porch,
 				tgt->timing.h_front_porch);
-		if (dfps_type != DSI_DFPS_IMMEDIATE_HFP)
+		if ((dfps_type != DSI_DFPS_IMMEDIATE_HFP) && (dfps_type != DSI_DFPS_IMMEDIATE_HV_P))
 			return false;
 	}
 
@@ -4712,7 +4743,7 @@ static bool dsi_display_is_seamless_dfps_possible(
 		DSI_DEBUG("timing.v_front_porch differs %d %d\n",
 				cur->timing.v_front_porch,
 				tgt->timing.v_front_porch);
-		if (dfps_type != DSI_DFPS_IMMEDIATE_VFP)
+		if ((dfps_type != DSI_DFPS_IMMEDIATE_VFP) && (dfps_type != DSI_DFPS_IMMEDIATE_HV_P))
 			return false;
 	}
 
@@ -5273,7 +5304,7 @@ static int dsi_display_dfps_calc_front_porch(
  */
 static int dsi_display_get_dfps_timing(struct dsi_display *display,
 			struct dsi_display_mode *adj_mode,
-				u32 curr_refresh_rate)
+				u32 curr_refresh_rate,int i)
 {
 	struct dsi_dfps_capabilities dfps_caps;
 	struct dsi_display_mode per_ctrl_mode;
@@ -5343,10 +5374,39 @@ static int dsi_display_get_dfps_timing(struct dsi_display *display,
 			adj_mode->timing.h_front_porch *= display->ctrl_count;
 		break;
 
+	case DSI_DFPS_IMMEDIATE_HV_P:
+		if (i < 0)
+			break;
+
+		if (!dfps_caps.dfps_hfp_list) {
+			DSI_ERR("dfps_caps.dfps_hfp_list is null ptr!");
+			break;
+		}
+
+		adj_mode->timing.h_front_porch = dfps_caps.dfps_hfp_list[i] *= display->ctrl_count;
+		adj_mode->timing.h_back_porch = dfps_caps.dfps_hbp_list[i] *= display->ctrl_count;
+		adj_mode->timing.h_sync_width = dfps_caps.dfps_hpw_list[i] *= display->ctrl_count;
+		adj_mode->timing.v_back_porch = dfps_caps.dfps_vbp_list[i];
+		adj_mode->timing.v_front_porch = dfps_caps.dfps_vfp_list[i];
+		adj_mode->timing.v_sync_width = dfps_caps.dfps_vpw_list[i];
+
+		SDE_EVT32(SDE_EVTLOG_FUNC_CASE3, DSI_DFPS_IMMEDIATE_HV_P,
+			curr_refresh_rate, timing->refresh_rate);
+		SDE_EVT32(adj_mode->timing.h_front_porch, adj_mode->timing.h_back_porch,
+				adj_mode->timing.h_sync_width, adj_mode->timing.v_back_porch,
+				adj_mode->timing.v_front_porch, adj_mode->timing.v_sync_width);
+		break;
 	default:
 		DSI_ERR("Unsupported DFPS mode %d\n", dfps_caps.type);
 		rc = -ENOTSUPP;
 	}
+
+	DSI_INFO("dfps_type=%d, cur_fps=%d, adj_fps=%d, h_active=%d, v_active=%d, hfp:%d, fbp:%d, hpw:%d, vbp:%d, vfp:%d, vpw:%d",
+		dfps_caps.type, curr_refresh_rate, timing->refresh_rate,
+		adj_mode->timing.h_active, adj_mode->timing.v_active,
+		adj_mode->timing.h_front_porch, adj_mode->timing.h_back_porch,
+		adj_mode->timing.h_sync_width, adj_mode->timing.v_back_porch,
+		adj_mode->timing.v_front_porch, adj_mode->timing.v_sync_width);
 
 	return rc;
 }
@@ -5362,7 +5422,7 @@ static bool dsi_display_validate_mode_seamless(struct dsi_display *display,
 	}
 
 	/* Currently the only seamless transition is dynamic fps */
-	rc = dsi_display_get_dfps_timing(display, adj_mode, 0);
+	rc = dsi_display_get_dfps_timing(display, adj_mode, 0, -1);
 	if (rc) {
 		DSI_DEBUG("Dynamic FPS not supported for seamless\n");
 	} else {
@@ -7667,7 +7727,7 @@ int dsi_display_get_modes_helper(struct dsi_display *display,
 			}
 
 			dsi_display_get_dfps_timing(display, sub_mode,
-					curr_refresh_rate);
+					curr_refresh_rate, i);
 			sub_mode->panel_mode_caps = DSI_OP_VIDEO_MODE;
 		}
 		end = array_idx;
@@ -9254,6 +9314,7 @@ int dsi_display_enable(struct dsi_display *display)
 		oplus_display_update_current_display();
 		/* vedio mode first screen fps code download */
 		oplus_panel_switch_vid_mode(display, mode);
+		oplus_panel_switch_vid_mode_post(display, mode);
 #endif /* OPLUS_FEATURE_DISPLAY */
 #ifdef OPLUS_FEATURE_DISPLAY_ADFR
 		oplus_adfr_need_resend_osync_cmd(display, true);
@@ -9264,6 +9325,18 @@ int dsi_display_enable(struct dsi_display *display)
 	if ((mode->priv_info->dsc_enabled ||
 			mode->priv_info->vdc_enabled) &&
 		!(mode->dsi_mode_flags & DSI_MODE_FLAG_DMS_FPS)) {
+#ifdef OPLUS_FEATURE_DISPLAY
+		/* PPS & timming swicth wait te send */
+		if (display->panel->oplus_priv.ddic_scaler_need_wait_te) {
+#ifdef OPLUS_FEATURE_DISPLAY_ADFR
+			DSI_INFO("dsi_mode_flags = %d\n", mode->dsi_mode_flags);
+			/* adfr-pre-switch wait te send */
+			oplus_adfr_pre_switch_send(display->panel);
+#endif /* OPLUS_FEATURE_DISPLAY_ADFR */
+			oplus_wait_for_vsync(display->panel);
+			usleep_range(1000, 1000+100);
+		}
+#endif /* OPLUS_FEATURE_DISPLAY */
 		rc = dsi_panel_update_pps(display->panel);
 		if (rc) {
 			DSI_ERR("[%s] panel pps cmd update failed, rc=%d\n",

@@ -1620,7 +1620,7 @@ void iris_dump_status(void)
 	u32 value, i;
 	struct iris_cfg *pcfg;
 	u32 len = _iris_get_regs_dump_len();
-	uint8_t read_path = PATH_I2C;
+//	uint8_t read_path = PATH_I2C;
 	int rc = 0;
 
 	pcfg = iris_get_cfg();
@@ -1641,14 +1641,14 @@ void iris_dump_status(void)
 
 	IRIS_LOGI("X7_dump_regs, len: %d", len);
 	for (i = 0; i < len; i++) {
-		if (read_path == PATH_I2C) { //use i2c to read
+//		if (read_path == PATH_I2C) { //use i2c to read
 			rc = pcfg->iris_i2c_read(_iris_get_regs_dump_addr(i), &value);
 			if (rc != 0) {
 				IRIS_LOGE("I2C read failed ! [%02d] %08x : %08x", i, _iris_get_regs_dump_addr(i), value);
 				break;
 			}
-		} else
-			value = iris_ocp_read(_iris_get_regs_dump_addr(i), DSI_CMD_SET_STATE_HS);
+//		} else
+//			value = iris_ocp_read(_iris_get_regs_dump_addr(i), DSI_CMD_SET_STATE_HS);
 		IRIS_LOGI("[%02d] %08x : %08x", i, _iris_get_regs_dump_addr(i), value);
 	}
 }
