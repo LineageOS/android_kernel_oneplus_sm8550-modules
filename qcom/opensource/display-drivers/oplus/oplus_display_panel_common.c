@@ -2178,14 +2178,12 @@ int oplus_display_update_clk_ffc(struct dsi_display *display,
 	struct dsi_panel *panel = display->panel;
 	struct oplus_clk_osc clk_osc_pending;
 
-	INFO_TRACKPOINT_REPORT("DisplayDriverID@@%d$$Switching ffc mode, clk:[%d -> %d]",
-			OPLUS_DISP_Q_INFO_DYN_MIPI,
+	DSI_INFO("Switching ffc mode, clk:[%d -> %d]",
 			display->cached_clk_rate,
 			display->dyn_bit_clk);
 
 	if (display->cached_clk_rate == display->dyn_bit_clk) {
-		INFO_TRACKPOINT_REPORT("DisplayDriverID@@%d$$Ignore duplicated clk ffc setting, clk=%d",
-				OPLUS_DISP_Q_INFO_DYN_MIPI_INVALID,
+		DSI_INFO("Ignore duplicated clk ffc setting, clk=%d",
 				display->dyn_bit_clk);
 		return rc;
 	}
@@ -2199,8 +2197,7 @@ int oplus_display_update_clk_ffc(struct dsi_display *display,
 	if (!rc) {
 		panel->oplus_priv.ffc_delay_frames = FFC_DELAY_MAX_FRAMES;
 	} else {
-		EXCEPTION_TRACKPOINT_REPORT("DisplayDriverID@@%d$$Failed to find ffc mode index, clk=%d, osc=%d",
-				OPLUS_DISP_Q_INFO_DYN_MIPI_INVALID,
+		DSI_ERR("Failed to find ffc mode index, clk=%d, osc=%d",
 				clk_osc_pending.clk_rate,
 				clk_osc_pending.osc_rate);
 	}
@@ -2217,14 +2214,12 @@ int oplus_display_update_osc_ffc(struct dsi_display *display,
 	struct dsi_panel *panel = display->panel;
 	struct oplus_clk_osc clk_osc_pending;
 
-	INFO_TRACKPOINT_REPORT("DisplayDriverID@@%d$$Switching ffc mode, osc:[%d -> %d]",
-			OPLUS_DISP_Q_INFO_DYN_OSC,
+	DSI_INFO("Switching ffc mode, osc:[%d -> %d]",
 			panel->oplus_priv.osc_rate_cur,
 			osc_rate);
 
 	if (osc_rate == panel->oplus_priv.osc_rate_cur) {
-		INFO_TRACKPOINT_REPORT("DisplayDriverID@@%d$$Ignore duplicated osc ffc setting, osc=%d",
-				OPLUS_DISP_Q_INFO_DYN_OSC_INVALID,
+		DSI_INFO("Ignore duplicated osc ffc setting, osc=%d",
 				panel->oplus_priv.osc_rate_cur);
 		return rc;
 	}
@@ -2235,8 +2230,7 @@ int oplus_display_update_osc_ffc(struct dsi_display *display,
 	clk_osc_pending.osc_rate = osc_rate;
 	rc = oplus_panel_check_ffc_config(panel, &clk_osc_pending);
 	if (rc) {
-		EXCEPTION_TRACKPOINT_REPORT("DisplayDriverID@@%d$$Failed to find ffc mode index, clk=%d, osc=%d",
-				OPLUS_DISP_Q_INFO_DYN_OSC_INVALID,
+		DSI_ERR("DisplayDriverID@@%d$$Failed to find ffc mode index, clk=%d, osc=%d",
 				clk_osc_pending.clk_rate,
 				clk_osc_pending.osc_rate);
 	}
