@@ -13,6 +13,9 @@
 #include <linux/err.h>
 #include <linux/string.h>
 #include <linux/notifier.h>
+#ifdef OPLUS_TRACKPOINT_REPORT
+#include <soc/oplus/oplus_trackpoint_report.h>
+#endif /* OPLUS_TRACKPOINT_REPORT */
 
 /* A hardware display blank change occurred */
 #define OPLUS_DISPLAY_EVENT_BLANK			0x01

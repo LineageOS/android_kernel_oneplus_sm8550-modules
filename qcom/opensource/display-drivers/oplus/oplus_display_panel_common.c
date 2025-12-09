@@ -16,7 +16,6 @@
 #include "oplus_display_private_api.h"
 #include "oplus_display_interface.h"
 #include "oplus_bl.h"
-
 #if defined(CONFIG_PXLW_IRIS)
 #include "../msm/iris/common/dsi_iris_loop_back.h"
 #endif
@@ -2179,7 +2178,15 @@ int oplus_display_update_clk_ffc(struct dsi_display *display,
 	struct dsi_panel *panel = display->panel;
 	struct oplus_clk_osc clk_osc_pending;
 
+	INFO_TRACKPOINT_REPORT("DisplayDriverID@@%d$$Switching ffc mode, clk:[%d -> %d]",
+			OPLUS_DISP_Q_INFO_DYN_MIPI,
+			display->cached_clk_rate,
+			display->dyn_bit_clk);
+
 	if (display->cached_clk_rate == display->dyn_bit_clk) {
+		INFO_TRACKPOINT_REPORT("DisplayDriverID@@%d$$Ignore duplicated clk ffc setting, clk=%d",
+				OPLUS_DISP_Q_INFO_DYN_MIPI_INVALID,
+				display->dyn_bit_clk);
 		return rc;
 	}
 
@@ -2191,6 +2198,11 @@ int oplus_display_update_clk_ffc(struct dsi_display *display,
 	rc = oplus_panel_check_ffc_config(panel, &clk_osc_pending);
 	if (!rc) {
 		panel->oplus_priv.ffc_delay_frames = FFC_DELAY_MAX_FRAMES;
+	} else {
+		EXCEPTION_TRACKPOINT_REPORT("DisplayDriverID@@%d$$Failed to find ffc mode index, clk=%d, osc=%d",
+				OPLUS_DISP_Q_INFO_DYN_MIPI_INVALID,
+				clk_osc_pending.clk_rate,
+				clk_osc_pending.osc_rate);
 	}
 
 	mutex_unlock(&panel->oplus_ffc_lock);
@@ -2205,7 +2217,15 @@ int oplus_display_update_osc_ffc(struct dsi_display *display,
 	struct dsi_panel *panel = display->panel;
 	struct oplus_clk_osc clk_osc_pending;
 
+	INFO_TRACKPOINT_REPORT("DisplayDriverID@@%d$$Switching ffc mode, osc:[%d -> %d]",
+			OPLUS_DISP_Q_INFO_DYN_OSC,
+			panel->oplus_priv.osc_rate_cur,
+			osc_rate);
+
 	if (osc_rate == panel->oplus_priv.osc_rate_cur) {
+		INFO_TRACKPOINT_REPORT("DisplayDriverID@@%d$$Ignore duplicated osc ffc setting, osc=%d",
+				OPLUS_DISP_Q_INFO_DYN_OSC_INVALID,
+				panel->oplus_priv.osc_rate_cur);
 		return rc;
 	}
 
@@ -2214,6 +2234,12 @@ int oplus_display_update_osc_ffc(struct dsi_display *display,
 	clk_osc_pending.clk_rate = panel->oplus_priv.clk_rate_cur;
 	clk_osc_pending.osc_rate = osc_rate;
 	rc = oplus_panel_check_ffc_config(panel, &clk_osc_pending);
+	if (rc) {
+		EXCEPTION_TRACKPOINT_REPORT("DisplayDriverID@@%d$$Failed to find ffc mode index, clk=%d, osc=%d",
+				OPLUS_DISP_Q_INFO_DYN_OSC_INVALID,
+				clk_osc_pending.clk_rate,
+				clk_osc_pending.osc_rate);
+	}
 
 	mutex_unlock(&panel->oplus_ffc_lock);
 
@@ -2465,6 +2491,11 @@ int oplus_panel_parse_config(struct dsi_panel *panel)
 	LCD_INFO("oplus,cmdq-pack-support: %s\n",
 		panel->oplus_priv.cmdq_pack_support ? "true" : "false");
 	panel->oplus_priv.cmdq_pack_state = false;
+
+	panel->oplus_priv.ddic_scaler_need_wait_te = utils->read_bool(utils->data,
+			"oplus,ddic-scaler-need-wait-te");
+	LCD_INFO("ddic_scaler_need_wait_te: %s\n",
+			panel->oplus_priv.ddic_scaler_need_wait_te ? "true" : "false");
 
 	return 0;
 }
@@ -2770,7 +2801,7 @@ void oplus_save_last_mode(struct dsi_display *display)
 	}
 }
 
-void oplus_panel_switch_to_sync_te(struct dsi_panel *panel)
+void oplus_panel_switch_to_sync_te(struct dsi_panel *panel, bool half_frame_90hz)
 {
 	s64 us_per_frame;
 	s64 duration;
@@ -2837,8 +2868,12 @@ void oplus_panel_switch_to_sync_te(struct dsi_panel *panel)
 		} else if (panel->last_refresh_rate == 60) {
 			usleep_range(delay + 200, delay + 300);
 		} else if (panel->last_refresh_rate == 90) {
-			if((2100 < vsync_cost) && (vsync_cost < 3100))
-				usleep_range(2 * 1000, (2 * 1000) + 100);
+			if (half_frame_90hz) {
+				usleep_range(delay + 200, delay + 300);
+			} else {
+				if((2100 < vsync_cost) && (vsync_cost < 3100))
+					usleep_range(2 * 1000, (2 * 1000) + 100);
+			}
 		}
 	} else if (vsync_cost > vsync_width) {
 		frame_end = us_per_frame - vsync_cost;
@@ -3072,8 +3107,9 @@ void oplus_apollo_async_bl_delay(struct dsi_panel *panel)
 	u32 frame_end;
 	struct dsi_display *display = NULL;
 	struct sde_encoder_virt *sde_enc;
+#ifdef OPLUS_FEATURE_DISPLAY_HIGH_PRECISION
 	int high_precision_fps;
-
+#endif
 	if(!strcmp(panel->type, "primary")) {
 		display = get_main_display();
 	} else if (!strcmp(panel->type, "secondary")) {
@@ -3087,11 +3123,13 @@ void oplus_apollo_async_bl_delay(struct dsi_panel *panel)
 		DSI_ERR("invalid encoder params\n");
 		return;
 	}
-
+#ifdef OPLUS_FEATURE_DISPLAY_HIGH_PRECISION
 	high_precision_fps = oplus_adfr_get_panel_high_precision_state(display);
 	if (high_precision_fps > 0) {
 		us_per_frame = 1000000 / high_precision_fps;
-	} else {
+	} else
+#endif
+	 {
 		us_per_frame = panel->cur_mode->priv_info->vsync_period;
 	}
 	async_bl_delay = panel->cur_mode->priv_info->async_bl_delay;
@@ -3249,4 +3287,25 @@ int oplus_display_set_shutdown_flag(void *buf)
 			__func__, buf, shutdown_flag);
 
 	return 0;
+}
+
+int oplus_display_panel_get_fps(void *data)
+{
+	int rc = 0;
+	struct dsi_display *display = get_main_display();
+	uint32_t *last_fps = data;
+
+	if (!display || !display->panel) {
+		LCD_ERR("Invalid display or panel\n");
+		rc = -EINVAL;
+		return rc;
+	}
+
+	mutex_lock(&display->display_lock);
+
+	*last_fps = display->panel->last_refresh_rate;
+
+	mutex_unlock(&display->display_lock);
+
+	return rc;
 }

@@ -3310,6 +3310,10 @@ void iris_alloc_update_ipopt_space(void)
 
 	for (i = IRIS_DTSI_PIP_IDX_START; i < iris_get_cmd_list_cnt(); i++) {
 		pip_index = iris_get_ip_idx(i);
+		if (NULL == pip_index) {
+			IRIS_LOGE("%s(), failed to get ip idx", __func__);
+			return;
+		}
 		dtsi_opt_cnt = 0;
 		for (j = 0; j < IRIS_IP_CNT; j++)
 			dtsi_opt_cnt += pip_index[j].opt_cnt;
@@ -3318,6 +3322,10 @@ void iris_alloc_update_ipopt_space(void)
 		sum = dtsi_opt_cnt;
 
 	pip_index = iris_get_ip_idx(IRIS_LUT_PIP_IDX);
+	if (NULL == pip_index) {
+		IRIS_LOGE("%s(), failed to get ip idx", __func__);
+		return;
+	}
 	for (j = 0; j < LUT_IP_END - LUT_IP_START; j++)
 		sum += pip_index[j].opt_cnt;
 
@@ -3387,7 +3395,7 @@ void _iris_read_power_mode(struct dsi_panel *panel)
 	struct dsi_cmd_desc_pxlw cmds_pxlw = {
 		{0, MIPI_DSI_DCS_READ, MIPI_DSI_MSG_REQ_ACK, 0, 0,
 		sizeof(get_power_mode), get_power_mode, 1, read_cmd_rbuf}, 1, 0};
-	struct dsi_cmd_desc cmds;
+	struct dsi_cmd_desc cmds = {0};
 	struct dsi_panel_cmd_set cmdset = {
 		.state = DSI_CMD_SET_STATE_HS,
 		.count = 1,
@@ -4648,8 +4656,8 @@ static ssize_t _iris_dump_cmd_payload(struct file *file,
 	if (payload == NULL)
 		return -EFAULT;
 
-	IRIS_LOGW("%s(), for i_p: 0x%02X opt: 0x%02X, payload[%d] is: 0x%08X",
-			__func__, ip, opt_id, pos, payload[pos]);
+	IRIS_LOGW("%s(), for i_p: 0x%02X opt: 0x%02X, payload[2] is: 0x%08X",
+			__func__, ip, opt_id, payload[2]);
 
 	return count;
 }

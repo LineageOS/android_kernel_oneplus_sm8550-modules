@@ -37,6 +37,10 @@
 #include "oplus_onscreenfingerprint.h"
 #endif /* OPLUS_FEATURE_DISPLAY_ONSCREENFINGERPRINT */
 
+#ifdef OPLUS_TRACKPOINT_REPORT
+#include <soc/oplus/oplus_trackpoint_report.h>
+#endif /* OPLUS_TRACKPOINT_REPORT */
+
 #if defined(CONFIG_PXLW_IRIS)
 #include "dsi_iris_api.h"
 #endif
@@ -87,6 +91,8 @@ uint64_t serial_number_fir = 0x0;
 uint64_t serial_number_sec = 0x0;
 
 int gamma_mode = 0;
+
+int oplus_sync_power_state = 0;
 
 struct touchpanel_event fp_state = {0};
 
@@ -223,8 +229,8 @@ int dsi_panel_read_panel_reg(struct dsi_display_ctrl *ctrl,
 	cmdsreq.msg.rx_len = len;
 	cmdsreq.msg.flags |= MIPI_DSI_MSG_UNICAST_COMMAND;
 
-	if ((!strcmp(panel->name, "dsi_oplus24675_samsung_ams667fk02_s6e8fc3_fhdp_vid")||!strcmp(panel->name, "dsi_oplus24241_samsung_ams667fk03_s6e8fc3_fhdp_vid")) &&
-			panel->panel_mode == DSI_OP_VIDEO_MODE) {
+	if ((!strcmp(panel->name, "dsi_oplus24675_samsung_ams667fk02_s6e8fc3_fhdp_vid")||!strcmp(panel->name, "dsi_oplus24241_samsung_ams667fk03_s6e8fc3_fhdp_vid")
+	||!strcmp(panel->name, "AC298 P 3 A0026 dsc video mode panel"))&&panel->panel_mode == DSI_OP_VIDEO_MODE) {
 		cmdsreq.msg.flags |= MIPI_DSI_MSG_USE_LPM;
 	}
 
@@ -689,6 +695,19 @@ static ssize_t oplus_display_regulator_control(struct kobject *obj,
 	}
 
 	return count;
+}
+
+static ssize_t oplus_display_get_main_panel_name(struct kobject *obj,
+		struct kobj_attribute *attr, char *buf)
+{
+	struct dsi_display *display = get_main_display();
+	if (!display || !display->panel || !display->panel->name) {
+		LCD_ERR("failed to config lcd panel name\n");
+		return -EINVAL;
+	}
+
+	LCD_INFO("panel name:%s\n", (char*)display->panel->name);
+	return sysfs_emit(buf, "panel_name:%s\n", (char*)display->panel->name);
 }
 
 static ssize_t oplus_display_get_panel_serial_number(struct kobject *obj,
@@ -2833,6 +2852,8 @@ int oplus_display_set_power(struct drm_connector *connector,
 		atomic_set(&display->panel->esd_pending, 1);
 
 	display->panel->power_state = power_mode;
+
+	oplus_sync_power_state = power_mode;
 	switch (power_mode) {
 	case SDE_MODE_DPMS_LP1:
 	case SDE_MODE_DPMS_LP2:
@@ -3175,6 +3196,115 @@ static ssize_t oplus_display_get_fp_state(struct kobject *obj,
 	return sprintf(buf, "%d,%d,%d\n", fp_state.x, fp_state.y, fp_state.touch_state);
 }
 
+#ifdef OPLUS_TRACKPOINT_REPORT
+int trackpoint_id = 0;
+static ssize_t oplus_get_trackpoint_test_attr(struct kobject *obj,
+	struct kobj_attribute *attr, char *buf)
+{
+	if (!buf) {
+		LCD_ERR("Invalid params\n");
+		return -EINVAL;
+	}
+
+	return sysfs_emit(buf, "Support trackpoint id:\n \
+		%d --> Command transfer failed\n \
+		%d --> Failed to enable host power regs\n \
+		%d --> Failed to enable power resources\n \
+		%d --> ESD check failed\n \
+		%d --> dma_tx done but irq isn't triggered\n \
+		%d --> wr_ptr_irq timeout failed\n \
+		%d --> SDE encoder underrun callback\n \
+		%d --> DSI_CTRL error\n \
+		%d --> DSI_PHY error\n \
+		%d/%d --> [INFO] MIPI dynamic clk\n \
+		%d/%d --> [INFO] OSC dynamic clk\n \
+		*** --> Trackpoint test default use %d\n \
+		Triggered trackpoint id: %d\n",
+			OPLUS_DISP_Q_ERROR_CMD_TRANS_FAIL,
+			OPLUS_DISP_Q_ERROR_POWER_CHECK_FAIL,
+			OPLUS_DISP_Q_ERROR_DCDC_CHECK_FAIL,
+			OPLUS_DISP_Q_ERROR_ESD_CHECK_FAIL,
+			OPLUS_DISP_Q_ERROR_DMA_IRQ_TRIGGER_FAIL,
+			OPLUS_DISP_Q_ERROR_PTR_TIMEOUT,
+			OPLUS_DISP_Q_ERROR_UNDERRUN,
+			OPLUS_DISP_Q_ERROR_CTRL_HW,
+			OPLUS_DISP_Q_ERROR_PHY_HW,
+			OPLUS_DISP_Q_INFO_DYN_MIPI, OPLUS_DISP_Q_INFO_DYN_MIPI_INVALID,
+			OPLUS_DISP_Q_INFO_DYN_OSC, OPLUS_DISP_Q_INFO_DYN_OSC_INVALID,
+			OPLUS_DISP_Q_INFO_TEST,
+			trackpoint_id);
+}
+
+static ssize_t oplus_set_trackpoint_test_attr(struct kobject *obj,
+	struct kobj_attribute *attr, const char *buf, size_t count)
+{
+	if (!buf) {
+		LCD_ERR("Invalid params\n");
+		return count;
+	}
+
+	sscanf(buf, "%d", &trackpoint_id);
+
+	switch (trackpoint_id) {
+	case OPLUS_DISP_Q_ERROR_CMD_TRANS_FAIL:
+		EXCEPTION_TRACKPOINT_REPORT("DisplayDriverID@@%d$$trackpoint_test: Command transfer failed",
+				trackpoint_id);
+		break;
+	case OPLUS_DISP_Q_ERROR_POWER_CHECK_FAIL:
+		EXCEPTION_TRACKPOINT_REPORT("DisplayDriverID@@%d$$trackpoint_test: Failed to enable host power regs",
+				trackpoint_id);
+		break;
+	case OPLUS_DISP_Q_ERROR_DCDC_CHECK_FAIL:
+		EXCEPTION_TRACKPOINT_REPORT("DisplayDriverID@@%d$$trackpoint_test: Failed to enable power resources",
+				trackpoint_id);
+		break;
+	case OPLUS_DISP_Q_ERROR_ESD_CHECK_FAIL:
+		EXCEPTION_TRACKPOINT_REPORT("DisplayDriverID@@%d$$trackpoint_test: ESD check failed",
+				trackpoint_id);
+		break;
+	case OPLUS_DISP_Q_ERROR_DMA_IRQ_TRIGGER_FAIL:
+		EXCEPTION_TRACKPOINT_REPORT("DisplayDriverID@@%d$$trackpoint_test: dma_tx done but irq not triggered",
+				trackpoint_id);
+		break;
+	case OPLUS_DISP_Q_ERROR_PTR_TIMEOUT:
+		EXCEPTION_TRACKPOINT_REPORT("DisplayDriverID@@%d$$trackpoint_test: wr_ptr_irq timeout failed",
+				trackpoint_id);
+		break;
+	case OPLUS_DISP_Q_ERROR_UNDERRUN:
+		EXCEPTION_TRACKPOINT_REPORT("DisplayDriverID@@%d$$trackpoint_test: SDE encoder underrun callback",
+				trackpoint_id);
+		break;
+	case OPLUS_DISP_Q_ERROR_CTRL_HW:
+		EXCEPTION_TRACKPOINT_REPORT("DisplayDriverID@@%d$$trackpoint_test: DSI_CTRL error",
+				trackpoint_id);
+		break;
+	case OPLUS_DISP_Q_ERROR_PHY_HW:
+		EXCEPTION_TRACKPOINT_REPORT("DisplayDriverID@@%d$$trackpoint_test: DSI_PHY error",
+				trackpoint_id);
+		break;
+	case OPLUS_DISP_Q_INFO_DYN_MIPI:
+	case OPLUS_DISP_Q_INFO_DYN_MIPI_INVALID:
+		INFO_TRACKPOINT_REPORT("DisplayDriverID@@%d$$trackpoint_test: [INFO] MIPI dynamic clk",
+				trackpoint_id);
+		break;
+	case OPLUS_DISP_Q_INFO_DYN_OSC:
+	case OPLUS_DISP_Q_INFO_DYN_OSC_INVALID:
+		INFO_TRACKPOINT_REPORT("DisplayDriverID@@%d$$trackpoint_test: [INFO] OSC dynamic clk",
+				trackpoint_id);
+		break;
+	default:
+		LCD_WARN("%d use default trackpoint_id:%d for invalid input: %s\n",
+				trackpoint_id, OPLUS_DISP_Q_INFO_TEST, buf);
+		trackpoint_id = OPLUS_DISP_Q_INFO_TEST;
+		EXCEPTION_TRACKPOINT_REPORT("DisplayDriverID@@%d$$trackpoint_test: %s",
+				trackpoint_id, buf);
+		break;
+	}
+
+	return count;
+}
+#endif /* OPLUS_TRACKPOINT_REPORT */
+
 static struct kobject *oplus_display_kobj;
 
 static OPLUS_ATTR(audio_ready, S_IRUGO | S_IWUSR, NULL,
@@ -3270,7 +3400,10 @@ static OPLUS_ATTR(ultra_low_power_aod_mode, S_IRUGO | S_IWUSR, oplus_ofp_get_ult
 static OPLUS_ATTR(LCM_CABC, S_IRUGO|S_IWUSR, oplus_display_get_panel_cabc, oplus_display_set_panel_cabc);
 #endif /* OPLUS_FEATURE_DISPLAY_ONSCREENFINGERPRINT */
 static OPLUS_ATTR(shutdownflag, S_IRUGO | S_IWUSR, oplus_get_shutdownflag, oplus_set_shutdownflag);
-
+#ifdef OPLUS_TRACKPOINT_REPORT
+static OPLUS_ATTR(trackpoint_test, S_IRUGO | S_IWUSR, oplus_get_trackpoint_test_attr, oplus_set_trackpoint_test_attr);
+#endif /* OPLUS_TRACKPOINT_REPORT */
+static OPLUS_ATTR(main_panel_name, S_IRUGO | S_IWUSR, oplus_display_get_main_panel_name, NULL);
 /*
  * Create a group of attributes so that we can create and destroy them all
  * at once.
@@ -3336,6 +3469,10 @@ static struct attribute *oplus_display_attrs[] = {
 #endif /* OPLUS_FEATURE_DISPLAY_ONSCREENFINGERPRINT */
 	&oplus_attr_LCM_CABC.attr,
 	&oplus_attr_shutdownflag.attr,
+#ifdef OPLUS_TRACKPOINT_REPORT
+	&oplus_attr_trackpoint_test.attr,
+#endif /* OPLUS_TRACKPOINT_REPORT */
+	&oplus_attr_main_panel_name.attr,
 	NULL,	/* need to NULL terminate the list of attributes */
 };
 

@@ -518,8 +518,8 @@ static int _iris_configure_ex(u32 display, u32 type, u32 count, u32 *values)
 
 			memset(dump_buf,  0, sizeof(dump_buf));
 			len = 0;
-			for (j = 0; j < dump_reg_cnt; j++)
-				len += snprintf(dump_buf+len, DUMP_REG_BUF_SIZE,
+			//for (j = 0; j < dump_reg_cnt; j++)
+				len += snprintf(dump_buf+len, (DUMP_REG_BUF_SIZE - len),
 					", addr = 0x%08x, value = 0x%08x",
 					dump_reg_addr[j], dump_reg_val[j]);
 			IRIS_LOGI("reg dump, count: %3d%s", i, dump_buf);

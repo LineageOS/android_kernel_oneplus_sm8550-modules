@@ -7,7 +7,9 @@
 ** Date : 2021/11/26
 ** Author : Display
 ******************************************************************/
-
+#ifdef OPLUS_TRACKPOINT_REPORT
+#include <soc/oplus/oplus_trackpoint_report.h>
+#endif /* OPLUS_TRACKPOINT_REPORT */
 #include "oplus_display_esd.h"
 
 int oplus_panel_parse_esd_reg_read_configs(struct dsi_panel *panel)
@@ -125,10 +127,11 @@ bool oplus_panel_validate_reg_read(struct dsi_panel *panel)
 	if (group_matched)
 		return true;
 
-	cnt += scnprintf(payload + cnt, sizeof(payload) - cnt, "DisplayDriverID@@408$$");
+	cnt += scnprintf(payload + cnt, sizeof(payload) - cnt, "DisplayDriverID@@%d$$", OPLUS_DISP_Q_ERROR_ESD_CHECK_FAIL);
 	cnt += scnprintf(payload + cnt, sizeof(payload) - cnt, "ESD:");
 	for (i = 0; i < len; ++i)
 		cnt += scnprintf(payload + cnt, sizeof(payload) - cnt, " [0x%02X]", config->return_buf[i]);
+	EXCEPTION_TRACKPOINT_REPORT("%s : ESD check failed\n", payload);
 
 	return false;
 }
@@ -136,6 +139,8 @@ int oplus_display_status_check_mipi_err_gpio(struct dsi_display *display)
 {
 	unsigned int mipi_err_gpio_value = 1;
 	struct dsi_panel *panel;
+	char payload[1024] = "";
+	u32 cnt = 0;
 
 	if (!display || !display->panel) {
 		LCD_INFO("Invalid display or panel params!\n");
@@ -154,6 +159,10 @@ int oplus_display_status_check_mipi_err_gpio(struct dsi_display *display)
 	LCD_INFO("esd mipi err flag status : %d\n", mipi_err_gpio_value);
 	if (mipi_err_gpio_value == 0) {
 		LCD_ERR("esd mipi err flag check failed, mipi_err_gpio_value = %d\n", mipi_err_gpio_value);
+		cnt += scnprintf(payload + cnt, sizeof(payload) - cnt, "DisplayDriverID@@%d$$", OPLUS_DISP_Q_ERROR_ESD_CHECK_FAIL);
+		cnt += scnprintf(payload + cnt, sizeof(payload) - cnt, "ESD:");
+		cnt += scnprintf(payload + cnt, sizeof(payload) - cnt, " [mipi err flag gpio status: %d]", mipi_err_gpio_value);
+		EXCEPTION_TRACKPOINT_REPORT("%s : ESD check failed\n", payload);
 		return -EINVAL;
 	}
 

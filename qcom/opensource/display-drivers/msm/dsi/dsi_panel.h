@@ -45,6 +45,7 @@ struct oplus_clk_osc {
 
 #define DSI_CMD_PPS_HDR_SIZE 7
 #define DSI_MODE_MAX 32
+#define PANEL_REGS_CHECK_NUM_MAX 64
 
 /*
  * Defining custom dsi msg flag.
@@ -103,6 +104,12 @@ struct dsi_dfps_capabilities {
 	u32 *dfps_list;
 	u32 dfps_list_len;
 	bool dfps_support;
+	u32 *dfps_hfp_list;
+	u32 *dfps_hbp_list;
+	u32 *dfps_hpw_list;
+	u32 *dfps_vbp_list;
+	u32 *dfps_vfp_list;
+	u32 *dfps_vpw_list;
 };
 
 struct dsi_qsync_capabilities {
@@ -153,6 +160,7 @@ struct dsi_panel_oplus_privite {
 	u32 osc_clk_mode1_rate;
 	bool cabc_enabled;
 	bool dre_enabled;
+	bool aod_backlight_async;
 	bool is_apollo_support;
 	u32 sync_brightness_level;
 	bool dp_support;
@@ -208,9 +216,14 @@ struct dsi_panel_oplus_privite {
 	u32 disable_delay_bl_count;
 	bool gamma_switch_enable;
 	bool vid_timming_switch_enabled;
+	bool vid_timming_switch_post_enabled;
 	bool dimming_setting_before_bl_0_enable;
 	bool vidmode_backlight_async_wait_enable;
 	bool set_backlight_not_do_esd_reg_read_enable;
+	bool dozedisable_esdcheck_delay;
+	bool doze_disable_esdcheck;
+	/* add for all wait te demand */
+	bool ddic_scaler_need_wait_te;
 };
 
 struct dsi_panel_oplus_serial_number {

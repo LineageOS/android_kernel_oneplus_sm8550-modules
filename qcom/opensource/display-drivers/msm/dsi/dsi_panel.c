@@ -430,11 +430,14 @@ static int dsi_panel_power_on(struct dsi_panel *panel)
 	int rc = 0;
 
 #ifdef OPLUS_FEATURE_DISPLAY
-	DSI_INFO("debug for dsi_panel_power_on\n");
+	DSI_INFO("debug for dsi_panel_power_on,panel=%s\n",panel->name);
 	oplus_panel_gpio_pre_on(panel);
+	
+    rc = dsi_pwr_enable_regulator_v2(panel, true);
+#else
+	rc = dsi_pwr_enable_regulator(&panel->power_info, true);
 #endif /* OPLUS_FEATURE_DISPLAY */
 
-	rc = dsi_pwr_enable_regulator(&panel->power_info, true);
 	if (rc) {
 		DSI_ERR("[%s] failed to enable vregs, rc=%d\n",
 				panel->name, rc);
@@ -463,6 +466,7 @@ static int dsi_panel_power_on(struct dsi_panel *panel)
 	if (!strcmp(panel->name, "AC052 P 3 A0003 dsc cmd mode panel")
 		|| !strcmp(panel->name, "AC052 S 3 A0001 dsc cmd mode panel")
 		|| !strcmp(panel->name, "AA536 P 3 A0001 dsc cmd mode panel")
+		|| !strcmp(panel->name, "AA545 P 3 A0005 dsc cmd mode panel")
 		|| !strcmp(panel->oplus_priv.vendor_name, "A0004")
 		|| !strcmp(panel->oplus_priv.vendor_name, "A0012")) {
 		rc = 0;
@@ -492,7 +496,11 @@ error_disable_gpio:
 	(void)dsi_panel_set_pinctrl_state(panel, false);
 
 error_disable_vregs:
+#ifdef OPLUS_FEATURE_DISPLAY
+	(void)dsi_pwr_enable_regulator_v2(panel, false);
+#else
 	(void)dsi_pwr_enable_regulator(&panel->power_info, false);
+#endif /* OPLUS_FEATURE_DISPLAY */
 
 exit:
 	return rc;
@@ -503,7 +511,7 @@ static int dsi_panel_power_off(struct dsi_panel *panel)
 	int rc = 0;
 
 #ifdef OPLUS_FEATURE_DISPLAY
-	DSI_INFO("debug for dsi_panel_power_off\n");
+	DSI_INFO("debug for dsi_panel_power_off,panel=%s\n",panel->name);
 #if defined(CONFIG_PXLW_IRIS)
 	if (iris_is_chip_supported() && (panel->is_secondary)) {
 		//Don't need delay for the iris second panel
@@ -543,7 +551,11 @@ static int dsi_panel_power_off(struct dsi_panel *panel)
 #if defined(CONFIG_PXLW_IRIS)
 	iris_power_off(panel);
 #endif
+#ifdef OPLUS_FEATURE_DISPLAY
+	rc = dsi_pwr_enable_regulator_v2(panel, false);
+#else
 	rc = dsi_pwr_enable_regulator(&panel->power_info, false);
+#endif /* OPLUS_FEATURE_DISPLAY */
 	if (rc)
 		DSI_ERR("[%s] failed to enable vregs, rc=%d\n",
 				panel->name, rc);
@@ -1757,6 +1769,31 @@ static int dsi_panel_parse_dyn_clk_caps(struct dsi_panel *panel)
 	return 0;
 }
 
+static void dsi_panel_parse_dfps_porches(struct dsi_parser_utils *utils,
+	u32 **dfps_porch_list, const char *porch_type, u32 dfps_list_len) {
+	int rc = 0;
+	int i;
+
+	*dfps_porch_list = kcalloc(dfps_list_len, sizeof(u32), GFP_KERNEL);
+	if (!*dfps_porch_list) {
+		rc = -ENOMEM;
+		DSI_ERR("[%s] dfps porch list parse failed, rc = %d\n", porch_type, rc);
+	}
+
+	rc = utils->read_u32_array(utils->data, porch_type,
+			*dfps_porch_list, dfps_list_len);
+	if (rc) {
+		rc = -EINVAL;
+		DSI_ERR("[%s] dfps porch list parse failed, rc = %d\n", porch_type, rc);
+	}
+
+	DSI_INFO("[%s]: ", porch_type);
+	for (i = 0; i < dfps_list_len; ++i)
+	{
+		DSI_INFO("[%d] ", (*dfps_porch_list)[i]);
+	}
+}
+
 static int dsi_panel_parse_dfps_caps(struct dsi_panel *panel)
 {
 	int rc = 0;
@@ -1790,6 +1827,8 @@ static int dsi_panel_parse_dfps_caps(struct dsi_panel *panel)
 		dfps_caps->type = DSI_DFPS_IMMEDIATE_HFP;
 	} else if (!strcmp(type, "dfps_immediate_porch_mode_vfp")) {
 		dfps_caps->type = DSI_DFPS_IMMEDIATE_VFP;
+	} else if (!strcmp(type, "dfps_immediate_porch_mode_both_hv_porch")) {
+		dfps_caps->type = DSI_DFPS_IMMEDIATE_HV_P;
 	} else {
 		DSI_ERR("[%s] dfps type is not recognized\n", name);
 		rc = -EINVAL;
@@ -1820,6 +1859,22 @@ static int dsi_panel_parse_dfps_caps(struct dsi_panel *panel)
 		rc = -EINVAL;
 		goto error;
 	}
+
+	if (dfps_caps->type == DSI_DFPS_IMMEDIATE_HV_P) {
+		dsi_panel_parse_dfps_porches(utils, &dfps_caps->dfps_hfp_list, "qcom,dsi-dfps-hfp-list",
+			dfps_caps->dfps_list_len);
+		dsi_panel_parse_dfps_porches(utils, &dfps_caps->dfps_hbp_list, "qcom,dsi-dfps-hbp-list",
+			dfps_caps->dfps_list_len);
+		dsi_panel_parse_dfps_porches(utils, &dfps_caps->dfps_hpw_list, "qcom,dsi-dfps-hpw-list",
+			dfps_caps->dfps_list_len);
+		dsi_panel_parse_dfps_porches(utils, &dfps_caps->dfps_vbp_list, "qcom,dsi-dfps-vbp-list",
+			dfps_caps->dfps_list_len);
+		dsi_panel_parse_dfps_porches(utils, &dfps_caps->dfps_vfp_list, "qcom,dsi-dfps-vfp-list",
+			dfps_caps->dfps_list_len);
+		dsi_panel_parse_dfps_porches(utils, &dfps_caps->dfps_vpw_list, "qcom,dsi-dfps-vpw-list",
+			dfps_caps->dfps_list_len);
+	}
+
 	dfps_caps->dfps_support = true;
 
 	/* calculate max and min fps */
@@ -2243,6 +2298,8 @@ const char *cmd_set_prop_map[DSI_CMD_SET_MAX] = {
 	"qcom,mdss-dsi-loading-effect-off-command",
 	"qcom,mdss-dsi-hbm-enter-switch-command",
 	"qcom,mdss-dsi-hbm-exit-switch-command",
+	"qcom,mdss-dsi-hbm-enter-dimming-command",
+	"qcom,mdss-dsi-hbm-exit-dimming-command",
 	"qcom,mdss-dsi-hbm-max-command",
 	"qcom,mdss-dsi-hbm-exit-max-command",
 	"qcom,mdss-dsi-dimming-setting-command",
@@ -2269,6 +2326,10 @@ const char *cmd_set_prop_map[DSI_CMD_SET_MAX] = {
 	"qcom,mdss-dsi-demura-dbv-mode-1-command",
 	"qcom,mdss-dsi-demura-dbv-mode-2-command",
 	"qcom,mdss-dsi-demura-dbv-mode-3-command",
+	"qcom,mdss-dsi-demura-dbv-mode-4-command",
+	"qcom,mdss-dsi-demura-dbv-mode-5-command",
+	"qcom,mdss-dsi-demura-dbv-mode-6-command",
+	"qcom,mdss-dsi-demura-dbv-mode-7-command",
 	"qcom,mdss-dsi-dly-on-command",
 	"qcom,mdss-dsi-dly-off-command",
 	"qcom,mdss-dsi-cabc-off-command",
@@ -2281,6 +2342,7 @@ const char *cmd_set_prop_map[DSI_CMD_SET_MAX] = {
 	"qcom,mdss-dsi-panel-init-command",
 	"qcom,mdss-dsi-pwm-turbo-on-command",
 	"qcom,mdss-dsi-vid-120hz-switch-command",
+	"qcom,mdss-dsi-vid-90hz-switch-command",
 	"qcom,mdss-dsi-vid-60hz-switch-command",
 	"qcom,mdss-dsi-pwm-turbo-off-command",
 	"qcom,mdss-dsi-pwm-turbo-hbm-on-command",
@@ -2475,6 +2537,8 @@ const char *cmd_set_state_map[DSI_CMD_SET_MAX] = {
 	"qcom,mdss-dsi-loading-effect-off-command-state",
 	"qcom,mdss-dsi-hbm-enter-switch-command-state",
 	"qcom,mdss-dsi-hbm-exit-switch-command-state",
+	"qcom,mdss-dsi-hbm-enter-dimming-command-state",
+	"qcom,mdss-dsi-hbm-exit-dimming-command-state",
 	"qcom,mdss-dsi-hbm-max-command-state",
 	"qcom,mdss-dsi-hbm-exit-max-command-state",
 	"qcom,mdss-dsi-dimming-setting-command-state",
@@ -2501,6 +2565,10 @@ const char *cmd_set_state_map[DSI_CMD_SET_MAX] = {
 	"qcom,mdss-dsi-demura-dbv-mode-1-command-state",
 	"qcom,mdss-dsi-demura-dbv-mode-2-command-state",
 	"qcom,mdss-dsi-demura-dbv-mode-3-command-state",
+	"qcom,mdss-dsi-demura-dbv-mode-4-command-state",
+	"qcom,mdss-dsi-demura-dbv-mode-5-command-state",
+	"qcom,mdss-dsi-demura-dbv-mode-6-command-state",
+	"qcom,mdss-dsi-demura-dbv-mode-7-command-state",
 	"qcom,mdss-dsi-dly-on-command-state",
 	"qcom,mdss-dsi-dly-off-command-state",
 	"qcom,mdss-dsi-cabc-off-command-state",
@@ -2511,6 +2579,7 @@ const char *cmd_set_state_map[DSI_CMD_SET_MAX] = {
 	"qcom,dsi-panel-date-switch-command-state",
 	"qcom,mdss-dsi-panel-info-switch-page-command-state",
 	"qcom,mdss-dsi-vid-120hz-switch-command-state",
+	"qcom,mdss-dsi-vid-90hz-switch-command-state",
 	"qcom,mdss-dsi-vid-60hz-switch-command-state",
 	"qcom,mdss-dsi-panel-init-command-state",
 	"qcom,mdss-dsi-pwm-turbo-on-command-state",
@@ -3347,6 +3416,9 @@ static int dsi_panel_parse_phy_timing(struct dsi_display_mode *mode,
 				mode->timing.refresh_rate);
 		do_div(pixel_clk_khz, 1000);
 		mode->pixel_clk_khz = pixel_clk_khz;
+		DSI_INFO("h_total_dce=%llu, v_total=%u, refresh_rate=%u, pclk = %llu, h_total=%u \n",
+			dsi_h_total_dce(&mode->timing), DSI_V_TOTAL(&mode->timing),
+			mode->timing.refresh_rate, pixel_clk_khz, DSI_H_TOTAL(&mode->timing));
 	}
 
 	return rc;
@@ -5171,6 +5243,9 @@ int dsi_panel_update_pps(struct dsi_panel *panel)
 	iris_dsi_panel_dump_pps(set);
 #endif
 
+	if (!strcmp(panel->name, "AA545 P 3 A0005 dsc cmd mode panel")) {
+		oplus_panel_switch_to_sync_te(panel, true);
+	}
 	rc = dsi_panel_tx_cmd_set(panel, DSI_CMD_SET_PPS);
 	if (rc) {
 		DSI_ERR("[%s] failed to send DSI_CMD_SET_PPS cmds, rc=%d\n",
@@ -5320,6 +5395,7 @@ int dsi_panel_prepare(struct dsi_panel *panel)
 	if (!strcmp(panel->name, "AC052 P 3 A0003 dsc cmd mode panel")
 		|| !strcmp(panel->name, "AC052 S 3 A0001 dsc cmd mode panel")
 		|| !strcmp(panel->name, "AA536 P 3 A0001 dsc cmd mode panel")
+		|| !strcmp(panel->name, "AA545 P 3 A0005 dsc cmd mode panel")
 		|| !strcmp(panel->oplus_priv.vendor_name, "A0004")
 		|| !strcmp(panel->oplus_priv.vendor_name, "A0012")) {
 		usleep_range(10*1000, (10*1000)+100);
@@ -5625,7 +5701,9 @@ int dsi_panel_switch(struct dsi_panel *panel)
 
 #ifdef OPLUS_FEATURE_DISPLAY
 	if (!strcmp(panel->name, "AA551 P 3 A0004 dsc cmd mode panel")) {
-		oplus_panel_switch_to_sync_te(panel);
+		oplus_panel_switch_to_sync_te(panel, false);
+	} else if (!strcmp(panel->name, "AA545 P 3 A0005 dsc cmd mode panel")) {
+		oplus_panel_switch_to_sync_te(panel, true);
 	} else if (!strcmp(panel->name, "AC052 S 3 A0001 dsc cmd mode panel")) {
 		oplus_panel_switch_to_sync_cur_te(panel);
 	} else if (oplus_panel_pwm_onepulse_is_enabled(panel)) {

@@ -11,6 +11,7 @@
 #include "oplus_bl.h"
 #include "oplus_display_interface.h"
 #include "oplus_display_panel_common.h"
+#include "oplus_display_panel_seed.h"
 #ifdef OPLUS_FEATURE_DISPLAY_ONSCREENFINGERPRINT
 #include "oplus_onscreenfingerprint.h"
 #endif /* OPLUS_FEATURE_DISPLAY_ONSCREENFINGERPRINT */
@@ -713,19 +714,37 @@ int oplus_panel_pwm_switch_wait_te_tx_cmd(struct dsi_panel *panel, u32 pwm_switc
 	return rc;
 }
 
-void oplus_panel_backlight_demura_dbv_switch(struct dsi_panel *panel, u32 bl_lvl)
+int oplus_display_panel_set_demura2_offset(void)
 {
+	u32 bl_lvl = 0;
 	int rc = 0;
-	u32 bl_demura_last_mode = panel->oplus_priv.bl_demura_mode;
+	struct dsi_display *display = NULL;
+	struct dsi_panel *panel = NULL;
+	u32 last_demura_mode = 0;
 	u32 bl_demura_mode = DSI_CMD_DEMURA_DBV_MODE0;
 
+	display = get_main_display();
+	if (!display) {
+		DSI_ERR("failed to set demura cmd, Invalid params display!\n");
+		return -EINVAL;
+	}
+
+	panel = display->panel;
+	if (!panel) {
+		DSI_ERR("[%s] failed to set demura, Invalid params\n", panel->name);
+		return -EINVAL;
+	}
+
 	if (!panel->oplus_priv.oplus_bl_demura_dbv_support)
-		return;
+		return -EINVAL;
+
+	bl_lvl = panel->bl_config.bl_level;
+	last_demura_mode = panel->oplus_priv.bl_demura_mode;
 
 	if (bl_lvl == 0 || bl_lvl == 1)
-		return;
+		return rc;
 
-	if (!strcmp(panel->name, "AA551 P 3 A0004 dsc cmd mode panel")) {
+	if (!strcmp(panel->name, "AC052 P 3 A0003 dsc cmd mode panel")) {
 		if ((bl_lvl >= 8) && (bl_lvl <= 1087)) {
 			panel->oplus_priv.bl_demura_mode = 0;
 			bl_demura_mode = DSI_CMD_DEMURA_DBV_MODE0;
@@ -738,6 +757,87 @@ void oplus_panel_backlight_demura_dbv_switch(struct dsi_panel *panel, u32 bl_lvl
 		} else if (2689 <= bl_lvl) {
 			panel->oplus_priv.bl_demura_mode = 3;
 			bl_demura_mode = DSI_CMD_DEMURA_DBV_MODE3;
+		}
+	} else {
+		return rc;
+	}
+
+	if (panel->oplus_priv.bl_demura_mode != last_demura_mode && panel->power_mode == SDE_MODE_DPMS_ON) {
+		mutex_lock(&display->display_lock);
+		mutex_lock(&panel->panel_lock);
+
+		rc |= dsi_display_override_dma_cmd_trig(display, DSI_TRIGGER_SW_SEOF);
+		rc |= dsi_panel_tx_cmd_set(panel, bl_demura_mode);
+		rc |= dsi_display_override_dma_cmd_trig(display, DSI_TRIGGER_NONE);
+
+		mutex_unlock(&panel->panel_lock);
+		mutex_unlock(&display->display_lock);
+
+		if (rc) {
+			DSI_ERR("[%s] failed to send bl_demura_mode, rc=%d\n", panel->name, rc);
+			return rc;
+		}
+	}
+	return rc;
+}
+
+void oplus_panel_backlight_demura_dbv_switch(struct dsi_panel *panel, u32 bl_lvl)
+{
+	int rc = 0;
+	u32 bl_demura_last_mode = panel->oplus_priv.bl_demura_mode;
+	u32 bl_demura_mode = DSI_CMD_DEMURA_DBV_MODE0;
+	char *tx_buf;
+	struct dsi_panel_cmd_set custom_cmd_set;
+
+	if (!panel->oplus_priv.oplus_bl_demura_dbv_support)
+		return;
+
+	if (bl_lvl == 0 || bl_lvl == 1)
+		return;
+
+	if (!strcmp(panel->name, "AA551 P 3 A0004 dsc cmd mode panel")) {
+		return;
+	} else if (!strcmp(panel->name, "AA545 P 3 A0005 dsc cmd mode panel")) {
+		if (bl_lvl <= 3515)
+			return;
+
+		if (PANEL_LOADING_EFFECT_MODE2 != __oplus_get_seed_mode())
+			return;
+
+		if ((bl_lvl > 3515) && (bl_lvl <= 3543)) {
+			panel->oplus_priv.bl_demura_mode = 0;
+			bl_demura_mode = DSI_CMD_DEMURA_DBV_MODE0;
+		} else if ((bl_lvl > 3543) && (bl_lvl <= 3600)) {
+			panel->oplus_priv.bl_demura_mode = 1;
+			bl_demura_mode = DSI_CMD_DEMURA_DBV_MODE1;
+		} else if ((bl_lvl > 3600) && (bl_lvl <= 3680)) {
+			panel->oplus_priv.bl_demura_mode = 2;
+			bl_demura_mode = DSI_CMD_DEMURA_DBV_MODE2;
+		} else if ((bl_lvl > 3680) && (bl_lvl <= 3720)) {
+			panel->oplus_priv.bl_demura_mode = 3;
+			bl_demura_mode = DSI_CMD_DEMURA_DBV_MODE3;
+		} else if ((bl_lvl > 3720) && (bl_lvl <= 3770)) {
+			panel->oplus_priv.bl_demura_mode = 4;
+			bl_demura_mode = DSI_CMD_DEMURA_DBV_MODE4;
+		} else if ((bl_lvl > 3770) && (bl_lvl <= 3860)) {
+			panel->oplus_priv.bl_demura_mode = 5;
+			bl_demura_mode = DSI_CMD_DEMURA_DBV_MODE5;
+		} else if ((bl_lvl > 3860) && (bl_lvl <= 3949)) {
+			panel->oplus_priv.bl_demura_mode = 6;
+			bl_demura_mode = DSI_CMD_DEMURA_DBV_MODE6;
+		}  else if ((bl_lvl > 3949) && (bl_lvl <= 4094)) {
+			panel->oplus_priv.bl_demura_mode = 7;
+			bl_demura_mode = DSI_CMD_DEMURA_DBV_MODE7;
+		}
+
+		custom_cmd_set = panel->cur_mode->priv_info->cmd_sets[bl_demura_mode];
+		tx_buf = (char*)custom_cmd_set.cmds[custom_cmd_set.count - 1].msg.tx_buf;
+
+		if (tx_buf[0] == 0x51) {
+			tx_buf[1] = (bl_lvl >> 8);
+			tx_buf[2] = (bl_lvl & 0xFF);
+		} else {
+			DSI_ERR("invaild format of cmd %s\n", cmd_set_prop_map[bl_demura_mode]);
 		}
 	} else {
 		if (bl_lvl < 688) {

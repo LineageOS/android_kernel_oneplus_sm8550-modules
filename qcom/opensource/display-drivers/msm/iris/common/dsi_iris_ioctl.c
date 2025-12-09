@@ -86,6 +86,12 @@ static int mdss_mipi_dsi_command(void __user *values)
 			goto err;
 		}
 		pdesc_multi = vmalloc(sizeof(struct dsi_cmd_desc) * cmd_cnt);
+		if (!pdesc_multi) {
+			IRIS_LOGE("can not vmalloc space");
+			ret = -ENOMEM;
+			goto err;
+		}
+		memset(pdesc_multi, 0, sizeof(struct dsi_cmd_desc) * cmd_cnt);
 		pcmd_indx = (char *)desc.msg.tx_buf + cmd_cnt + 1;
 		for (indx = 0; indx < cmd_cnt; indx++) {
 			pdesc = pdesc_multi + indx;
@@ -252,6 +258,8 @@ int iris_configure_t(uint32_t display, u32 type, void __user *argp)
 		return -EPERM;
 	}
 
+	value = value & 0xFFFFFFFF;
+
 	iris_ioctl_lock();
 	if (pcfg->iris_chip_type == CHIP_IRIS7P)
 		ret = iris_configure_i7p(display, type, value);
@@ -268,6 +276,7 @@ static int iris_configure_ex_t(uint32_t display, uint32_t type,
 	int ret = -1;
 	uint32_t *val = NULL;
 	struct iris_cfg *pcfg;
+	uint32_t i = 0;
 
 	pcfg = iris_get_cfg();
 
@@ -282,6 +291,10 @@ static int iris_configure_ex_t(uint32_t display, uint32_t type,
 		vfree(val);
 		return -EPERM;
 	}
+
+	for (i = 0; i < count; i++)
+		val[i] = val[i] & 0xFFFFFFFF;
+
 	if (pcfg->iris_chip_type == CHIP_IRIS7P)
 		ret = iris_configure_ex_i7p(display, type, count, val);
 	else if (pcfg->iris_chip_type == CHIP_IRIS7)

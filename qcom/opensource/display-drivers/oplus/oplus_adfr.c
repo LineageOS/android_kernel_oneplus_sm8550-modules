@@ -1738,11 +1738,19 @@ int oplus_adfr_sa_handle(void *sde_encoder_virt)
 		return -EINVAL;
 	}
 
+#ifdef OPLUS_FEATURE_DISPLAY_ONSCREENFINGERPRINT
+	/* auto mode, fakeframe and min fps are available only after power on */
+	if ((display->panel->power_mode != SDE_MODE_DPMS_ON) && !oplus_ofp_full_screen_aod_mode_is_enabled()) {
+		ADFR_DEBUG("should not handle sa when power mode is %u\n", display->panel->power_mode);
+		return 0;
+	}
+#else
 	/* auto mode, fakeframe and min fps are available only after power on */
 	if (display->panel->power_mode != SDE_MODE_DPMS_ON) {
 		ADFR_DEBUG("should not handle sa when power mode is %u\n", display->panel->power_mode);
 		return 0;
 	}
+#endif
 
 	h_skew = display->panel->cur_mode->timing.h_skew;
 
@@ -2205,7 +2213,7 @@ int oplus_adfr_pre_switch_send(void *dsi_panel)
 
 	OPLUS_ADFR_TRACE_BEGIN("oplus_adfr_pre_switch_send");
 
-	if (panel->cur_mode->timing.refresh_rate == 60) {
+	if (panel->cur_mode->timing.refresh_rate == 60 || panel->cur_mode->timing.refresh_rate == 90) {
 		ADFR_DEBUG("start to delay to second half frame in 60hz timing\n");
 		oplus_need_to_sync_te(panel);
 	}

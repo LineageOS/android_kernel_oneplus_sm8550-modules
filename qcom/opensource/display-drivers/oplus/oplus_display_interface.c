@@ -28,6 +28,7 @@ extern int oplus_dimlayer_hbm;
 extern unsigned int oplus_dsi_log_type;
 extern const char *cmd_set_prop_map[];
 extern int oplus_debug_max_brightness;
+extern bool g_oplus_send_fps_code;
 bool is_evt_panel = false;
 bool is_dvt_0_panel = false;
 bool is_pvt_panel = false;
@@ -761,55 +762,59 @@ error:
 	return rc;
 }
 
-int oplus_panel_vddr_on(struct dsi_display *display, const char *vreg_name)
+int oplus_panel_vddr_on(struct dsi_panel *panel, const char *vreg_name)
 {
 	int rc = 0;
 
-	if (!display || !display->panel) {
+	if (!panel) {
 		LCD_ERR("display or display panel is null, power vddr failed!\n");
 		return -ENODEV;
 	}
 
-	if ((!strcmp(display->panel->name, "AC052 P 3 A0003 dsc cmd mode panel")
-		|| !strcmp(display->panel->name, "AC052 P 1 A0002 dsc cmd mode panel")
-		|| !strcmp(display->panel->name, "AA536 P 3 A0001 dsc cmd mode panel")
-		|| !strcmp(display->panel->name, "AA551 P 3 A0004 dsc cmd mode panel"))
+	if ((!strcmp(panel->name, "AC052 P 3 A0003 dsc cmd mode panel")
+		|| !strcmp(panel->name, "AC052 P 1 A0002 dsc cmd mode panel")
+		|| !strcmp(panel->name, "AA536 P 3 A0001 dsc cmd mode panel")
+		|| !strcmp(panel->name, "AA551 P 3 A0004 dsc cmd mode panel")
+		|| !strcmp(panel->name, "AA545 P 3 A0005 dsc cmd mode panel"))
 		&& !strcmp(vreg_name, "vddio")) {
-		if (gpio_is_valid(display->panel->reset_config.panel_vout_gpio)) {
-			rc = gpio_direction_output(display->panel->reset_config.panel_vout_gpio, 1);
+		DSI_INFO("debug for oplus_panel_vddr_on,panel=%s\n", panel->name);
+		if (gpio_is_valid(panel->reset_config.panel_vout_gpio)) {
+			rc = gpio_direction_output(panel->reset_config.panel_vout_gpio, 1);
 			if (rc)
 				LCD_ERR("unable to set dir for panel_vout_gpio rc=%d\n", rc);
-			gpio_set_value(display->panel->reset_config.panel_vout_gpio, 1);
+			gpio_set_value(panel->reset_config.panel_vout_gpio, 1);
 		}
 	}
 
 	return rc;
 }
 
-int oplus_panel_vddr_off(struct dsi_display *display, const char *vreg_name)
+int oplus_panel_vddr_off(struct dsi_panel *panel, const char *vreg_name)
 {
 	int rc = 0;
 
-	if (!display || !display->panel) {
+	if (!panel) {
 		LCD_ERR("display or display panel is null, power vddr failed!\n");
 		return -ENODEV;
 	}
 
-	if ((!strcmp(display->panel->name, "AC052 P 3 A0003 dsc cmd mode panel")
-		|| !strcmp(display->panel->name, "AC052 P 1 A0002 dsc cmd mode panel")
-		|| !strcmp(display->panel->name, "AA536 P 3 A0001 dsc cmd mode panel")
-		|| !strcmp(display->panel->name, "AA551 P 3 A0004 dsc cmd mode panel"))
+	if ((!strcmp(panel->name, "AC052 P 3 A0003 dsc cmd mode panel")
+		|| !strcmp(panel->name, "AC052 P 1 A0002 dsc cmd mode panel")
+		|| !strcmp(panel->name, "AA536 P 3 A0001 dsc cmd mode panel")
+		|| !strcmp(panel->name, "AA551 P 3 A0004 dsc cmd mode panel")
+		|| !strcmp(panel->name, "AA545 P 3 A0005 dsc cmd mode panel"))
 		&& !strcmp(vreg_name, "vci")) {
+		DSI_INFO("debug for oplus_panel_vddr_off,panel=%s\n", panel->name);
 		usleep_range(2*1000, (2*1000)+100);
-		if (gpio_is_valid(display->panel->reset_config.panel_vout_gpio)) {
-			gpio_set_value(display->panel->reset_config.panel_vout_gpio, 0);
+		if (gpio_is_valid(panel->reset_config.panel_vout_gpio)) {
+			gpio_set_value(panel->reset_config.panel_vout_gpio, 0);
 		}
 	}
 
-	if (display->panel->oplus_priv.oplus_disp_hw_seq_modify_flag && !strcmp(vreg_name, "vci")) {
+	if (panel->oplus_priv.oplus_disp_hw_seq_modify_flag && !strcmp(vreg_name, "vci")) {
 		usleep_range(2*1000, (2*1000)+100);
-		if (gpio_is_valid(display->panel->reset_config.panel_vout_gpio)) {
-			gpio_set_value(display->panel->reset_config.panel_vout_gpio, 0);
+		if (gpio_is_valid(panel->reset_config.panel_vout_gpio)) {
+			gpio_set_value(panel->reset_config.panel_vout_gpio, 0);
 		}
 	}
 
@@ -1102,5 +1107,41 @@ int oplus_panel_cmdq_pack_status_reset(void *sde_connector)
 	LCD_DEBUG("end\n");
 
 	return 0;
+}
+
+int oplus_panel_send_asynchronous_cmd(void)
+{
+	int rc = 0;
+
+	rc = oplus_display_panel_set_demura2_offset();
+
+	return rc;
+}
+
+void oplus_dsi_ctrl_configure_pre(struct dsi_ctrl *dsi_ctrl, u32 *sched_line_no)
+{
+	struct dsi_mode_info *timing = &(dsi_ctrl->host_config.video_timing);
+	struct dsi_display *display = get_main_display();
+	char tag_name[64];
+	u32 refresh_rate = 0;
+
+	if (!display || !display->panel) {
+		LCD_ERR("primary display or primary_display->panel is null\n");
+		return;
+	}
+
+	if (display->panel->cur_mode) {
+		refresh_rate = display->panel->cur_mode->timing.refresh_rate;
+	}
+	if (display->panel->last_refresh_rate != refresh_rate) {
+		g_oplus_send_fps_code = true;
+	}
+	*sched_line_no = g_oplus_send_fps_code ? 1 : ((*sched_line_no == 0) ? 1 :*sched_line_no);
+	snprintf(tag_name, sizeof(tag_name), "cur_refresh_rate[%d]-*sched_line_no[%d]", timing->refresh_rate, *sched_line_no);
+
+	SDE_ATRACE_BEGIN(tag_name);
+	SDE_ATRACE_END(tag_name);
+	SDE_EVT32(dsi_ctrl->cell_index, SDE_EVTLOG_FUNC_EXIT,
+		*sched_line_no);
 }
 

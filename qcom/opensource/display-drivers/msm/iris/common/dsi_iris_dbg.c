@@ -294,7 +294,7 @@ static ssize_t iris_dbg_display_mode_show(struct file *file, char __user *ubuf,
 	}
 
 	size = iris_debug_display_mode_get(kbuf, size, false);
-	if (size >= count)
+	if ((size > 0) && (size >= count))
 		size = count - 1;
 
 	if (copy_to_user(ubuf, kbuf, size)) {
@@ -359,7 +359,7 @@ int iris_debug_display_info_get(char *kbuf, int size)
 					panel->cur_mode->priv_info->dsi_transfer_time_us);
 
 			len += snprintf(kbuf + len, size - len,
-					"%-20s:\t%d\n", "panel clock", panel->cur_mode->priv_info->clk_rate_hz);
+					"%-20s:\t%llu\n", "panel clock", panel->cur_mode->priv_info->clk_rate_hz);
 
 			len += snprintf(kbuf + len, size - len,
 					"%-20s:\t%d\n", "panel dsc", panel->cur_mode->priv_info->dsc_enabled);
@@ -393,7 +393,7 @@ int iris_debug_display_info_get(char *kbuf, int size)
 					panel->cur_mode->priv_info->dsi_transfer_time_us);
 
 			len += snprintf(kbuf + len, size - len,
-					"%-20s:\t%d\n", "panel clock", panel->cur_mode->priv_info->clk_rate_hz);
+					"%-20s:\t%llu\n", "panel clock", panel->cur_mode->priv_info->clk_rate_hz);
 
 			len += snprintf(kbuf + len, size - len,
 					"%-20s:\t%d\n", "panel dsc", panel->cur_mode->priv_info->dsc_enabled);
@@ -428,7 +428,7 @@ static ssize_t iris_dbg_display_info_show(struct file *file, char __user *ubuf,
 	}
 
 	size = iris_debug_display_info_get(kbuf, size);
-	if (size >= count)
+	if ((size > 0) && (size >= count))
 		size = count - 1;
 
 	if (copy_to_user(ubuf, kbuf, size)) {
