@@ -35,6 +35,7 @@ enum oplus_mms_type {
 	OPLUS_MMS_TYPE_LEVEL_SHIFT,
 	OPLUS_MMS_TYPE_RETENTION,
 	OPLUS_MMS_TYPE_PLC,
+	OPLUS_MMS_TYPE_STATE_KEEP,
 };
 
 enum mms_msg_type {
@@ -75,6 +76,10 @@ struct mms_item {
 	struct mutex update_lock;
 	union mms_msg_data data;
 	union mms_msg_data pre_data;
+#if IS_ENABLED(CONFIG_OPLUS_CHG_MMS_DEBUG) && IS_ENABLED(CONFIG_OPLUS_DEBUG_AUTH)
+	bool overwritten;
+	union mms_msg_data overwrite_data;
+#endif
 };
 
 enum mms_msg_payload {
@@ -138,6 +143,7 @@ struct oplus_mms {
 	struct mutex sync_msg_lock;
 	struct delayed_work update_work;
 	struct delayed_work msg_work;
+	struct work_struct callback_work;
 
 	struct device_node *of_node;
 	void *drv_data;
@@ -151,8 +157,10 @@ struct oplus_mms {
 
 #ifdef CONFIG_OPLUS_CHG_MMS_DEBUG
 	u32 debug_item_id;
-	struct mms_subscribe *debug_subs;
 #endif /* CONFIG_OPLUS_CHG_MMS_DEBUG */
+#if IS_ENABLED(CONFIG_OPLUS_CHG_MMS_PUBLISH_USERSPACE)
+	struct mms_subscribe *userspace_subs;
+#endif /* CONFIG_OPLUS_CHG_MMS_PUBLISH_USERSPACE */
 };
 
 typedef void (*mms_callback_t)(struct oplus_mms *topic, void *data);
@@ -190,6 +198,8 @@ struct mms_subscribe *oplus_mms_subscribe(
 	void (*callback)(struct mms_subscribe *, enum mms_msg_type, u32, bool),
 	const char *format, ...);
 int oplus_mms_unsubscribe(struct mms_subscribe *subs);
+int oplus_mms_subs_move_to_top(struct mms_subscribe *subs);
+int oplus_mms_subs_move_to_down(struct mms_subscribe *subs);
 int oplus_mms_wait_topic(const char *name, mms_callback_t call, void *data);
 int oplus_mms_set_publish_interval(struct oplus_mms *mms, int time_ms);
 int oplus_mms_stop_publish(struct oplus_mms *mms);

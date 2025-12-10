@@ -1282,10 +1282,17 @@ static ssize_t re_range_show(struct device *dev,
 
 	aw_cali_svc_get_dev_re_range(aw_dev, range_buf);
 
+#ifdef OPLUS_ARCH_EXTENDS
+	len += snprintf(buf + len, PAGE_SIZE - len,
+		"re_min value: [%u] mOhms\n", range_buf[RE_MIN_FLAG]);
+	len += snprintf(buf + len, PAGE_SIZE - len,
+		"re_max value: [%u] mOhms\n", range_buf[RE_MAX_FLAG]);
+#else /* OPLUS_ARCH_EXTENDS */
 	len += snprintf(buf + len, PAGE_SIZE - len,
 		"re_min value: [%d] mOhms\n", range_buf[RE_MIN_FLAG]);
 	len += snprintf(buf + len, PAGE_SIZE - len,
 		"re_max value: [%d] mOhms\n", range_buf[RE_MAX_FLAG]);
+#endif /* OPLUS_ARCH_EXTENDS */
 
 	return len;
 }
@@ -1758,6 +1765,13 @@ static int aw_cali_misc_params_ptr(struct aw_device *aw_dev, struct ptr_params_d
 		return ret;
 	}
 
+#ifdef OPLUS_ARCH_EXTENDS
+	if (p_params->len <= 0) {
+		aw_dev_err(aw_dev->dev, "malloc len is err!\n");
+		return -ENOMEM;
+	}
+#endif /* OPLUS_ARCH_EXTENDS */
+
 	p_data = kzalloc(p_params->len, GFP_KERNEL);
 	if (p_data == NULL) {
 		ret = -ENOMEM;
@@ -1863,6 +1877,13 @@ static int aw_cali_misc_ops_read(struct aw_device *aw_dev,
 	char *data_ptr = NULL;
 	int32_t *data_32_ptr = NULL;
 
+#ifdef OPLUS_ARCH_EXTENDS
+	if (!data_len) {
+		aw_dev_err(aw_dev->dev, "malloc len is err!\n");
+		return -ENOMEM;
+	}
+#endif /* OPLUS_ARCH_EXTENDS */
+
 	data_ptr = kzalloc(data_len, GFP_KERNEL);
 	if (!data_ptr)
 		return -ENOMEM;
@@ -1916,6 +1937,13 @@ static int aw_cali_misc_read_dsp(struct aw_device *aw_dev, aw_ioctl_msg_t *msg)
 	uint32_t dsp_msg_id = (uint32_t)msg->opcode_id;
 	int data_len = msg->data_len;
 	char *data_ptr = NULL;
+
+#ifdef OPLUS_ARCH_EXTENDS
+	if (!data_len) {
+		aw_dev_err(aw_dev->dev, "malloc len is err!\n");
+		return -ENOMEM;
+	}
+#endif /* OPLUS_ARCH_EXTENDS */
 
 	data_ptr = kzalloc(data_len, GFP_KERNEL);
 	if (!data_ptr)
@@ -2181,7 +2209,11 @@ static ssize_t aw_cali_misc_read(struct file *filp, char __user *buf, size_t siz
 	case CALI_STR_DEV_NUM: {
 		if (aw_dev->ops.aw_get_dev_num) {
 			dev_num = aw_dev->ops.aw_get_dev_num();
+#ifdef OPLUS_ARCH_EXTENDS
+			len += snprintf(local_buf + len, sizeof(local_buf) - len, "dev_num:%u\n", dev_num);
+#else /* OPLUS_ARCH_EXTENDS */
 			len += snprintf(local_buf + len, sizeof(local_buf) - len, "dev_num:%d\n", dev_num);
+#endif /* OPLUS_ARCH_EXTENDS */
 		} else {
 			aw_dev_err(aw_dev->dev, "get dev num is NULL");
 			return -EINVAL;
