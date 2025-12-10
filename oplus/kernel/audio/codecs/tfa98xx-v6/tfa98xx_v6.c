@@ -1409,6 +1409,7 @@ static ssize_t tfa98xx_fres_write(struct file *file,
 
 	if (!tfa98xx) {
 		pr_err("tfa98xx_fres_write 2\n");
+		return -EINVAL;
 	}
 
 	pr_err("tfa98xx_fres_write 3\n");
@@ -1476,8 +1477,11 @@ static ssize_t tfa98xx_fres_read(struct file *file,
 	/*write to MTP*/
 	tfa98xxSetFresFrequency(tfa98xx->tfa, fres);
 
+#ifdef OPLUS_ARCH_EXTENDS
+	ret = snprintf(str, PAGE_SIZE, "fres %hu\n",fres);
+#else /* OPLUS_ARCH_EXTENDS */
 	ret = snprintf(str, PAGE_SIZE, "fres %d\n",fres);
-
+#endif /* OPLUS_ARCH_EXTENDS */
 	ret = simple_read_from_buffer(user_buf, count, ppos, str, ret);
 
 	kfree(str);
@@ -4808,6 +4812,7 @@ static int tfa98xx_mute(struct snd_soc_dai *dai, int mute, int stream)
 		/* stop DSP only when both playback and capture streams
 		 * are deactivated
 		 */
+
 
 		if (stream == SNDRV_PCM_STREAM_PLAYBACK)
 			tfa98xx->pstream = 0;

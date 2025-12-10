@@ -269,7 +269,7 @@ enum ufcs_emark_id {
 };
 
 enum ufcs_emark_power {
-	UFCS_EMARK_POWER_DEFAULT = 3000,
+	UFCS_EMARK_POWER_DEFAULT = 4000,
 	UFCS_EMARK_POWER_THIRD = 5000,
 	UFCS_EMARK_POWER_V0 = 6500,
 	UFCS_EMARK_POWER_V1 = 10000,
@@ -515,7 +515,7 @@ struct ufcs_current_limits {
 	int btb_diff_down;
 	int current_imax;
 	int current_slow_chg;
-	int full_1time_limit;
+	int current_fcl;
 };
 
 struct oplus_ufcs_limits {
@@ -753,6 +753,7 @@ struct oplus_ufcs_chip {
 	int ufcs_keep_last_status;
 	int ufcs_startup_retry_times;
 	int ufcs_recover_cnt;
+	bool fcl_trigger;
 
 	u8 int_column[UFCS_DUMP_REG_CNT];
 	u8 reg_dump[UFCS_DUMP_REG_CNT];

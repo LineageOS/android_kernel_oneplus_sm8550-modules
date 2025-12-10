@@ -46,6 +46,7 @@ static int goodix_read_limit_fw(struct seq_file *s, struct touchpanel_data *ts,
 	p_goodix_testdata->fw = fw;
 	p_goodix_testdata->test_item = test_head->test_item;
 	p_goodix_testdata->pos = &ts->com_test_data.result_cur_len;
+	p_goodix_testdata->raw_cap_restriction = ts->com_test_data.raw_cap_restriction;
 	return 0;
 }
 

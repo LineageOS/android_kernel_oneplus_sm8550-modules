@@ -673,6 +673,7 @@ struct syna_tcm {
 
 	/* flags */
 	int probe_done;
+	int is_update_log;
 	int pwr_state;
 	int sub_pwr_state;
 	bool slept_in_early_suspend;
@@ -690,6 +691,7 @@ struct syna_tcm {
 	int driver_current_state;
 	bool differ_read_every_frame;
 	bool tp_data_record_support;
+	bool data_record;
 	bool enter_force_doze;
 	int boot_mode;                                      /*boot up mode */
 
