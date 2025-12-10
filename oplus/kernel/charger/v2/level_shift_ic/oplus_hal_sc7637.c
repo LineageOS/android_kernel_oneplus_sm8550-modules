@@ -29,12 +29,16 @@
 #if IS_ENABLED(CONFIG_OPLUS_CHG_TEST_KIT)
 #include "test-kit.h"
 #endif
+#include "../monitor/oplus_chg_track.h"
+#include <oplus_chg_monitor.h>
 #if IS_ENABLED(CONFIG_OPLUS_FEATURE_CHG_DEBUG_KIT)
 #include <debug-kit.h>
 #endif
 
-#define SC7637_I2C_ERR_MAX	2
-#define REG_LENGTH		7
+#define SC7637_I2C_ERR_MAX			2
+#define REG_LENGTH				7
+#define TRACK_UPLOAD_COUNT_MAX			10
+#define TRACK_DEVICE_ABNORMAL_UPLOAD_PERIOD	(24 * 3600)
 
 struct chip_sc7637 {
 	struct i2c_client *client;
@@ -54,7 +58,7 @@ struct chip_sc7637 {
 	struct mutex data_lock;
 
 	atomic_t i2c_err_count;
-	bool fpga_test_support;
+	bool fpga_support;
 	int reg_config[REG_LENGTH];
 #if IS_ENABLED(CONFIG_OPLUS_FEATURE_CHG_DEBUG_KIT)
 	struct oplus_device_bus *odb;
@@ -62,10 +66,20 @@ struct chip_sc7637 {
 #if IS_ENABLED(CONFIG_OPLUS_CHG_TEST_KIT)
 	struct test_feature *fpga_level_shift_test;
 #endif
+	bool probe_err;
+	unsigned long rst_ing;
 };
+
+enum rst_type {
+	FPGA_RST = 1,
+	I2C_RST,
+};
+
+static int sc7637_hardware_init(struct chip_sc7637 *chip);
 
 struct oplus_chg_ic_virq sc7637_virq_table[] = {
 	{ .virq_id = OPLUS_IC_VIRQ_ERR },
+	{ .virq_id = OPLUS_IC_VIRQ_FPGA_RST },
 };
 
 static struct regmap_config sc7637_regmap_config = {
@@ -76,6 +90,10 @@ static struct regmap_config sc7637_regmap_config = {
 
 static __inline__ void sc7637_i2c_err_inc(struct chip_sc7637 *chip, u8 addr, bool read)
 {
+	static int upload_count = 0;
+	static int pre_upload_time = 0;
+	int curr_time;
+
 	if (unlikely(!chip->ic_dev))
 		return;
 
@@ -86,9 +104,16 @@ static __inline__ void sc7637_i2c_err_inc(struct chip_sc7637 *chip, u8 addr, boo
 		return;
 
 	atomic_inc(&chip->i2c_err_count);
-	oplus_chg_ic_creat_err_msg(chip->ic_dev, OPLUS_IC_ERR_I2C, 0,
-		"addr[0x%x] %s", addr, read ? "read error" : "write error");
-	oplus_chg_ic_virq_trigger(chip->ic_dev, OPLUS_IC_VIRQ_ERR);
+	curr_time = oplus_chg_track_get_local_time_s();
+	if (curr_time - pre_upload_time > TRACK_DEVICE_ABNORMAL_UPLOAD_PERIOD)
+		upload_count = 0;
+	if (upload_count < TRACK_UPLOAD_COUNT_MAX) {
+		upload_count++;
+		pre_upload_time = oplus_chg_track_get_local_time_s();
+		oplus_chg_ic_creat_err_msg(chip->ic_dev, OPLUS_IC_ERR_I2C, 0,
+			"addr[0x%x] %s$$err_reason@@i2c_err", addr, read ? "read error" : "write error");
+		oplus_chg_ic_virq_trigger(chip->ic_dev, OPLUS_IC_VIRQ_ERR);
+	}
 }
 
 static __inline__ void sc7637_i2c_err_clr(struct chip_sc7637 *chip)
@@ -110,6 +135,8 @@ static int sc7637_read_byte(struct chip_sc7637 *chip, u8 addr, u8 *data)
 	unsigned int buf;
 #endif
 
+	if (chip->fpga_support && chip->rst_ing)
+		return -EBUSY;
 	mutex_lock(&chip->i2c_lock);
 #if IS_ENABLED(CONFIG_OPLUS_FEATURE_CHG_DEBUG_KIT)
 	rc = oplus_dev_bus_read(chip->odb, addr, &buf);
@@ -140,6 +167,8 @@ __maybe_unused static int sc7637_read_data(
 {
 	int rc;
 
+	if (chip->fpga_support && chip->rst_ing)
+		return -EBUSY;
 	mutex_lock(&chip->i2c_lock);
 #if IS_ENABLED(CONFIG_OPLUS_FEATURE_CHG_DEBUG_KIT)
 	rc = oplus_dev_bus_bulk_read(chip->odb, addr, buf, len);
@@ -166,6 +195,8 @@ __maybe_unused static int sc7637_write_byte(struct chip_sc7637 *chip, u8 addr, u
 {
 	int rc;
 
+	if (chip->fpga_support && chip->rst_ing)
+		return -EBUSY;
 	mutex_lock(&chip->i2c_lock);
 #if IS_ENABLED(CONFIG_OPLUS_FEATURE_CHG_DEBUG_KIT)
 	rc = oplus_dev_bus_write(chip->odb, addr, data);
@@ -190,6 +221,8 @@ __maybe_unused static int sc7637_write_data(
 {
 	int rc;
 
+	if (chip->fpga_support && chip->rst_ing)
+		return -EBUSY;
 	mutex_lock(&chip->i2c_lock);
 #if IS_ENABLED(CONFIG_OPLUS_FEATURE_CHG_DEBUG_KIT)
 	rc = oplus_dev_bus_bulk_write(chip->odb, addr, buf, len);
@@ -215,6 +248,8 @@ __maybe_unused static int sc7637_read_byte_mask(
 	u8 temp;
 	int rc;
 
+	if (chip->fpga_support && chip->rst_ing)
+		return -EBUSY;
 	mutex_lock(&chip->data_lock);
 	rc = sc7637_read_byte(chip, addr, &temp);
 	if (rc < 0) {
@@ -236,6 +271,8 @@ __maybe_unused static int sc7637_write_byte_mask(
 	u8 temp;
 	int rc;
 
+	if (chip->fpga_support && chip->rst_ing)
+		return -EBUSY;
 	mutex_lock(&chip->data_lock);
 	rc = sc7637_read_byte(chip, addr, &temp);
 	if (rc < 0) {
@@ -256,7 +293,28 @@ __maybe_unused static int sc7637_write_byte_mask(
 
 static int oplus_sc7637_init(struct oplus_chg_ic_dev *ic_dev)
 {
-	ic_dev->online = true;
+	struct chip_sc7637 *chip;
+	int rc = 0;
+
+	if (ic_dev == NULL) {
+		chg_err("ic_dev is NULL");
+		return -ENODEV;
+	}
+	chip = oplus_chg_ic_get_drvdata(ic_dev);
+	if (!chip) {
+		chg_err("chip is NULL");
+		return -ENODEV;
+	}
+	if (chip->probe_err)
+		rc = sc7637_hardware_init(chip);
+
+	if (rc < 0) {
+		ic_dev->online = false;
+		return -EINVAL;
+	} else {
+		chip->probe_err = false;
+		ic_dev->online = true;
+	}
 
 	return 0;
 }
@@ -379,7 +437,9 @@ static int __sc7637_set_conver_enable(struct chip_sc7637 *chip, bool enable)
 			(0x00 << SC7637_CONVER_ENABLE_SHIFT));
 
 	sc7637_read_byte(chip, SC7637_REG_ADDR_00H, &temp);
-	chg_info("update enable=0x%0x\n", temp);
+	if (chip->fpga_support && enable && temp != 0x9f)
+		rc = -EINVAL;
+	chg_info("update enable=0x%0x, rc=%d\n", temp, rc);
 
 	return rc;
 }
@@ -464,6 +524,49 @@ static int oplus_sc7637_reg_dump(struct oplus_chg_ic_dev *ic_dev)
 	return rc;
 }
 
+static int oplus_sc7637_rst_notify(struct oplus_chg_ic_dev *ic_dev, int type)
+{
+	int rc = 0;
+	struct chip_sc7637 *chip;
+
+	if (ic_dev == NULL) {
+		chg_err("ic_dev is NULL");
+		return -ENODEV;
+	}
+
+	chip = oplus_chg_ic_get_drvdata(ic_dev);
+	if (!chip) {
+		chg_err("chip not specified!\n");
+		return -EINVAL;
+	}
+	switch (type) {
+	case FPGA_RESET_START:
+		set_bit(FPGA_RST, &chip->rst_ing);
+		break;
+	case FPGA_RESET_END:
+		clear_bit(FPGA_RST, &chip->rst_ing);
+		if (!chip->rst_ing) {
+			rc = sc7637_hardware_init(chip);
+			oplus_chg_ic_virq_trigger(chip->ic_dev, OPLUS_IC_VIRQ_FPGA_RST);
+		}
+		break;
+	case GUAGE_I2C_RST_START:
+		set_bit(I2C_RST, &chip->rst_ing);
+		break;
+	case GUAGE_I2C_RST_END:
+		clear_bit(I2C_RST, &chip->rst_ing);
+		if (!chip->rst_ing) {
+			rc = sc7637_hardware_init(chip);
+			oplus_chg_ic_virq_trigger(chip->ic_dev, OPLUS_IC_VIRQ_FPGA_RST);
+		}
+		break;
+	default:
+		break;
+	}
+
+	return rc;
+}
+
 #if IS_ENABLED(CONFIG_OPLUS_CHG_TEST_KIT)
 static bool test_kit_fpga_level_shift_test(struct test_feature *feature, char *buf, size_t len)
 {
@@ -539,6 +642,10 @@ static void *oplus_chg_get_func(struct oplus_chg_ic_dev *ic_dev,
 		func = OPLUS_CHG_IC_FUNC_CHECK(OPLUS_IC_FUNC_REG_DUMP,
 					       oplus_sc7637_reg_dump);
 		break;
+	case OPLUS_IC_FUNC_BAL_HW_INIT:
+		func = OPLUS_CHG_IC_FUNC_CHECK(OPLUS_IC_FUNC_BAL_HW_INIT,
+					       oplus_sc7637_rst_notify);
+		break;
 	default:
 		chg_err("this func(=%d) is not supported\n", func_id);
 		func = NULL;
@@ -596,9 +703,16 @@ static int sc7637_parse_dt(struct chip_sc7637 *chip)
 	int rc;
 	int i;
 	int length;
+	struct device_node *parent_node;
 
-	chip->fpga_test_support = of_property_read_bool(node, "oplus,fpga_test_support");
-	chg_info("fpga_test_support=%d\n", chip->fpga_test_support);
+	parent_node = of_get_parent(node);
+	if (parent_node) {
+		chip->fpga_support = of_property_read_bool(parent_node, "oplus,fpga_support");
+		if (chip->fpga_support)
+			chg_info("fpga_support=%d\n", chip->fpga_support);
+	} else {
+		chip->fpga_support = 0;
+	}
 
 	rc = of_property_count_elems_of_size(node, "oplus,reg", sizeof(u32));
 	if (rc < 0) {
@@ -629,28 +743,33 @@ error:
 static int sc7637_hardware_init(struct chip_sc7637 *chip)
 {
 	int rc = 0;
+	u8 temp;
+	bool check_ok = true;
+	int i;
 
 	if (atomic_read(&chip->suspended) == 1) {
 		chg_err("sc7637 ic is suspend\n");
 		return -EINVAL;
 	}
 
-
-
 	__sc7637_set_hw_enable(chip, true);
 	mdelay(5);
-	if (chip->reg_config[2] >= 0)
-		rc |= sc7637_write_byte(chip, SC7637_REG_ADDR_02H, chip->reg_config[2]);
-	if (chip->reg_config[3] >= 0)
-		rc |= sc7637_write_byte(chip, SC7637_REG_ADDR_03H, chip->reg_config[3]);
-	if (chip->reg_config[4] >= 0)
-		rc |= sc7637_write_byte(chip, SC7637_REG_ADDR_04H, chip->reg_config[4]);
-	if (chip->reg_config[5] >= 0)
-		rc |= sc7637_write_byte(chip, SC7637_REG_ADDR_05H, chip->reg_config[5]);
-	if (chip->reg_config[6] >= 0)
-		rc |= sc7637_write_byte(chip, SC7637_REG_ADDR_06H, chip->reg_config[6]);
+
+	for (i = SC7637_REG_ADDR_02H; i <= SC7637_REG_ADDR_06H; i++) {
+		if (chip->reg_config[i] < 0)
+			continue;
+		rc |= sc7637_write_byte(chip, i, chip->reg_config[i]);
+		if (chip->fpga_support) {
+			rc |= sc7637_read_byte(chip, i, &temp);
+			if (temp != chip->reg_config[i])
+				check_ok &= false;
+		}
+	}
 	rc |= __sc7637_set_conver_enable(chip, true);
 	rc |= __sc7637_reg_dump(chip);
+
+	if (!check_ok)
+		return -EINVAL;
 
 	return rc;
 }
@@ -691,10 +810,11 @@ static int chip_sc7637_probe(struct i2c_client *client, const struct i2c_device_
 		goto gpio_init_err;
 	}
 	sc7637_parse_dt(chip);
+	chip->probe_err = false;
 	rc = sc7637_hardware_init(chip);
 	if (rc < 0) {
+		chip->probe_err = true;
 		chg_err("hardware init error, rc=%d\n", rc);
-		goto hw_init_err;
 	}
 	rc = of_property_read_u32(chip->dev->of_node, "oplus,ic_type",
 				  &ic_type);
@@ -735,13 +855,12 @@ static int chip_sc7637_probe(struct i2c_client *client, const struct i2c_device_
 	oplus_sc7637_init(chip->ic_dev);
 	chg_info("register %s\n", chip->dev->of_node->name);
 #if IS_ENABLED(CONFIG_OPLUS_CHG_TEST_KIT)
-	if (chip->fpga_test_support) {
+	if (chip->fpga_support) {
 		chip->fpga_level_shift_test = test_feature_register(&fpga_level_shift_test_cfg, chip);
 		if (IS_ERR_OR_NULL(chip->fpga_level_shift_test))
 			chg_err("fpga level shift register error");
 	}
 #endif
-
 
 	return 0;
 
@@ -750,7 +869,6 @@ ic_reg_error:
 	devm_oplus_device_bus_unregister(chip->odb);
 #endif
 error:
-hw_init_err:
 gpio_init_err:
 regmap_init_err:
 	devm_kfree(&client->dev, chip);
@@ -765,7 +883,6 @@ static int sc7637_pm_resume(struct device *dev_chip)
 	if(chip == NULL)
 		return 0;
 
-	chg_info("start\n");
 	atomic_set(&chip->suspended, 0);
 	return 0;
 }
@@ -778,7 +895,6 @@ static int sc7637_pm_suspend(struct device *dev_chip)
 	if(chip == NULL)
 		return 0;
 
-	chg_info("start\n");
 	atomic_set(&chip->suspended, 1);
 
 	return 0;

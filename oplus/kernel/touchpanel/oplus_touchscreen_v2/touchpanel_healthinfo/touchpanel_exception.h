@@ -23,6 +23,7 @@ typedef enum {
 	EXCEP_FW_UPDATE,
 	EXCEP_GRIP,
 	EXCEP_IRQ,
+	EXCEP_BASELINE_ERR,
 } tp_excep_type;
 
 int tp_exception_report(void *tp_exception_data, tp_excep_type excep_tpye, void *summary, unsigned int summary_size);
