@@ -2621,8 +2621,13 @@ static ssize_t dbg_prof_show(struct device *dev,
 	struct aw882xx *aw882xx = dev_get_drvdata(dev);
 	ssize_t len = 0;
 
+#ifdef OPLUS_ARCH_EXTENDS
+	len += snprintf(buf + len, PAGE_SIZE - len,
+		" %hhu\n", aw882xx->dbg_en_prof);
+#else /* OPLUS_ARCH_EXTENDS */
 	len += snprintf(buf + len, PAGE_SIZE - len,
 		" %d\n", aw882xx->dbg_en_prof);
+#endif /* OPLUS_ARCH_EXTENDS */
 
 	return len;
 }
