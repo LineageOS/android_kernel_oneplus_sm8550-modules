@@ -930,6 +930,7 @@ static struct device_attribute *tps6128xd_attributes[] = {
 };
 #endif
 
+#if IS_ENABLED(CONFIG_OPLUS_CHG_TEST_KIT)
 static void oplus_tps6128xd_retry_init_work(struct work_struct *work)
 {
 	struct delayed_work *dwork = to_delayed_work(work);
@@ -940,6 +941,7 @@ static void oplus_tps6128xd_retry_init_work(struct work_struct *work)
 	if (!chip->i2c_success)
 		schedule_delayed_work(&chip->retry_init_work, msecs_to_jiffies(5000));
 }
+#endif
 
 #if (LINUX_VERSION_CODE >= KERNEL_VERSION(6, 3, 0))
 static int tps6128xd_driver_probe(struct i2c_client *client)
