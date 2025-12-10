@@ -142,7 +142,7 @@ static void syna_delta_read(struct seq_file *s, void *chip_data);
 static void syna_baseline_read(struct seq_file *s, void *chip_data);
 static void syna_main_register(struct seq_file *s, void *chip_data);
 static void syna_reserve_read(struct seq_file *s, void *chip_data);
-static void syna_tp_limit_data_write(void *chip_data, int count);
+static void syna_tp_data_record_write(void *chip_data, int count);
 static void syna_tcm_test_report(struct syna_tcm *tcm_info, u32 code);
 
 #ifndef CONFIG_REMOVE_OPLUS_FUNCTION
@@ -1652,7 +1652,11 @@ static void syna_dev_reflash_startup_work(struct work_struct *work)
 			tp_exception_report(&tcm->exception_data, EXCEP_FW_UPDATE, "FW_Update_Failed", sizeof("FW_Update_Failed"));
 		}
 		syna_pal_mutex_unlock(&hw_if->bdata_rst.reset_en_mutex);
+		/*if probe_status is not exit, olc will update log*/
+		tcm->is_update_log = 1;
 		goto exit;
+	} else {
+		tcm->is_update_log = 0;
 	}
 
 	/* re-initialize the app fw */
@@ -2815,7 +2819,7 @@ static struct debug_info_proc_operations syna_debug_proc_ops = {
 	.baseline_blackscreen_read = syna_baseline_read,
 	.main_register_read = syna_main_register,
 	.reserve_read  = syna_reserve_read,
-	.tp_limit_data_write = syna_tp_limit_data_write,
+	.tp_data_record_write = syna_tp_data_record_write,
 };
 
 static void syna_start_aging_test(void *chip_data)
@@ -3355,6 +3359,9 @@ static int syna_dev_probe(struct platform_device *pdev)
 	device_init_wakeup(&pdev->dev, 1);
 	init_completion(&tcm->report_complete);
 
+	tcm->is_update_log = 0;
+	init_probe_status_proc(tcm);
+
 /* ts check panel dt */
 #if IS_ENABLED(CONFIG_DRM_OPLUS_PANEL_NOTIFY) || IS_ENABLED(CONFIG_QCOM_PANEL_EVENT_NOTIFIER)
 	/* get spi of_node from spi_register_driver */
@@ -3485,6 +3492,7 @@ static int syna_dev_probe(struct platform_device *pdev)
 
 #ifdef HAS_SYSFS_INTERFACE
 err_create_cdev:
+	remove_touchpanel_proc(tcm);
 	syna_tcm_remove_device(tcm->tcm_dev);
 #endif
 #if defined(TCM_CONNECT_IN_PROBE)
@@ -4231,7 +4239,7 @@ static void syna_reserve_read(struct seq_file *s, void *chip_data)
 	return;
 }
 
-static void syna_tp_limit_data_write(void *chip_data, int count)
+static void syna_tp_data_record_write(void *chip_data, int count)
 {
 	int retval;
 	struct syna_tcm *tcm_info = (struct syna_tcm *)chip_data;

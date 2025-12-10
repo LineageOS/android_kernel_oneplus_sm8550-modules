@@ -17,6 +17,7 @@
 #include <linux/of.h>
 #include <oplus_chg_module.h>
 #include <oplus_mms.h>
+#include <debug/oplus_debug_auth.h>
 
 struct class *oplus_mms_class;
 struct oplus_mms_call_head {
@@ -157,6 +158,13 @@ int oplus_mms_get_item_data(struct oplus_mms *mms, u32 item_id,
 			 mms->desc->name, item_id);
 		return -ENOTSUPP;
 	}
+
+#if IS_ENABLED(CONFIG_OPLUS_CHG_MMS_DEBUG) && IS_ENABLED(CONFIG_OPLUS_DEBUG_AUTH)
+	if (item->overwritten && oplus_debug_auth_is_cert_valid()) {
+		memcpy(data, &item->overwrite_data, sizeof(union mms_msg_data));
+		return 0;
+	}
+#endif
 
 	if (update || mms->force_update)
 		oplus_mms_item_update(mms, item_id, false);
@@ -396,9 +404,9 @@ static void oplus_mms_notify_caller(struct oplus_mms *mms, struct mms_msg *msg)
 		if (!subs->callback)
 			continue;
 		if (sync)
-			list_add(&subs->callback_list_sync, &callback_list);
+			list_add_tail(&subs->callback_list_sync, &callback_list);
 		else
-			list_add(&subs->callback_list, &callback_list);
+			list_add_tail(&subs->callback_list, &callback_list);
 	}
 	rcu_read_unlock();
 
@@ -732,6 +740,7 @@ struct mms_subscribe *oplus_mms_subscribe(
 {
 	struct mms_subscribe *subs, *subs_temp;
 	va_list args;
+	char name[TOPIC_NAME_MAX] = {0};
 
 	if (mms == NULL) {
 		chg_err("mms is NULL\n");
@@ -746,11 +755,14 @@ struct mms_subscribe *oplus_mms_subscribe(
 		return ERR_PTR(-EINVAL);
 	}
 
+	va_start(args, format);
+	(void)vsnprintf(name, TOPIC_NAME_MAX, format, args);
+	va_end(args);
 	spin_lock(&mms->subscribe_lock);
 	list_for_each_entry_rcu(subs_temp, &mms->subscribe_list, list) {
-		if (callback == subs_temp->callback) {
+		if (!strcmp(name, subs_temp->name)) {
 			spin_unlock(&mms->subscribe_lock);
-			chg_info("There are the same subscribers(%s)\n", subs_temp->name);
+			chg_info("There are the same name(%s)\n", subs_temp->name);
 			return subs_temp;
 		}
 	}
@@ -761,9 +773,7 @@ struct mms_subscribe *oplus_mms_subscribe(
 		chg_err("alloc subs memory error\n");
 		return ERR_PTR(-ENOMEM);
 	}
-	va_start(args, format);
-	(void)vsnprintf(subs->name, TOPIC_NAME_MAX, format, args);
-	va_end(args);
+	snprintf(subs->name, TOPIC_NAME_MAX, "%s", name);
 	subs->priv_data = priv_data;
 	subs->callback = callback;
 	subs->mms = mms;
@@ -797,6 +807,86 @@ int oplus_mms_unsubscribe(struct mms_subscribe *subs)
 
 	return 0;
 }
+
+int oplus_mms_subs_move_to_top(struct mms_subscribe *subs)
+{
+	struct mms_subscribe *subs_temp;
+	struct oplus_mms *mms;
+	bool find = false;
+
+	if (subs == NULL) {
+		chg_err("subs is NULL");
+		return -EINVAL;
+	}
+	mms = subs->mms;
+	if (mms == NULL) {
+		chg_err("mms is NULL");
+		return -ENODEV;
+	}
+
+	spin_lock(&mms->subscribe_lock);
+	list_for_each_entry_rcu(subs_temp, &mms->subscribe_list, list) {
+		if (subs_temp == subs) {
+			find = true;
+			break;
+		}
+	}
+	if (find) {
+		list_del_rcu(&subs->list);
+		list_add_rcu(&subs->list, &mms->subscribe_list);
+	}
+	spin_unlock(&mms->subscribe_lock);
+
+	if (find) {
+		synchronize_rcu();
+	} else {
+		chg_err("%s topic not find %s subs\n", mms->desc->name, subs->name);
+		return -EINVAL;
+	}
+
+	return 0;
+}
+EXPORT_SYMBOL(oplus_mms_subs_move_to_top);
+
+int oplus_mms_subs_move_to_down(struct mms_subscribe *subs)
+{
+	struct mms_subscribe *subs_temp;
+	struct oplus_mms *mms;
+	bool find = false;
+
+	if (subs == NULL) {
+		chg_err("subs is NULL");
+		return -EINVAL;
+	}
+	mms = subs->mms;
+	if (mms == NULL) {
+		chg_err("mms is NULL");
+		return -ENODEV;
+	}
+
+	spin_lock(&mms->subscribe_lock);
+	list_for_each_entry_rcu(subs_temp, &mms->subscribe_list, list) {
+		if (subs_temp == subs) {
+			find = true;
+			break;
+		}
+	}
+	if (find) {
+		list_del_rcu(&subs->list);
+		list_add_tail_rcu(&subs->list, &mms->subscribe_list);
+	}
+	spin_unlock(&mms->subscribe_lock);
+
+	if (find) {
+		synchronize_rcu();
+	} else {
+		chg_err("%s topic not find %s subs\n", mms->desc->name, subs->name);
+		return -EINVAL;
+	}
+
+	return 0;
+}
+EXPORT_SYMBOL(oplus_mms_subs_move_to_down);
 
 int oplus_mms_set_publish_interval(struct oplus_mms *mms, int time_ms)
 {
@@ -855,6 +945,7 @@ static ssize_t item_id_store(struct device *dev, struct device_attribute *attr,
 	}
 
 	mms->debug_item_id = val;
+	chg_info("debug_item_id=%d\n", val);
 
 	return count;
 }
@@ -896,20 +987,204 @@ static ssize_t subscribe_show(struct device *dev, struct device_attribute *attr,
 }
 static DEVICE_ATTR_RO(subscribe);
 
+#if IS_ENABLED(CONFIG_OPLUS_DEBUG_AUTH)
+static ssize_t overwrite_show(struct device *dev, struct device_attribute *attr,
+			      char *buf)
+{
+	struct oplus_mms *mms = dev_get_drvdata(dev);
+	union mms_msg_data data;
+	struct mms_item *item;
+	ssize_t rc;
+
+	item = oplus_mms_get_item(mms, mms->debug_item_id);
+	if (item == NULL) {
+		chg_err("%s item(=%d) not found\n", mms->desc->name, mms->debug_item_id);
+		return -EINVAL;
+	}
+	if (!item->overwritten) {
+		rc = sprintf(buf, "None\n");
+		return rc;
+	}
+	data = item->overwrite_data;
+
+	if (oplus_mms_item_is_str(mms, mms->debug_item_id))
+		rc = sprintf(buf, "%s\n", data.strval);
+	else
+		rc = sprintf(buf, "%d\n", data.intval);
+
+	return rc;
+}
+
+static ssize_t overwrite_store(struct device *dev, struct device_attribute *attr,
+			       const char *buf, size_t count)
+{
+	struct oplus_mms *mms = dev_get_drvdata(dev);
+	union mms_msg_data data;
+	struct mms_item *item;
+	const char *data_buf;
+	ssize_t data_size;
+
+	data_size = oplus_debug_auth_get_data(buf, count, &data_buf);
+	if (data_size < 0) {
+		chg_err("get data error, rc=%zd\n", data_size);
+		return data_size;
+	}
+
+	item = oplus_mms_get_item(mms, mms->debug_item_id);
+	if (item == NULL) {
+		chg_err("%s item(=%d) not found\n", mms->desc->name, mms->debug_item_id);
+		return -EINVAL;
+	}
+
+	if (oplus_mms_item_is_str(mms, mms->debug_item_id)) {
+		data.strval = devm_kzalloc(dev, data_size + 1, GFP_KERNEL);
+		if (data.strval == NULL) {
+			chg_err("alloc overwrite_data buf error\n");
+			return -ENOMEM;
+		}
+		if (item->overwritten)
+			devm_kfree(dev, item->overwrite_data.strval);
+		item->overwrite_data.strval = data.strval;
+		chg_info("%d: overwrite_data=%s\n", mms->debug_item_id, data.strval);
+		memcpy(data.strval, data_buf, data_size);
+	} else {
+		if (kstrtos32(data_buf, 0, &data.intval)) {
+			chg_err("buf error\n");
+			return -EINVAL;
+		}
+		item->overwrite_data.intval = data.intval;
+		chg_info("%d: overwrite_data=%d\n", mms->debug_item_id, data.intval);
+	}
+	item->overwritten = true;
+
+	return count;
+}
+static DEVICE_ATTR_RW(overwrite);
+
+static ssize_t clean_overwrite_store(struct device *dev, struct device_attribute *attr,
+				     const char *buf, size_t count)
+{
+	struct oplus_mms *mms = dev_get_drvdata(dev);
+	struct mms_item *item;
+
+	item = oplus_mms_get_item(mms, mms->debug_item_id);
+	if (item == NULL) {
+		chg_err("%s item(=%d) not found\n", mms->desc->name, mms->debug_item_id);
+		return -EINVAL;
+	}
+	if (!item->overwritten)
+		return count;
+
+	if (oplus_mms_item_is_str(mms, mms->debug_item_id)) {
+		devm_kfree(dev, item->overwrite_data.strval);
+		item->overwrite_data.strval = NULL;
+	}
+	item->overwritten = false;
+
+	return count;
+}
+static DEVICE_ATTR_WO(clean_overwrite);
+
+static ssize_t publish_store(struct device *dev, struct device_attribute *attr,
+			     const char *buf, size_t count)
+{
+	struct oplus_mms *mms = dev_get_drvdata(dev);
+	struct mms_msg *msg;
+	enum mms_msg_type type;
+	enum mms_msg_prio prio;
+	const char *data_buf;
+	ssize_t data_size;
+	ssize_t rc;
+
+	data_size = oplus_debug_auth_get_data(buf, count, &data_buf);
+	if (data_size < 0) {
+		chg_err("get data error, rc=%zd\n", data_size);
+		return data_size;
+	}
+
+	if(sscanf(data_buf, "%u,%u", &type, &prio) != 2) {
+		chg_err("get msg info error\n");
+		return -EINVAL;
+	}
+
+	msg = oplus_mms_alloc_msg(type, prio, (type == MSG_TYPE_TIMER) ? 0 : mms->debug_item_id);
+	if (msg == NULL) {
+		chg_err("alloc msg buf error\n");
+		return -ENOMEM;
+	}
+	rc = oplus_mms_publish_msg(mms, msg);
+	if (rc < 0) {
+		chg_err("publish msg error, rc=%zd\n", rc);
+		kfree(msg);
+		return -EFAULT;
+	}
+	chg_info("%d: publish, type=%u, prio=%u\n", mms->debug_item_id, type, prio);
+
+	return count;
+}
+static DEVICE_ATTR_WO(publish);
+#endif /* CONFIG_OPLUS_CHG_MMS_DEBUG */
+
+static ssize_t items_show(struct device *dev, struct device_attribute *attr,
+			  char *buf)
+{
+	struct oplus_mms *mms = dev_get_drvdata(dev);
+	int i = 0;
+	ssize_t len = 0;
+
+	for (i = 0; i < mms->desc->item_num - 1; i++)
+		len += sprintf(buf + len, "%d,", mms->desc->item_table[i].desc.item_id);
+	len += sprintf(buf + len, "%d\n", mms->desc->item_table[i].desc.item_id);
+
+	return len;
+}
+static DEVICE_ATTR_RO(items);
+
+static ssize_t is_str_data_show(struct device *dev, struct device_attribute *attr,
+				char *buf)
+{
+	struct oplus_mms *mms = dev_get_drvdata(dev);
+	struct mms_item *item;
+	ssize_t rc;
+
+	item = oplus_mms_get_item(mms, mms->debug_item_id);
+	if (item == NULL) {
+		chg_err("%s item(=%d) not found\n", mms->desc->name, mms->debug_item_id);
+		return -EINVAL;
+	}
+
+	if (item->desc.str_data)
+		rc = sprintf(buf, "True\n");
+	else
+		rc = sprintf(buf, "False\n");
+
+	return rc;
+}
+static DEVICE_ATTR_RO(is_str_data);
+
 static struct device_attribute *oplus_mms_attributes[] = {
 	&dev_attr_item_id,
 	&dev_attr_data,
 	&dev_attr_subscribe,
+#if IS_ENABLED(CONFIG_OPLUS_DEBUG_AUTH)
+	&dev_attr_overwrite,
+	&dev_attr_clean_overwrite,
+	&dev_attr_publish,
+#endif /* CONFIG_OPLUS_DEBUG_AUTH */
+	&dev_attr_items,
+	&dev_attr_is_str_data,
 	NULL
 };
+#endif /* CONFIG_OPLUS_CHG_MMS_DEBUG */
 
+#if IS_ENABLED(CONFIG_OPLUS_CHG_MMS_PUBLISH_USERSPACE)
 enum {
 	TOPIC_ENV_ITEM = 0,
 	TOPIC_ENV_DATA,
 	TOPIC_ENV_MAX,
 };
 
-static void debug_subs_callback(struct mms_subscribe *subs, enum mms_msg_type type, u32 id, bool sync)
+static void userspace_subs_callback(struct mms_subscribe *subs, enum mms_msg_type type, u32 id, bool sync)
 {
 	struct oplus_mms *mms = subs->priv_data;
 	struct mms_item *item;
@@ -962,7 +1237,7 @@ static void debug_subs_callback(struct mms_subscribe *subs, enum mms_msg_type ty
 	free_page((unsigned long)item_env_buf);
 	free_page((unsigned long)data_env_buf);
 }
-#endif /* CONFIG_OPLUS_CHG_MMS_DEBUG */
+#endif /* CONFIG_OPLUS_CHG_MMS_PUBLISH_USERSPACE */
 
 static void oplus_mms_update_work(struct work_struct *work)
 {
@@ -1004,6 +1279,14 @@ static void oplus_mms_msg_work(struct work_struct *work)
 	kfree(msg);
 
 	queue_delayed_work(mms_wq, &mms->msg_work, 0);
+}
+
+static void oplus_mms_callback_work(struct work_struct *work)
+{
+	struct oplus_mms *mms = container_of(work, struct oplus_mms,
+					callback_work);
+
+	oplus_mms_call(mms);
 }
 
 static int oplus_mms_match_device_by_name(struct device *dev, const void *data)
@@ -1107,6 +1390,7 @@ __oplus_mms_register(struct device *parent, const struct oplus_mms_desc *desc,
 	}
 	INIT_DELAYED_WORK(&mms->update_work, oplus_mms_update_work);
 	INIT_DELAYED_WORK(&mms->msg_work, oplus_mms_msg_work);
+	INIT_WORK(&mms->callback_work, oplus_mms_callback_work);
 	INIT_LIST_HEAD(&mms->subscribe_list);
 	INIT_LIST_HEAD(&mms->msg_list);
 
@@ -1132,20 +1416,20 @@ __oplus_mms_register(struct device *parent, const struct oplus_mms_desc *desc,
 	atomic_inc(&mms->use_cnt);
 	mms->initialized = true;
 
-#ifdef CONFIG_OPLUS_CHG_MMS_DEBUG
-	mms->debug_subs =
-		oplus_mms_subscribe(mms, mms, debug_subs_callback, "debug");
-	if (IS_ERR_OR_NULL(mms->debug_subs)) {
-		chg_err("debug subscribe %s topic error, rc=%ld\n",
+#if IS_ENABLED(CONFIG_OPLUS_CHG_MMS_PUBLISH_USERSPACE)
+	mms->userspace_subs =
+		oplus_mms_subscribe(mms, mms, userspace_subs_callback, "userspace");
+	if (IS_ERR_OR_NULL(mms->userspace_subs)) {
+		chg_err("userspace subscribe %s topic error, rc=%ld\n",
 			mms->desc->name,
-			PTR_ERR(mms->debug_subs));
+			PTR_ERR(mms->userspace_subs));
 	}
-#endif /* CONFIG_OPLUS_CHG_MMS_DEBUG */
+#endif /* CONFIG_OPLUS_CHG_MMS_PUBLISH_USERSPACE */
 
 	kobject_uevent(&dev->kobj, KOBJ_CHANGE);
 
 	queue_delayed_work(mms_wq, &mms->update_work, 0);
-	oplus_mms_call(mms);
+	schedule_work(&mms->callback_work);
 
 	return mms;
 
@@ -1236,10 +1520,13 @@ void oplus_mms_unregister(struct oplus_mms *mms)
 	mms->removing = true;
 	cancel_delayed_work_sync(&mms->update_work);
 	cancel_delayed_work_sync(&mms->msg_work);
+	cancel_work_sync(&mms->callback_work);
 	sysfs_remove_link(&mms->dev.kobj, "powers");
+#if IS_ENABLED(CONFIG_OPLUS_CHG_MMS_PUBLISH_USERSPACE)
+	if (!IS_ERR_OR_NULL(mms->userspace_subs))
+		oplus_mms_unsubscribe(mms->userspace_subs);
+#endif /* CONFIG_OPLUS_CHG_MMS_PUBLISH_USERSPACE */
 #ifdef CONFIG_OPLUS_CHG_MMS_DEBUG
-	if (!IS_ERR_OR_NULL(mms->debug_subs))
-		oplus_mms_unsubscribe(mms->debug_subs);
 	attrs = oplus_mms_attributes;
 	while ((attr = *attrs++))
 		device_remove_file(&mms->dev, attr);
