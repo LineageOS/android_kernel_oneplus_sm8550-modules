@@ -2770,7 +2770,11 @@ enum Tfa98xx_Error tfaGetFwApiVersion(struct tfa_device *tfa, unsigned char *pFi
 		return Tfa98xx_Error_Bad_Parameter;
 	if (!tfa->is_probus_device)
 	{
+#ifdef OPLUS_ARCH_EXTENDS
+		int buffer = 0;
+#else /* OPLUS_ARCH_EXTENDS */
 		int buffer;
+#endif /* OPLUS_ARCH_EXTENDS */
 		err = mem_read(tfa, FW_VAR_API_VERSION, 1, (int *)(&buffer));
 		if (err) {
 			pr_debug("%s Error: Unable to get API Version from DSP \n", __FUNCTION__);

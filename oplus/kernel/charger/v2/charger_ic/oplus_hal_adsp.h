@@ -45,7 +45,7 @@
 #define AP_OPCODE_WRITE_BUFFER    0x10008
 #define OEM_READ_WAIT_TIME_MS    500
 #define MAX_OEM_PROPERTY_DATA_SIZE 128
-#define AP_READ_WAIT_TIME_MS      500
+#define AP_READ_WAIT_TIME_MS      1000
 #define MAX_AP_PROPERTY_DATA_SIZE 512
 #define AP_UFCS_WAIT_TIME_MS      500
 #define MAX_UFCS_CAPS_ITEM        16
@@ -106,6 +106,11 @@
 #define BC_UFCS_PWR_INFO_READY		0X77
 #define BC_BATTERY_RESET_START		0X78
 #define PD_SOURCECAP_DONE		0X79
+#define REQUEST_QOS			0X7a
+#define RELEASE_QOS			0X7b
+#define HMAC_UPDATE			0X7c
+#define BC_POWER_ROLE_STATUS		0X7d
+#define UFCS_EXIT_MODE_NOTIFY		0X7e
 #endif
 
 #ifdef OPLUS_FEATURE_CHG_BASIC
@@ -148,6 +153,7 @@ struct oplus_ap_read_ufcs_resp_msg {
 struct oplus_ap_read_req_msg {
 	struct pmic_glink_hdr hdr;
 	u32 message_id;
+	u32 value;
 };
 
 struct oplus_ap_read_buffer_resp_msg {
@@ -162,6 +168,11 @@ enum oplus_ap_message_id {
 	AP_MESSAGE_GET_GAUGE_REG_INFO,
 	AP_MESSAGE_GET_GAUGE_CALIB_TIME,
 	AP_MESSAGE_GET_GAUGE_BATTINFO,
+	AP_MESSAGE_GET_LPD_INFO,
+	AP_MESSAGE_GET_GAUGE_LIFETIME_STATUS,
+	AP_MESSAGE_GET_GAUGE_LIFETIME_INFO,
+	AP_MESSAGE_GET_GAUGE_R_INFO,
+	AP_MESSAGE_GET_GAUGE_THREE_LEVEL_TERM_VOLT,
 	AP_MESSAGE_MAX_SIZE = 32,
 };
 
@@ -180,6 +191,7 @@ struct oplus_ap_write_buffer_resp_msg {
 
 enum oplus_ap_write_message_id {
 	AP_MESSAGE_WRITE_CALIB_TIME,
+	AP_MESSAGE_WRITE_THREE_LEVEL_TERM_VOLT,
 };
 #endif
 
@@ -274,6 +286,18 @@ enum battery_property_id {
 	BATT_DEEP_DISCHG_LAST_CC,
 	BATT_GET_UFCS_RUNNING_STATE,
 	BATT_VOLT_MIN,
+	BATT_SET_CHG_PATH,
+	BATT_GET_CHG_PATH_STATUS,
+	BATT_GET_CAR_C,
+	BATT_SET_CAR_C_CLEAR,
+	BATT_GET_VCT,
+	BATT_SET_VCT,
+	BATT_SET_BATT_FULL,
+	BATT_SET_CUV_STATE,
+	BATT_GET_CUV_STATE,
+	BATT_ITERM_CHECK_STAT,
+	BATT_ITERM_TIMEOUT,
+	BATT_SET_TRUE_FCC,
 #endif
 	BATT_PROP_MAX,
 };
@@ -348,6 +372,8 @@ enum usb_property_id {
 	USB_SNS_STATUS,
 	USB_SET_UFCS_SM_PERIOD,
 	USB_SET_RERUN_AICL,
+	USB_SET_AICL_VOL,
+	USB_GET_AICL_VOL,
 	USB_SET_PLC_STATUS,
 #endif /*OPLUS_FEATURE_CHG_BASIC*/
 	USB_PROP_MAX,
@@ -586,8 +612,38 @@ struct oplus_chg_iio {
 	struct iio_channel	*usbtemp_sup_v_chan;
 	struct iio_channel	*subboard_temp_chan;
 	struct iio_channel	*batt_con_btb_chan;
+	struct iio_channel	*sub_batt_con_btb_chan;
 	struct iio_channel	*usb_con_btb_chan;
 	struct iio_channel	*chg_mos_temp_chan;
+	struct iio_channel	*sub_con_btb_detect_adc;
+	struct iio_channel	*vph_pwr_chan;
+	struct iio_channel	*vbat_sns_qbg_chan;
+	struct iio_channel	*pmic_vbat_adc;
+};
+
+enum oplus_sub_btb_adc_index {
+	OPLUS_SUB_BTB_VALD_MIN_ADC,
+	OPLUS_SUB_BTB_VALD_MAX_ADC,
+	OPLUS_SUB_BTB_MAX,
+};
+
+#define OPLUS_CHG_TRACK_PLAT_CALI_INFO_LEN	300
+
+enum oplus_gauge_track_type {
+	GAUGE_TRACK_CALI_FLAG_ZCV = 1,
+	GAUGE_TRACK_CALI_FLAG_AGING = 2,
+	GAUGE_TRACK_CALI_FLAG_PLUGOUT = 4,
+	GAUGE_TRACK_CALI_FLAG_CHG_FULL = 5
+};
+
+struct gauge_track_cali_info_s {
+	int vbat;
+	int tbat;
+	int soc;
+	int cycle_count;
+	int learn_capacity;
+	int imp;
+	int soh;
 };
 #endif
 
@@ -614,6 +670,7 @@ struct battery_chg_dev {
 	struct votable			*chg_disable_votable;
 	struct mutex			chg_en_lock;
 	bool 				    chg_en;
+	struct psy_state		oplus_psy;
 #endif
 	struct class			battery_class;
 	struct pmic_glink_client	*client;
@@ -645,6 +702,7 @@ struct battery_chg_dev {
 	struct delayed_work	cid_status_change_work;
 	struct delayed_work	usbtemp_recover_work;
 	struct delayed_work	adsp_crash_recover_work;
+	struct delayed_work	crash_track_work;
 	struct delayed_work	voocphy_enable_check_work;
 	struct delayed_work	otg_vbus_enable_work;
 	struct delayed_work	otg_status_check_work;
@@ -655,7 +713,15 @@ struct battery_chg_dev {
 	struct delayed_work	oem_lcm_en_check_work;
 	struct delayed_work	ctrl_lcm_frequency;
 	struct delayed_work	sourcecap_done_work;
+	struct delayed_work	pdo_update_work;
 	struct delayed_work	sourcecap_suspend_recovery_work;
+	struct delayed_work	update_pd_svooc_work;
+	struct delayed_work	iterm_timeout_work;
+	struct delayed_work	request_qos_work;
+	struct delayed_work	release_qos_work;
+	struct work_struct	wired_otg_enable_work;
+	struct delayed_work	update_common_charge_flag_work;
+	bool			qos_status;
 	u32			oem_misc_ctl_data;
 	bool			oem_usb_online;
 	bool			oem_lcm_check;
@@ -679,6 +745,7 @@ struct battery_chg_dev {
 	bool				ufcs_verify_auth_ready;
 	bool				ufcs_power_info_ready;
 	bool				ufcs_vdm_emark_ready;
+	bool				ufcs_exiting;
 	bool				adapter_verify_auth;
 	bool				adspfg_i2c_reset_processing;
 	bool				adspfg_i2c_reset_notify_done;
@@ -687,7 +754,14 @@ struct battery_chg_dev {
 	pd_msg_data			pdo[PPS_PDO_MAX];
 	bool					voocphy_err_check;
 	bool			bypass_vooc_support;
-	bool			ufcs_run_check_support;
+	bool			usb_aicl_enhance;
+	bool			soccp_support;
+	bool				qcom_gauge_cali_track_support;
+	struct gauge_track_cali_info_s 	*pre_info;
+	struct work_struct		gauge_cali_track_by_plug_work;
+	struct work_struct		gauge_cali_track_by_full_work;
+	struct mutex                    pre_info_lock;
+	struct mutex                    cur_info_lock;
 #endif
 #ifdef OPLUS_FEATURE_CHG_BASIC
 	int vchg_trig_irq;
@@ -758,6 +832,9 @@ struct battery_chg_dev {
 	int read_by_reg;
 	struct delayed_work check_adspfg_status;
 	struct delayed_work hboost_notify_work;
+	bool ufcs_run_check_support;
+	bool error_prop;
+	int sub_btb_valid_temp[OPLUS_SUB_BTB_MAX];
 #endif
 	int batt_full_para[CHARGING_TYPE_MAX][QBG_TEMP_MAX];
 	int batt_full_temp[QBG_TEMP_MAX];
@@ -806,3 +883,4 @@ int oplus_adsp_voocphy_get_atl_last_geat_current(void);
 int oplus_adsp_voocphy_set_curve_num(int number);
 #endif
 #endif /*__SM8350_CHARGER_H*/
+
