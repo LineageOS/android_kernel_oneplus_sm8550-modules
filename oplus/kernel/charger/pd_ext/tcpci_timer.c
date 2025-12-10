@@ -23,6 +23,7 @@
 
 #define TIMEOUT_VAL(val)		(val * 1000)
 #define TIMEOUT_RANGE(min, max)		((min * 3000 + max * 2000) / 5)
+#define SNK_FLOW_DELAY_MS	10
 
 static inline uint64_t tcpc_get_timer_tick(struct tcpc_device *tcpc)
 {
@@ -145,7 +146,7 @@ DECL_TCPC_TIMEOUT(PD_PE_VDM_POSTPONE, 3),
 #ifdef CONFIG_USB_PD_REV30_COLLISION_AVOID
 DECL_TCPC_TIMEOUT(PD_TIMER_DEFERRED_EVT, 5000),
 #ifdef CONFIG_USB_PD_REV30_SNK_FLOW_DELAY_STARTUP
-DECL_TCPC_TIMEOUT(PD_TIMER_SNK_FLOW_DELAY, CONFIG_USB_PD_UFP_FLOW_DLY),
+DECL_TCPC_TIMEOUT(PD_TIMER_SNK_FLOW_DELAY, SNK_FLOW_DELAY_MS),
 #endif	/* CONFIG_USB_PD_REV30_SNK_FLOW_DELAY_STARTUP */
 #endif	/* CONFIG_USB_PD_REV30_COLLISION_AVOID */
 #endif	/* CONFIG_USB_PD_REV30 */
@@ -267,7 +268,7 @@ static inline void on_pe_timer_timeout(
 
 	case PD_TIMER_HARD_RESET_COMPLETE:
 		rv = tcpci_get_chip_vid(tcpc, &chip_vid);
-		if (!rv &&  SOUTHCHIP_PD_VID == chip_vid) {
+		if (!rv && SOUTHCHIP_PD_VID == chip_vid) {
 			pd_put_sent_hard_reset_event(tcpc);
 		}
 		break;

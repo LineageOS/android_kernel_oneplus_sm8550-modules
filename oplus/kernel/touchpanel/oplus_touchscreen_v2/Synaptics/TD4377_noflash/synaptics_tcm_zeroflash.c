@@ -228,8 +228,8 @@ static int zeroflash_get_fw_image(void)
 {
 	int retval = 0;
 	struct syna_tcm_hcd *tcm_hcd = g_zeroflash_hcd->tcm_hcd;
-	struct firmware *request_fw_headfile = NULL;
 	struct touchpanel_data *ts = spi_get_drvdata(tcm_hcd->s_client);
+	struct firmware *request_fw_headfile = NULL;
 	char *fw_name_lpwg = NULL;
 	char *p_node = NULL;
 	char *postfix = "_LPWG.img";
@@ -237,8 +237,8 @@ static int zeroflash_get_fw_image(void)
 
 	if (tcm_hcd->request_fw_image_id == 1) {
 		fw_name_lpwg = kzalloc(MAX_FW_NAME_LENGTH, GFP_KERNEL);
-			if (fw_name_lpwg == NULL) {
-				TPD_INFO("fw_name_lpwg kzalloc error!\n");
+		if (fw_name_lpwg == NULL) {
+			TPD_INFO("fw_name_lpwg kzalloc error!\n");
 				return -ENOMEM;
 			}
 
@@ -252,7 +252,7 @@ static int zeroflash_get_fw_image(void)
 			release_firmware(g_zeroflash_hcd->fw_lpwg_entry);
 			g_zeroflash_hcd->fw_lpwg_entry = NULL;
 			g_zeroflash_hcd->image = NULL;
-		}
+			}
 
 		retval = request_firmware(&g_zeroflash_hcd->fw_lpwg_entry, fw_name_lpwg, ts->dev);
 		if (!retval) {
@@ -265,6 +265,7 @@ static int zeroflash_get_fw_image(void)
 
 		kfree(fw_name_lpwg);
 	} else {
+		tcm_hcd->tcm_firmware_headfile = ts->firmware_in_dts;
 		if(!g_zeroflash_hcd->fw_entry) {
 			TPD_INFO("oplus tp update can't get fw, get fw from headfile\n");
 			request_fw_headfile = kzalloc(sizeof(struct firmware), GFP_KERNEL);
@@ -294,7 +295,6 @@ static int zeroflash_get_fw_image(void)
 			return -1;
 		}
 	}
-
 	if (!ts->lpwg_fw_support) {
 		if(!tcm_hcd->tp_fw_update_parse) {
 			return 0;
@@ -1025,10 +1025,18 @@ exit:
 void zeroflash_download_firmware_work(struct work_struct *work)
 {
 	struct syna_tcm_hcd *tcm_hcd = g_zeroflash_hcd->tcm_hcd;
-	if (tcm_hcd->id_info.mode == MODE_ROMBOOTLOADER) {
-		zeroflash_do_romboot_firmware_download();
+	struct touchpanel_data *ts = spi_get_drvdata(tcm_hcd->s_client);
+
+	if(ts->tcm_skip_time) {
+		if (tcm_hcd->id_info.mode == MODE_ROMBOOTLOADER) {
+			zeroflash_do_romboot_firmware_download();
+		}
 	} else {
-		zeroflash_do_f35_firmware_downloading();
+		if (tcm_hcd->id_info.mode == MODE_ROMBOOTLOADER) {
+			zeroflash_do_romboot_firmware_download();
+		} else {
+			zeroflash_do_f35_firmware_downloading();
+		}
 	}
 	return;
 }

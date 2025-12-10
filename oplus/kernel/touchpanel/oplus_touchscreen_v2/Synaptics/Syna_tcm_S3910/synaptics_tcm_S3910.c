@@ -5285,10 +5285,15 @@ full_out:
 	return error_count;
 }
 
+static int raw_cap_data_restriction(int val, int raw_cap_restriction)
+{
+	return val * raw_cap_restriction / 100;
+}
+
 static int syna_full_rawcap_test(struct seq_file *s, void *chip_data,
 				 struct auto_testdata *syna_testdata, struct test_item_info *p_test_item_info)
 {
-	uint16_t u_data16 = 0;
+	uint16_t u_data16 = 0, r_u_data16 = 0;
 	int i = 0, ret = 0, index = 0, byte_cnt = 2;
 	int error_count = 0;
 	struct syna_tcm_data *tcm_info = (struct syna_tcm_data *)chip_data;
@@ -5346,13 +5351,15 @@ static int syna_full_rawcap_test(struct seq_file *s, void *chip_data,
 		store_to_file(syna_testdata->fp, syna_testdata->length,
 			      syna_testdata->pos, "%04d, ", u_data16);
 
-		if ((u_data16 < p_mutual_n[index]) || (u_data16 > p_mutual_p[index])) {
-			TP_INFO(tcm_info->tp_index, "full rawcap test failed at node[%d]=%d [%d %d].\n", index, u_data16,
+		r_u_data16 = raw_cap_data_restriction(u_data16, syna_testdata->raw_cap_restriction);
+
+		if ((r_u_data16 < p_mutual_n[index]) || (r_u_data16 > p_mutual_p[index])) {
+			TP_INFO(tcm_info->tp_index, "full rawcap test failed at node[%d]=%d restriction[%d] [%d %d].\n", index, u_data16, r_u_data16,
 				 p_mutual_n[index], p_mutual_p[index]);
 
 			if (!error_count) {
-				seq_printf(s, "full rawcap test failed at node[%d]=%d [%d %d].\n", index,
-					   u_data16, p_mutual_n[index], p_mutual_p[index]);
+				seq_printf(s, "full rawcap test failed at node[%d]=%d restriction[%d] [%d %d].\n", index,
+					   u_data16, r_u_data16, p_mutual_n[index], p_mutual_p[index]);
 			}
 
 			error_count++;
@@ -6705,7 +6712,7 @@ static  void syna_reserve_read(struct seq_file *s, void *chip_data)
 	return;
 }
 
-static void syna_tp_limit_data_write(void *chip_data, int count)
+static void syna_tp_data_record_write(void *chip_data, int count)
 {
 	int retval;
 	struct syna_tcm_data *tcm_info = (struct syna_tcm_data *)chip_data;
@@ -6793,7 +6800,7 @@ static struct debug_info_proc_operations syna_debug_proc_ops = {
 	.main_register_read = syna_main_register,
 	.reserve_read  = syna_reserve_read,
 	.delta_snr_read = syna_delta_snr_read,
-	.tp_limit_data_write = syna_tp_limit_data_write,
+	.tp_data_record_write = syna_tp_data_record_write,
 };
 
 static void syna_start_aging_test(void *chip_data)

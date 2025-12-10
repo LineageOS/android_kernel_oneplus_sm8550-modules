@@ -1,5 +1,5 @@
 /**************************************************************
- * Copyright (c)  2008- 2030  Oplus Mobile communication Corp.ltd.
+ * Copyright (c)  2008- 2030  oplus Mobile communication Corp.ltd.
  * File       : goodix_drivers_brl.c
  * Description: Source file for Goodix GT9897 driver
  * Version   : 1.0
@@ -544,7 +544,11 @@ static int goodix_enable_gesture(struct chip_data_brl *chip_info, bool enable)
 			TPD_INFO("GT:%s, [WARNING!!]invilid gesture,not enable\n", __func__);
 			goto OUT;
 		}
-		goodix_enter_sleep(chip_info, false);
+		if (!chip_info->gesture_enable) {
+			goodix_enter_sleep(chip_info, false);
+		} else {
+			TPD_INFO("GT:%s, aleady in gesture,no need reset :%d\n", __func__, chip_info->gesture_enable);
+		}
 		TPD_INFO("GT:%s, gesture_type:0x%08X, and disable sleep\n", __func__, chip_info->gesture_type);
 		tmp_cmd.len = 8;
 		tmp_cmd.cmd = 0xA6;
@@ -3999,7 +4003,7 @@ out:
 	return;
 }
 
-static void goodix_limit_write(void *chip_data, int32_t count)
+static void goodix_tp_data_record_write(void *chip_data, int32_t count)
 {
 	struct chip_data_brl *chip_info;
 	int rx_num, tx_num;
@@ -4051,7 +4055,7 @@ static struct debug_info_proc_operations debug_info_proc_ops = {
 	.delta_read                = goodix_delta_read,
 	.baseline_read             = goodix_baseline_read,
 	.main_register_read        = goodix_main_register_read,
-	.tp_limit_data_write	 = goodix_limit_write,
+	.tp_data_record_write      = goodix_tp_data_record_write,
 };
 /********* End of implementation of debug_info_proc_operations callbacks**********************/
 
@@ -4525,6 +4529,11 @@ static int brl_noisedata_test(struct seq_file *s,
 	return 0;
 }
 
+static int raw_cap_data_restriction(int val, int raw_cap_restriction)
+{
+	return val * raw_cap_restriction / 100;
+}
+
 static int brl_capacitance_test(struct seq_file *s,
 				void *chip_data,
 			    struct auto_testdata *goodix_testdata,
@@ -4558,10 +4567,12 @@ static int brl_capacitance_test(struct seq_file *s,
 
 	ts_test->test_result[TYPE_TEST2] = GTP_TEST_OK;
 	for (i = 0; i < ts_test->rawdata.size; i++) {
-		val = ts_test->rawdata.data[i];
+		val = raw_cap_data_restriction(ts_test->rawdata.data[i], goodix_testdata->raw_cap_restriction);
 		if (val > max_limit[i] || val < min_limit[i]) {
-			TPD_INFO("GT:rawdata[%d] out of threshold[%d,%d]\n", val, min_limit[i], max_limit[i]);
-			seq_printf(s, "rawdata[%d] out of threshold[%d,%d]\n", val, min_limit[i], max_limit[i]);
+			TPD_INFO("GT:rawdata[%d] restriction[%d] out of threshold[%d,%d]\n",
+				ts_test->rawdata.data[i], val, min_limit[i], max_limit[i]);
+			seq_printf(s, "rawdata[%d] restriction[%d] out of threshold[%d,%d]\n",
+				ts_test->rawdata.data[i], val, min_limit[i], max_limit[i]);
 			err_cnt++;
 		}
 	}
