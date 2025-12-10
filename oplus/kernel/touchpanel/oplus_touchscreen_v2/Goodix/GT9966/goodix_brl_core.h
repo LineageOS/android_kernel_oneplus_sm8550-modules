@@ -1,5 +1,5 @@
 /**************************************************************
- * Copyright (c)  2008- 2030  Oplus Mobile communication Corp.ltd.
+ * Copyright (c)  2008- 2030  oplus Mobile communication Corp.ltd.
  * File       : goodix_drivers_gt9886.h
  * Description: header file for Goodix GT9886 driver
  * Version   : 1.0

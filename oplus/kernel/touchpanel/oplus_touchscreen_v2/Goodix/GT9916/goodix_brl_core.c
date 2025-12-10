@@ -529,7 +529,11 @@ static int goodix_enable_gesture(struct chip_data_brl *chip_info, bool enable)
 			TPD_INFO("GT_brlD:%s, [WARNING!!]invilid gesture,not enable\n", __func__);
 			goto OUT;
 		}
-		goodix_enter_sleep(chip_info, false);
+		if (!chip_info->gesture_enable) {
+			goodix_enter_sleep(chip_info, false);
+		} else {
+			TPD_INFO("GT_brlD:%s, aleady in gesture,no need reset :%d\n", __func__, chip_info->gesture_enable);
+		}
 		tmp_cmd.len = GTP_CMD_GESTURE_LEN;
 		tmp_cmd.cmd = GOODIX_GESTURE_CMD_ENABLE;
 		tmp_cmd.data[0] = chip_info->gesture_type  & GOODIX_CLEAR_BYTE;
@@ -3961,7 +3965,7 @@ out:
 	return;
 }
 
-static void goodix_limit_write(void *chip_data, int32_t count)
+static void goodix_tp_data_record_write(void *chip_data, int32_t count)
 {
 	struct chip_data_brl *chip_info;
 	int rx_num, tx_num;
@@ -4013,7 +4017,7 @@ static struct debug_info_proc_operations debug_info_proc_ops = {
 	.delta_read                = gt_brld_delta_read,
 	.baseline_read             = goodix_baseline_read,
 	.main_register_read        = goodix_main_register_read,
-	.tp_limit_data_write	 = goodix_limit_write,
+	.tp_data_record_write      = goodix_tp_data_record_write,
 };
 /********* End of implementation of debug_info_proc_operations callbacks**********************/
 
@@ -4431,6 +4435,11 @@ static int brl_noisedata_test(struct seq_file *s,
 	return 0;
 }
 
+static int raw_cap_data_restriction(int val, int raw_cap_restriction)
+{
+	return val * raw_cap_restriction / 100;
+}
+
 static int brl_capacitance_test(struct seq_file *s,
 				void *chip_data,
 			    struct auto_testdata *goodix_testdata,
@@ -4507,10 +4516,12 @@ static int brl_capacitance_test(struct seq_file *s,
 	goodix_rotate_abcd2cbad(tx, rx, ts_test->rawdata.data);
 
 	for (i = 0; i < ts_test->rawdata.size; i++) {
-		val = ts_test->rawdata.data[i];
+		val = raw_cap_data_restriction(ts_test->rawdata.data[i], goodix_testdata->raw_cap_restriction);
 		if (val > max_limit[i] || val < min_limit[i]) {
-			TPD_INFO("GT_brlD:rawdata[%d] out of threshold[%d,%d]\n", val, min_limit[i], max_limit[i]);
-			seq_printf(s, "rawdata[%d] out of threshold[%d,%d]\n", val, min_limit[i], max_limit[i]);
+			TPD_INFO("GT_brlD:rawdata[%d] restriction[%d] out of threshold[%d,%d]\n",
+				ts_test->rawdata.data[i], val, min_limit[i], max_limit[i]);
+			seq_printf(s, "rawdata[%d] restriction[%d] out of threshold[%d,%d]\n",
+				ts_test->rawdata.data[i], val, min_limit[i], max_limit[i]);
 			err_cnt++;
 		}
 	}
