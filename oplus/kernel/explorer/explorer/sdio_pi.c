@@ -83,7 +83,9 @@ struct explorer_plat_data *epd_save;
 /* for remap */
 #define DEVICE_REMAP_ADDR_MASK(k)	(0xffffffff << DEVICE_MATCH_ADDR_START_BIT(k))
 
+#ifndef MIN
 #define MIN(X, Y) ((X) < (Y) ? (X) : (Y))
+#endif
 
 #define SDIO_RETRY_TIMES 3
 
