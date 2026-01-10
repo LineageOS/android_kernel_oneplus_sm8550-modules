@@ -1,6 +1,6 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 /*
- * Copyright (c) 2023-2024 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #ifndef _CAM_TFE_CSID_770_H_
@@ -51,7 +51,6 @@ static struct cam_tfe_csid_pxl_reg_offset  cam_tfe_csid_770_ipp_reg_offset = {
 	.early_eof_en_shift_val              = 29,
 	.halt_master_sel_shift               = 4,
 	.halt_mode_shift                     = 2,
-	.halt_mode_mask                      = 3,
 	.halt_master_sel_master_val          = 1,
 	.halt_master_sel_slave_val           = 0,
 	.binning_supported                   = 3,
@@ -60,7 +59,6 @@ static struct cam_tfe_csid_pxl_reg_offset  cam_tfe_csid_770_ipp_reg_offset = {
 	.is_multi_vc_dt_supported            = true,
 	.format_measure_en_shift_val         = 0,
 	.measure_en_hbi_vbi_cnt_val          = 0xc,
-	.cgc_mode_en_shift_val               = 9,
 };
 
 static struct cam_tfe_csid_pxl_reg_offset  cam_tfe_csid_770_ppp_reg_offset = {
@@ -105,7 +103,6 @@ static struct cam_tfe_csid_pxl_reg_offset  cam_tfe_csid_770_ppp_reg_offset = {
 	.early_eof_en_shift_val              = 29,
 	.halt_master_sel_shift               = 4,
 	.halt_mode_shift                     = 2,
-	.halt_mode_mask                      = 3,
 	.halt_master_sel_master_val          = 3,
 	.halt_master_sel_slave_val           = 2,
 	.binning_supported                   = 0,
@@ -114,7 +111,6 @@ static struct cam_tfe_csid_pxl_reg_offset  cam_tfe_csid_770_ppp_reg_offset = {
 	.is_multi_vc_dt_supported            = true,
 	.format_measure_en_shift_val         = 0,
 	.measure_en_hbi_vbi_cnt_val          = 0xc,
-	.cgc_mode_en_shift_val               = 9,
 };
 
 static struct cam_tfe_csid_rdi_reg_offset cam_tfe_csid_770_rdi_0_reg_offset = {
@@ -160,7 +156,6 @@ static struct cam_tfe_csid_rdi_reg_offset cam_tfe_csid_770_rdi_0_reg_offset = {
 	.is_multi_vc_dt_supported                 = true,
 	.format_measure_en_shift_val              = 0,
 	.measure_en_hbi_vbi_cnt_val               = 0xc,
-	.cgc_mode_en_shift_val                    = 8,
 };
 
 static struct cam_tfe_csid_rdi_reg_offset cam_tfe_csid_770_rdi_1_reg_offset = {
@@ -206,7 +201,6 @@ static struct cam_tfe_csid_rdi_reg_offset cam_tfe_csid_770_rdi_1_reg_offset = {
 	.is_multi_vc_dt_supported                 = true,
 	.format_measure_en_shift_val              = 0,
 	.measure_en_hbi_vbi_cnt_val               = 0xc,
-	.cgc_mode_en_shift_val                    = 8,
 };
 
 static struct cam_tfe_csid_rdi_reg_offset cam_tfe_csid_770_rdi_2_reg_offset = {
@@ -252,7 +246,6 @@ static struct cam_tfe_csid_rdi_reg_offset cam_tfe_csid_770_rdi_2_reg_offset = {
 	.is_multi_vc_dt_supported                 = true,
 	.format_measure_en_shift_val              = 0,
 	.measure_en_hbi_vbi_cnt_val               = 0xc,
-	.cgc_mode_en_shift_val                    = 8,
 };
 
 static struct cam_tfe_csid_csi2_rx_reg_offset
@@ -286,7 +279,6 @@ static struct cam_tfe_csid_csi2_rx_reg_offset
 	.csi2_irq_mask_all                            = 0xFFFFFFF,
 	.csi2_misr_enable_shift_val                   = 6,
 	.csi2_vc_mode_shift_val                       = 2,
-	.csi2_rx_epd_mode_shift_en                    = 8,
 	.csi2_capture_long_pkt_en_shift               = 0,
 	.csi2_capture_short_pkt_en_shift              = 1,
 	.csi2_capture_cphy_pkt_en_shift               = 2,
