@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2017-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2025 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #include <linux/module.h>
@@ -687,6 +687,7 @@ static int __cam_csiphy_parse_lane_info_cmd_buf(
 	uint32_t *cmd_buf = NULL;
 	struct cam_csiphy_info *cam_cmd_csiphy_info = NULL;
 	size_t len;
+
 	rc = cam_mem_get_cpu_buf(cmd_desc->mem_handle,
 		&generic_ptr, &len);
 	if (rc < 0) {
@@ -932,10 +933,10 @@ int32_t cam_cmd_buf_parser(struct csiphy_device *csiphy_dev,
 	int                      rc = 0, i;
 	uintptr_t                generic_pkt_ptr;
 	struct cam_packet       *csl_packet = NULL;
-	struct cam_packet       *csl_packet_u = NULL;
 	struct cam_cmd_buf_desc *cmd_desc = NULL;
 	size_t                   len, remain_len;
 	uint32_t                 cmd_buf_type;
+
 
 	if (!cfg_dev || !csiphy_dev) {
 		CAM_ERR(CAM_CSIPHY, "Invalid Args");
@@ -955,18 +956,21 @@ int32_t cam_cmd_buf_parser(struct csiphy_device *csiphy_dev,
 		CAM_ERR(CAM_CSIPHY,
 			"Inval cam_packet strut size: %zu, len_of_buff: %zu",
 			 sizeof(struct cam_packet), len);
+		cam_mem_put_cpu_buf(cfg_dev->packet_handle);
 		rc = -EINVAL;
-		goto put_buf;
+		return rc;
 	}
 
 	remain_len -= (size_t)cfg_dev->offset;
-	csl_packet_u = (struct cam_packet *)
+	csl_packet = (struct cam_packet *)
 		(generic_pkt_ptr + (uint32_t)cfg_dev->offset);
 
-	rc = cam_packet_util_copy_pkt_to_kmd(csl_packet_u, &csl_packet, remain_len);
-	if (rc) {
-		CAM_ERR(CAM_CSIPHY, "Copying packet to KMD failed");
-		goto put_buf;
+	if (cam_packet_util_validate_packet(csl_packet,
+		remain_len)) {
+		CAM_ERR(CAM_CSIPHY, "Invalid packet params");
+		cam_mem_put_cpu_buf(cfg_dev->packet_handle);
+		rc = -EINVAL;
+		return rc;
 	}
 
 	if (csl_packet->num_cmd_buf)
@@ -975,8 +979,9 @@ int32_t cam_cmd_buf_parser(struct csiphy_device *csiphy_dev,
 			csl_packet->cmd_buf_offset / 4);
 	else {
 		CAM_ERR(CAM_CSIPHY, "num_cmd_buffer = %d", csl_packet->num_cmd_buf);
+		cam_mem_put_cpu_buf(cfg_dev->packet_handle);
 		rc = -EINVAL;
-		goto end;
+		return rc;
 	}
 
 	CAM_DBG(CAM_CSIPHY, "CSIPHY:%u num cmd buffers received: %u",
@@ -984,8 +989,10 @@ int32_t cam_cmd_buf_parser(struct csiphy_device *csiphy_dev,
 
 	for (i = 0; i < csl_packet->num_cmd_buf; i++) {
 		rc = cam_packet_util_validate_cmd_desc(&cmd_desc[i]);
-		if (rc)
-			goto end;
+		if (rc) {
+			cam_mem_put_cpu_buf(cfg_dev->packet_handle);
+			return rc;
+		}
 
 		cmd_buf_type = cmd_desc[i].meta_data;
 
@@ -1011,9 +1018,6 @@ int32_t cam_cmd_buf_parser(struct csiphy_device *csiphy_dev,
 			break;
 	}
 
-end:
-	cam_common_mem_free(csl_packet);
-put_buf:
 	cam_mem_put_cpu_buf(cfg_dev->packet_handle);
 	return rc;
 }

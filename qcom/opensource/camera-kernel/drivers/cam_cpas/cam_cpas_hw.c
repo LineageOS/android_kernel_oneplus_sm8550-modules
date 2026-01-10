@@ -3681,7 +3681,6 @@ int cam_cpas_hw_probe(struct platform_device *pdev,
 				rc, num_cam);
 			goto disable_soc_res;
 		}
-		CAM_DBG(CAM_CPAS, "cam software fuse info: 0x%x", soc_private->part_info);
 	}
 	rc = cam_cpas_soc_disable_resources(&cpas_hw->soc_info, true, true);
 	if (rc) {
