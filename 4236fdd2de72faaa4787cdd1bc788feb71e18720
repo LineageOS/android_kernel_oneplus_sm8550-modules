@@ -1,0 +1,21 @@
+{
+  "comments": [
+    {
+      "unresolved": false,
+      "key": {
+        "uuid": "20a3c54e_fc87555e",
+        "filename": "/PATCHSET_LEVEL",
+        "patchSetId": 1
+      },
+      "lineNbr": 0,
+      "author": {
+        "id": 13648
+      },
+      "writtenOn": "2026-02-06T23:25:36Z",
+      "side": 1,
+      "message": "Not sue why oplus had this commented out, but it seems fine as is now.",
+      "revId": "4236fdd2de72faaa4787cdd1bc788feb71e18720",
+      "serverId": "1ec6b3db-b2c1-4fa4-84a2-4c7efe89ba71"
+    }
+  ]
+}
