@@ -70,7 +70,7 @@ void iris_query_capability(struct dsi_panel *panel)
 		caps.feature_enabled);
 
 	if (is_project(22811) || is_project(22851) || is_project(22635) || is_project(23603) ||
-			is_project(22714) || is_project(23667) || is_project(23801)) {
+			is_project(22714) || is_project(23667) || is_project(23801) || is_project(23861)) {
 		iris_chip_enable = chip_enable;
 		if (caps.feature_enabled & (1 << (SUPPORT_SOFT_IRIS - 16)))
 			soft_iris_enable = true;
