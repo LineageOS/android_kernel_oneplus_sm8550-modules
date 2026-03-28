@@ -29,6 +29,7 @@
 #define RESPONSE_TIMEOUT_MS_SHORT 300
 #define RESPONSE_TIMEOUT_MS_DEFAULT 1000
 #define RESPONSE_TIMEOUT_MS_LONG 3000
+#define RESPONSE_TIMEOUT_MS_LONG_PT17_PT18 5000
 
 #define ERASE_FLASH_DELAY_MS 5000
 #define WRITE_FLASH_DELAY_MS 200
@@ -3477,6 +3478,13 @@ static int syna_mode_switch(void *chip_data, work_mode mode, int flag)
 			TPD_INFO("%s: synaptics enable edg limit failed.\n", __func__);
 		}
 		break;
+
+	case MODE_UNDERWATER:
+		ret = syna_tcm_set_dynamic_config(tcm_hcd, DC_UNDER_WATER, flag?1:0);
+		if (ret < 0) {
+			TPD_INFO("%s:failed to set under_water mode\n", __func__);
+		}
+		break;
 	default:
 		break;
 	}
@@ -3820,15 +3828,25 @@ static int testing_run_prod_test_item(struct syna_tcm_hcd *tcm_info,
 	test_hcd->test_out.buf[0] = test_code;
 
 	LOCK_BUFFER(test_hcd->test_resp);
-	retval = syna_tcm_write_message(tcm_info,
-					CMD_PRODUCTION_TEST,
-					test_hcd->test_out.buf,
-					1,
-					&test_hcd->test_resp.buf,
-					&test_hcd->test_resp.buf_size,
-					&test_hcd->test_resp.data_length,
-					RESPONSE_TIMEOUT_MS_LONG);
-
+	if (tcm_info->pt17_pt18_test_support) {
+		retval = syna_tcm_write_message(tcm_info,
+						CMD_PRODUCTION_TEST,
+						test_hcd->test_out.buf,
+						1,
+						&test_hcd->test_resp.buf,
+						&test_hcd->test_resp.buf_size,
+						&test_hcd->test_resp.data_length,
+						RESPONSE_TIMEOUT_MS_LONG_PT17_PT18);
+	}  else {
+		retval = syna_tcm_write_message(tcm_info,
+						CMD_PRODUCTION_TEST,
+						test_hcd->test_out.buf,
+						1,
+						&test_hcd->test_resp.buf,
+						&test_hcd->test_resp.buf_size,
+						&test_hcd->test_resp.data_length,
+						RESPONSE_TIMEOUT_MS_LONG);
+	}
 	if (retval < 0) {
 		TPD_INFO("Failed to write command %s\n", STR(CMD_PRODUCTION_TEST));
 		UNLOCK_BUFFER(test_hcd->test_resp);

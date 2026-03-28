@@ -463,7 +463,7 @@ static void sy6974b_event_work(struct work_struct *work)
 		chip->bc12_retried = 0;
 		chip->bc12_delay_cnt = 0;
 		if (hiz)
-			sy6974b_really_suspend_charger(chip, false);
+			sy6974b_suspend_charger(false);
 		if (chip->oplus_charger_type == POWER_SUPPLY_TYPE_UNKNOWN)
 			sy6974b_get_bc12(chip);
 	} else if (prev_pg && !chip->power_good) {
@@ -477,6 +477,8 @@ static void sy6974b_event_work(struct work_struct *work)
 		Charger_Detect_Release();
 		oplus_chg_pullup_dp_set(false);
 #endif
+		if (hiz)
+			sy6974b_suspend_charger(false);
 		sy6974b_inform_charger_type(chip);
 		sy6974b_set_wdt_timer(chip, REG05_SY6974B_WATCHDOG_TIMER_DISABLE);
 		oplus_chg_wakelock(chip, false);
@@ -970,15 +972,27 @@ static void sy6974b_really_suspend_charger(struct sy6974b_chip *chip, bool en)
 		return;
 	}
 
-	if (atomic_read(&chip->driver_suspended) == 1) {
+	if ((atomic_read(&chip->driver_suspended) == 1) ||
+		((chip->oplus_charger_type == POWER_SUPPLY_TYPE_UNKNOWN) && chip->vbus_present && en) ||
+		(chip->otg_enable == true && en)) {
 		return;
 	}
+
+	chg_info("sy6974b_really_suspend_charger en:%d\n", en);
 
 	rc = sy6974b_write_byte_mask(chip, REG00_SY6974B_ADDRESS,
 			REG00_SY6974B_SUSPEND_MODE_MASK,
 			en ? REG00_SY6974B_SUSPEND_MODE_ENABLE : REG00_SY6974B_SUSPEND_MODE_DISABLE);
 	if (rc < 0) {
 		chg_err("fail en=%d rc = %d\n", en, rc);
+	}
+
+	if (en) {
+		schedule_delayed_work(&chip->event_work, msecs_to_jiffies(500));
+		sy6974b_charging_current_write_fast(chip, DISCONNECT_FCC_MAX_CURR);
+	} else {
+		if (!IS_ERR_OR_NULL(chip->fcc_votable))
+			rerun_election(chip->fcc_votable, false);
 	}
 }
 

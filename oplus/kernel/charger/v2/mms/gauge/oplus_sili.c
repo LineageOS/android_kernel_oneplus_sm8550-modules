@@ -1284,7 +1284,7 @@ void oplus_gauge_get_ddrc_status(struct oplus_mms *mms)
 		} else {
 			last_cc = oplus_gauge_get_last_cc(mms);
 		}
-		if (last_cc <= 0 || *step_status || *cc < last_cc ||
+		if (last_cc <= 0 || *step_status || *cc < last_cc || vterm < current_volt ||
 		    (chip->sub_gauge && (sub_last_cc <= 0 || chip->deep_spec.sub_cc < sub_last_cc))) {
 			update_vterm = vterm;
 			update_vshut = vshut;
@@ -3305,8 +3305,19 @@ int oplus_mms_gauge_get_si_prop(struct oplus_mms *mms, union mms_msg_data *data)
 
 void oplus_mms_gauge_sili_init(struct oplus_mms_gauge *chip)
 {
+	int step_status_switch;
+	int temp_range;
+
 	if (!chip->deep_spec.support)
 		return;
+
+	if (chip->deep_spec.ddrc_strategy_v2) {
+		step_status_switch = chip->deep_spec.ddrc_temp_switch;
+		temp_range = chip->deep_spec.ddrc_temp_num;
+	} else {
+		step_status_switch = DDB_CURVE_TEMP_NORMAL;
+		temp_range = DDB_CURVE_TEMP_WARM;
+	}
 
 	vote(chip->gauge_shutdown_voltage_votable, READY_VOTER, true, INVALID_MAX_VOLTAGE, false);
 	vote(chip->gauge_term_voltage_votable, READY_VOTER, true, INVALID_MAX_VOLTAGE, false);
@@ -3316,7 +3327,10 @@ void oplus_mms_gauge_sili_init(struct oplus_mms_gauge *chip)
 	if (chip->sub_gauge)
 		chip->deep_spec.sub_counts = oplus_gauge_get_deep_dischg_count(chip, chip->gauge_ic_comb[__ffs(chip->sub_gauge)]);
 	chip->deep_spec.ddrc_tbatt.index_n = oplus_gauge_ddrc_get_temp_region(chip);
-	chip->deep_spec.ddrc_tbatt.index_p = chip->deep_spec.ddrc_tbatt.index_n;
+	if (chip->deep_spec.ddrc_tbatt.index_n < step_status_switch)
+		chip->deep_spec.ddrc_tbatt.index_p = temp_range;
+	else
+		chip->deep_spec.ddrc_tbatt.index_p = chip->deep_spec.ddrc_tbatt.index_n;
 	chip->deep_spec.ddbc_tbatt.index_n = oplus_gauge_ddbc_get_temp_region(chip);
 	oplus_gauge_get_ddrc_status(chip->gauge_topic);
 

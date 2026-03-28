@@ -911,9 +911,9 @@ static char aw_rtp_name_162Hz[][AW_RTP_NAME_MAX] = {
 	{"aw8697_reserved_359.bin"},
 	{"aw8697_reserved_360.bin"},
 	{"aw8697_reserved_361.bin"},
-	{"aw8697_reserved_362.bin"},
+	{"aw8697_CircleToSearch_RTP_362_162Hz.bin"},
 	{"aw8697_programs_clean_RTP_363_162Hz.bin"},
-	{"aw8697_reserved_364.bin"},
+	{"aw8697_notification_clean_RTP_364_162Hz.bin"},
 	{"aw8697_Threestagekey_RTP_365_162Hz.bin"},
 	{"aw8697_reserved_366.bin"},
 	{"aw8697_reserved_367.bin"},
@@ -1344,9 +1344,9 @@ static char aw_rtp_name_166Hz[][AW_RTP_NAME_MAX] = {
 	{"aw8697_reserved_359.bin"},
 	{"aw8697_reserved_360.bin"},
 	{"aw8697_reserved_361.bin"},
-	{"aw8697_reserved_362.bin"},
+	{"aw8697_CircleToSearch_RTP_362_166Hz.bin"},
 	{"aw8697_programs_clean_RTP_363_166Hz.bin"},
-	{"aw8697_reserved_364.bin"},
+	{"aw8697_notification_clean_RTP_364_166Hz.bin"},
 	{"aw8697_Threestagekey_RTP_365_166Hz.bin"},
 	{"aw8697_reserved_366.bin"},
 	{"aw8697_reserved_367.bin"},
@@ -1775,9 +1775,9 @@ static char aw_rtp_name_174Hz[][AW_RTP_NAME_MAX] = {
 	{"aw8697_reserved_359.bin"},
 	{"aw8697_reserved_360.bin"},
 	{"aw8697_reserved_361.bin"},
-	{"aw8697_reserved_362.bin"},
+	{"aw8697_CircleToSearch_RTP_362_174Hz.bin"},
 	{"aw8697_programs_clean_RTP_363_174Hz.bin"},
-	{"aw8697_reserved_364.bin"},
+	{"aw8697_notification_clean_RTP_364_174Hz.bin"},
 	{"aw8697_Threestagekey_RTP_365_174Hz.bin"},
 	{"aw8697_reserved_366.bin"},
 	{"aw8697_reserved_367.bin"},
@@ -2208,9 +2208,9 @@ static char aw_rtp_name_178Hz[][AW_RTP_NAME_MAX] = {
 	{"aw8697_reserved_359.bin"},
 	{"aw8697_reserved_360.bin"},
 	{"aw8697_reserved_361.bin"},
-	{"aw8697_reserved_362.bin"},
+	{"aw8697_CircleToSearch_RTP_362_178Hz.bin"},
 	{"aw8697_programs_clean_RTP_363_178Hz.bin"},
-	{"aw8697_reserved_364.bin"},
+	{"aw8697_notification_clean_RTP_364_178Hz.bin"},
 	{"aw8697_Threestagekey_RTP_365_178Hz.bin"},
 	{"aw8697_reserved_366.bin"},
 	{"aw8697_reserved_367.bin"},
@@ -2642,9 +2642,9 @@ static char aw_rtp_name[][AW_RTP_NAME_MAX] = {
 	{"aw8697_reserved_359.bin"},
 	{"aw8697_reserved_360.bin"},
 	{"aw8697_reserved_361.bin"},
-	{"aw8697_reserved_362.bin"},
+	{"aw8697_CircleToSearch_RTP_362.bin"},
 	{"aw8697_programs_clean_RTP_363.bin"},
-	{"aw8697_reserved_364.bin"},
+	{"aw8697_notification_clean_RTP_364.bin"},
 	{"aw8697_Threestagekey_RTP_365.bin"},
 	{"aw8697_reserved_366.bin"},
 	{"aw8697_reserved_367.bin"},
@@ -8617,7 +8617,7 @@ static int aw_file_mmap(struct file *filp, struct vm_area_struct *vma)
 
 #if LINUX_VERSION_CODE > KERNEL_VERSION(4, 7, 0)
 	/* only accept PROT_READ, PROT_WRITE and MAP_SHARED from the API of mmap */
-	vm_flags_t vm_flags = calc_vm_prot_bits(PROT_READ|PROT_WRITE, 0) | calc_vm_flag_bits(filp, MAP_SHARED);
+	vm_flags_t vm_flags = calc_vm_prot_bits(PROT_READ|PROT_WRITE, 0);
 	vm_flags |= current->mm->def_flags | VM_MAYREAD | VM_MAYWRITE | VM_MAYEXEC | VM_SHARED | VM_MAYSHARE;
 	if (vma && (pgprot_val(vma->vm_page_prot) != pgprot_val(vm_get_page_prot(vm_flags))))
 		return -EPERM;
@@ -8702,7 +8702,7 @@ static ssize_t proc_vibration_style_write(struct file *filp, const char __user *
 	char buffer[5] = { 0 };
 	int rc = 0;
 	int val;
-	if (count > sizeof(buffer)) {
+	if (count >= sizeof(buffer)) {
 		return -EFAULT;
 	}
 	if (buf == NULL) {
@@ -8713,10 +8713,11 @@ static ssize_t proc_vibration_style_write(struct file *filp, const char __user *
 		return -EFAULT;
 	}
 
+	buffer[count] = '\0';
 	aw_dev_err("buffer=%s", buffer);
 	rc = kstrtoint(buffer, 0, &val);
 	if (rc < 0)
-		return count;
+		return rc;
 	aw_dev_err("val = %d", val);
 
 	if (val == 0) {

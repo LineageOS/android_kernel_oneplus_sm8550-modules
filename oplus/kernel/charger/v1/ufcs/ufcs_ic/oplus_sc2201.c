@@ -454,6 +454,18 @@ static int sc2201_handshake(void)
 	return rc;
 }
 
+static int sc2201_ack_timeout(void)
+{
+	int rc = 0;
+	struct oplus_sc2201 *chip = g_sc2201;
+
+	if (!chip)
+		return -ENODEV;
+	rc = sc2201_write_bit_mask(chip, SC2201_ADDR_UFCS_OPTION1, SC2201_FLAG_ACK_TIMEOUT_MASK,
+					(SC2201_FLAG_EN_LENGTH_END_VALUE << SC2201_FLAG_ACK_TIMEOUT_SHIFT));
+	return rc;
+}
+
 static int sc2201_ping(int baud)
 {
 	int rc = 0;
@@ -624,6 +636,7 @@ static int sc2201_hardware_init(struct oplus_sc2201 *chip)
 		return rc;
 	}
 
+	sc2201_ack_timeout();
 	sc2201_dump_registers();
 	gpio_direction_output(chip->ufcs_en_gpio, 0);
 	pinctrl_select_state(chip->pinctrl, chip->ufcs_en_sleep);

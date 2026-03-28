@@ -4434,48 +4434,53 @@ DECLARE_PROC_OPS(leather_cover_enable, simple_open,
 static ssize_t proc_disable_touch_event_write(struct file *file,
 		const char __user *buffer, size_t count, loff_t *ppos)
 {
-	int value = 0;
+	int disable_touch_event = 0;
 	char buf[4] = {0};
 	struct touchpanel_data *ts = PDE_DATA(file_inode(file));
 
+	if (count > 4) {
+		TPD_INFO("%s:count > 4\n", __func__);
+		return count;
+	}
 	if (!ts) {
 		TPD_INFO("%s: ts is NULL\n", __func__);
 		return count;
 	}
 
-	tp_copy_from_user(buf, sizeof(buf), buffer, count, 4);
+	tp_copy_from_user(buf, sizeof(buf), buffer, count, 2);
 
-	if (kstrtoint(buf, 10, &value)) {
+	if (kstrtoint(buf, 10, &disable_touch_event)) {
 		TP_INFO(ts->tp_index, "%s: kstrtoint error\n", __func__);
 		return count;
 	}
-
-	ts->touch_event_diasble = !!value;
-
-	TP_INFO(ts->tp_index, "%s: touch_event_diasble value=%d\n", __func__, value);
-
+	TP_INFO(ts->tp_index, "%s: write value=%d\n", __func__,
+		disable_touch_event);
+	mutex_lock(&ts->mutex);
+	ts->ts_ops->mode_switch(ts->chip_data, MODE_UNDERWATER, disable_touch_event > 0);
+	ts->disable_touch_event = disable_touch_event;
+	mutex_unlock(&ts->mutex);
 	return count;
 }
 
-static ssize_t proc_disable_touch_event_read(struct file *file, char __user *buffer,
-		size_t count, loff_t *ppos)
+static ssize_t proc_disable_touch_event_read(struct file *file,
+		char __user *user_buf, size_t count, loff_t *ppos)
 {
 	int ret = 0;
 	char page[PAGESIZE] = {0};
 	struct touchpanel_data *ts = PDE_DATA(file_inode(file));
 
 	if (!ts) {
-		return 0;
+		snprintf(page, PAGESIZE - 1, "%d\n", -1); /*no support*/
+
+	} else {
+		snprintf(page, PAGESIZE - 1, "%d\n", ts->disable_touch_event); /*support*/
 	}
 
-	TP_INFO(ts->tp_index, "touch_event_diasble value is: %d\n", ts->touch_event_diasble);
-	ret = snprintf(page, PAGESIZE - 1, "%d\n", ts->touch_event_diasble);
-	ret = simple_read_from_buffer(buffer, count, ppos, page, strlen(page));
-
+	ret = simple_read_from_buffer(user_buf, count, ppos, page, strlen(page));
 	return ret;
 }
 
-DECLARE_PROC_OPS(proc_disable_touch_event_ops, simple_open, proc_disable_touch_event_read, proc_disable_touch_event_write, NULL);
+DECLARE_PROC_OPS(proc_disable_touch_event_fops, simple_open, proc_disable_touch_event_read, proc_disable_touch_event_write, NULL);
 
 static ssize_t proc_probe_status_write(struct file *file,
 		const char __user *buffer, size_t count, loff_t *ppos)
@@ -4820,6 +4825,10 @@ int init_touchpanel_proc_part2(struct touchpanel_data *ts, struct proc_dir_entry
 			ts->charger_pump_support
 		},
 		{
+			"disable_touch_event", 0666, NULL, &proc_disable_touch_event_fops, ts, false,
+			ts->disable_touch_event_support
+		},
+		{
 			"wireless_charge_detect", 0666, NULL, &proc_wireless_charge_detect_fops, ts, false,
 			ts->wireless_charger_support
 		},
@@ -4993,7 +5002,6 @@ int init_touchpanel_proc(struct touchpanel_data *ts)
 			"leather_cover_enable", 0666, NULL, &leather_cover_enable, ts, false,
 			ts->leather_cover_mode_support
 		},
-		{"disable_touch_event", 0644, NULL, &proc_disable_touch_event_ops, ts, false, true},
 		{"aiunit_game_info", 0666, NULL, &proc_aiunit_game_info_ops, ts, false,
 			ts->aiunit_game_info_support
 		},

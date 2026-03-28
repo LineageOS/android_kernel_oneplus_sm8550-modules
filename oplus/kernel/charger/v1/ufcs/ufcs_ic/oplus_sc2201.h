@@ -114,6 +114,12 @@
 #define SC2201_ADDR_DP_VH (0x30F5)
 #define SC2201_MASK_DP_VH (0x5A)
 
+/*reg02F0*/
+#define SC2201_ADDR_UFCS_OPTION1    (0x02F0)
+#define SC2201_FLAG_ACK_TIMEOUT_MASK    BIT(7)
+#define SC2201_FLAG_EN_LENGTH_END_VALUE   1
+#define SC2201_FLAG_ACK_TIMEOUT_SHIFT   (7)
+
 /****************Message Construction Helper*********/
 struct oplus_sc2201 {
 	struct device *dev;

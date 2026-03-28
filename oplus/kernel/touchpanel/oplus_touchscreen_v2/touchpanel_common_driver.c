@@ -374,7 +374,9 @@ void operate_mode_switch(struct touchpanel_data *ts)
 		if (ts->waterproof_support) {
 			mode_switch_health(ts, MODE_WATERPROOF, ts->waterproof & ~(0x1 << WATERPROOF_RUS_BIT));
 		}
-
+		if (ts->disable_touch_event_support) {
+			mode_switch_health(ts, MODE_UNDERWATER, ts->disable_touch_event);
+		}
 		mode_switch_health(ts, MODE_NORMAL, true);
 	}
 }
@@ -947,7 +949,7 @@ static inline void tp_touch_handle(struct touchpanel_data *ts)
 			}
 
 			if (((obj_attention & TOUCH_BIT_CHECK) >> i) & 0x01
-			    && (points[i].status != 0)) {
+			    && (points[i].status != 0) && (!ts->disable_touch_event)) {
 				input_mt_slot(ts->input_dev, i);
 				input_mt_report_slot_state(ts->input_dev, MT_TOOL_FINGER, 1);
 				ts->touch_report_num++;
@@ -1312,7 +1314,7 @@ static inline void tp_work_func(struct touchpanel_data *ts)
 		}
 
 		if (CHK_BIT(cur_event, IRQ_PALM)
-			&& ts->palm_to_sleep_enable && !ts->is_suspended) {
+			&& ts->palm_to_sleep_enable && !ts->is_suspended && !ts->disable_touch_event) {
 			tp_palm_to_sleep_inScreenLock(ts);
 		}
 
@@ -2305,6 +2307,7 @@ static int init_parse_dts(struct device *dev, struct touchpanel_data *ts)
 	ts->edge_pull_out_support = of_property_read_bool(np, "edge_pull_out_support");
 	ts->lpwg_fw_support = of_property_read_bool(np, "lpwg_fw_support");
 	ts->diaphragm_touch_support = of_property_read_bool(np, "diaphragm_touch_support");
+	ts->disable_touch_event_support = of_property_read_bool(np, "disable_touch_event_support");
 
 #ifdef CONFIG_TOUCHPANEL_TRUSTED_TOUCH
 	ts->trusted_touch_support = of_property_read_bool(np, "trusted_touch_support");

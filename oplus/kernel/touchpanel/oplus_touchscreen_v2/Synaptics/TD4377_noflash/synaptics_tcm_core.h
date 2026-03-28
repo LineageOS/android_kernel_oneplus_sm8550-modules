@@ -241,6 +241,7 @@ enum dynamic_config_id {
 	DC_GLOVE_MODE_STATE = 0xF5,
 	DC_LOW_TEMP_ENABLE = 0xFD,
 	DC_WATERPROOF_ENABLE = 0xFC,
+	DC_UNDER_WATER = 0xF6,
 };
 
 enum command {

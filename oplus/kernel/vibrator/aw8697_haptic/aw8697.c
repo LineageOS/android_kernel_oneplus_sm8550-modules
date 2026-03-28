@@ -7495,7 +7495,11 @@ static ssize_t proc_vibration_style_write(struct file *filp, const char __user *
 	int val;
 	int ret;
 
-	if (count > 5) {
+	if (count >= sizeof(buffer)) {
+		return -EFAULT;
+	}
+
+	if (buf == NULL) {
 		return -EFAULT;
 	}
 
@@ -7504,10 +7508,11 @@ static ssize_t proc_vibration_style_write(struct file *filp, const char __user *
 		return -EFAULT;
 	}
 
+	buffer[count] = '\0';
 	dev_err(aw8697->dev,"buffer=%s", buffer);
 	ret = kstrtoint(buffer, 0, &val);
 	if (ret != 0)
-		return -EINVAL;
+		return ret;
 	dev_err(aw8697->dev,"val = %d", val);
 
 	if (val == 0) {
@@ -7610,7 +7615,7 @@ static int aw8697_file_mmap(struct file *filp, struct vm_area_struct *vma)
     int ret = 0;
 #if LINUX_VERSION_CODE > KERNEL_VERSION(4,7,0)
     //only accept PROT_READ, PROT_WRITE and MAP_SHARED from the API of mmap
-    vm_flags_t vm_flags = calc_vm_prot_bits(PROT_READ|PROT_WRITE, 0) | calc_vm_flag_bits(filp, MAP_SHARED);
+    vm_flags_t vm_flags = calc_vm_prot_bits(PROT_READ|PROT_WRITE, 0);
     vm_flags |= current->mm->def_flags | VM_MAYREAD | VM_MAYWRITE | VM_MAYEXEC| VM_SHARED | VM_MAYSHARE;
     if(vma && (pgprot_val(vma->vm_page_prot) != pgprot_val(vm_get_page_prot(vm_flags))))
         return -EPERM;
