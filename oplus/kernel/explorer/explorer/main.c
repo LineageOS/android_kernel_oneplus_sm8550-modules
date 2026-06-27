@@ -1196,6 +1196,7 @@ power_out:
 			ret = copy_from_user(data, (char __user *)arg, param_size);
 			if (ret) {
 				pr_err("%s, can not copy explorer_data from user, ret = 0x%x.\n", __func__, ret);
+				devm_kfree(dev, data);
 				goto td_out;
 			}
 			tunning_info = (struct explorer_tunning_data_info *)data;
@@ -1203,11 +1204,11 @@ power_out:
 			ret = explorer_load_fw(epd, tunning_info->name, tunning_info->addr);
 			if (ret<0) {
 				pr_err("%s, explorer_load_fw failed.\n", __func__);
+				devm_kfree(dev, data);
 				goto td_out;
 			}
 			pr_info("%s, IOC_NR_SEND_TUNNING_DATA done.\n", __func__);
 td_out:
-			devm_kfree(dev, data);
 			break;
 		}
 		case IOC_NR_SECURITY:
