@@ -97,12 +97,12 @@
 /* #define AW_ENABLE_PIN_CONTROL */
 /* #define AW_SND_SOC_CODEC */
 /* #define AW869X_MUL_GET_F0 */
-#define AW869X_DRIVER_ENABLE
-#define AW869XX_DRIVER_ENABLE
-#define AW8671X_DRIVER_ENABLE
-#define AW8672X_DRIVER_ENABLE
+/* #define AW869X_DRIVER_ENABLE */
+/* #define AW869XX_DRIVER_ENABLE */
+/* #define AW8671X_DRIVER_ENABLE */
+/* #define AW8672X_DRIVER_ENABLE */
 #define AW8692X_DRIVER_ENABLE
-#define AW8693X_DRIVER_ENABLE
+/* #define AW8693X_DRIVER_ENABLE */
 
 /*********************************************************
  *
