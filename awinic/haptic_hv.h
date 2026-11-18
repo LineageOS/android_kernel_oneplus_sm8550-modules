@@ -83,18 +83,13 @@
 #define AW_BIT_RESET				(0xAA)
 #define CPU_LATENCY_QOC_VALUE			(0)
 
-#define AW_DEFAULT_GAIN                         (0x80)
-#define AW_STRONG_GAIN				(0x80)
-#define AW_MEDIUM_GAIN				(0x60)
-#define AW_LIGHT_GAIN				(0x40)
-
 #define AW_CHECK_RAM_DATA
 #define AW_READ_BIN_FLEXBALLY
 #define AW_LRA_F0_DEFAULT
-/* #define AW_INPUT_FRAMEWORK */
-#define AW_TIKTAP
+#define AW_INPUT_FRAMEWORK
+/* #define AW_TIKTAP */
 /* #define AW_DOUBLE */
-#define AW_DURATION_DECIDE_WAVEFORM
+/* #define AW_DURATION_DECIDE_WAVEFORM */
 /* #define AW_USE_MAXIMUM_F0_CALI_DATA */
 /* #define AW_OSC_MULTI_CALI */
 /* #define AW_BOOT_OSC_CALI */

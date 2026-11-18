@@ -20,61 +20,11 @@
 
 char *aw_ram_name = "haptic_ram.bin";
 char aw_rtp_name[][AW_RTP_NAME_MAX] = {
-	{"aw869xx_rtp.bin"},
-	{"aw869xx_rtp_Argo_Navis.bin"},
-	{"aw869xx_rtp_Attentive.bin"},
-	{"aw869xx_rtp_Awake.bin"},
-	{"aw869xx_rtp_Bird_Loop.bin"},
-	{"aw869xx_rtp_Brilliant_Times.bin"},
-	{"aw869xx_rtp_Chimey_Phone.bin"},
-	{"aw869xx_rtp_Complex.bin"},
-	{"aw869xx_rtp_Crazy_Dream.bin"},
-	{"aw869xx_rtp_Curve_Ball_Blend.bin"},
-	{"aw869xx_rtp_Digital_Phone.bin"},
-	{"aw869xx_rtp_Electrovision.bin"},
-	{"aw869xx_rtp_Ether_Shake.bin"},
-	{"aw869xx_rtp_Fateful_Words.bin"},
-	{"aw869xx_rtp_Flutey_Phone.bin"},
-	{"aw869xx_rtp_Future_Funk.bin"},
-	{"aw869xx_rtp_Future_Hi_Tech.bin"},
-	{"aw869xx_rtp_Girtab.bin"},
-	{"aw869xx_rtp_Hello.bin"},
-	{"aw869xx_rtp_Hexagon.bin"},
-	{"aw869xx_rtp_Hydra.bin"},
-	{"aw869xx_rtp_Insert_Coin.bin"},
-	{"aw869xx_rtp_Jumping_Dots.bin"},
-	{"aw869xx_rtp_Keys.bin"},
-	{"aw869xx_rtp_Loopy.bin"},
-	{"aw869xx_rtp_Loopy_Lounge.bin"},
-	{"aw869xx_rtp_Modular.bin"},
-	{"aw869xx_rtp_Momentum.bin"},
-	{"aw869xx_rtp_Morning.bin"},
-	{"aw869xx_rtp_Moto.bin"},
-	{"aw869xx_rtp_Natural.bin"},
-	{"aw869xx_rtp_New_Player.bin"},
-	{"aw869xx_rtp_Onward.bin"},
-	{"aw869xx_rtp_Organ_Dub.bin"},
-	{"aw869xx_rtp_Overclocked.bin"},
-	{"aw869xx_rtp_Pegasus.bin"},
-	{"aw869xx_rtp_Pyxis.bin"},
-	{"aw869xx_rtp_Regrade.bin"},
-	{"aw869xx_rtp_Scarabaeus.bin"},
-	{"aw869xx_rtp_Sceptrum.bin"},
-	{"aw869xx_rtp_Simple.bin"},
-	{"aw869xx_rtp_Solarium.bin"},
-	{"aw869xx_rtp_Sparse.bin"},
-	{"aw869xx_rtp_Terrabytes.bin"},
-	{"aw869xx_rtp_Zero_Hour.bin"},
-	{"aw869xx_rtp_Play.bin"},
-	{"aw869xx_rtp_TJINGLE.bin"},
-	{"aw869xx_rtp_Verizon_Airwaves.bin"},
-	{"aw869xx_rtp_City_Lights.bin"},
-	{"aw869xx_rtp_Firefly.bin"},
-	{"aw869xx_rtp_Now_or_Never.bin"},
-	{"aw869xx_rtp_Moto_Retro.bin"},
-	{"aw869xx_rtp_Moto_Original.bin"},
-	{"aw869xx_rtp_Moto_Classic.bin"},
-	{"aw869xx_rtp_New_Hello_moto.bin"},
+	{"haptic_rtp_osc_24K_5s.bin"},
+	{"haptic_rtp.bin"},
+	{"haptic_rtp_lighthouse.bin"},
+	{"haptic_rtp_silk.bin"},
+	{"haptic_rtp_auto_sin.bin"},
 };
 
 #ifdef AW_TIKTAP
@@ -1062,7 +1012,7 @@ static int ram_select_waveform(struct aw_haptic *aw_haptic)
 	uint8_t wavseq = 0;
 	uint8_t wavloop = 0;
 
-	if (aw_haptic->duration < 0) {
+	if (aw_haptic->duration <= 0) {
 		aw_err("duration time %d error", aw_haptic->duration);
 		return -ERANGE;
 	}
@@ -1079,12 +1029,7 @@ static int ram_select_waveform(struct aw_haptic *aw_haptic)
 		wavseq = 4;
 		wavloop = 15;
 		aw_haptic->activate_mode = AW_RAM_LOOP_MODE;
-	} else if ((aw_haptic->duration == 0) && (0 < aw_haptic->seq[0])) {
-		wavseq = aw_haptic->seq[0];
-	} else {
-		aw_err("duration time error, duration= %d", aw_haptic->duration);
-		return -ERANGE;
-	} 
+	}
 	aw_info("duration %d, select index %d", aw_haptic->duration, wavseq);
 	aw_haptic->func->set_wav_seq(aw_haptic, 0, wavseq);
 	aw_haptic->func->set_wav_loop(aw_haptic, 0, wavloop);
@@ -1791,8 +1736,6 @@ static ssize_t activate_store(struct device *dev, struct device_attribute *attr,
 	mutex_lock(&aw_haptic->lock);
 	aw_haptic->state = val;
 	aw_haptic->activate_mode = aw_haptic->info.mode;
-	if (0 == val)
-	    aw_haptic->gain = AW_DEFAULT_GAIN;
 	mutex_unlock(&aw_haptic->lock);
 	queue_work(aw_haptic->work_queue, &aw_haptic->vibrator_work);
 
@@ -1940,7 +1883,6 @@ static ssize_t seq_store(struct device *dev, struct device_attribute *attr,
 {
 	cdev_t *cdev = dev_get_drvdata(dev);
 	struct aw_haptic *aw_haptic = container_of(cdev, struct aw_haptic, vib_dev);
-#if 0
 	uint32_t databuf[2] = { 0, 0 };
 
 	if (sscanf(buf, "%x %x", &databuf[0], &databuf[1]) == 2) {
@@ -1955,44 +1897,7 @@ static ssize_t seq_store(struct device *dev, struct device_attribute *attr,
 					     aw_haptic->seq[databuf[0]]);
 		mutex_unlock(&aw_haptic->lock);
 	}
-#endif
-	unsigned int val = 0;
-	int rc = 0;
-	rc = kstrtouint(buf, 0, &val);
-	if (rc < 0)
-		return rc;
 
-	val = (val >> 24) & 0xFF;
-	aw_info("%s: seq=%d\n", __func__,val);
-
-	mutex_lock(&aw_haptic->lock);
-	aw_haptic->duration = 0;
-	if (val == 3) {
-		aw_haptic->seq[0] = 1;
-	} else if (val == 4) {
-		aw_haptic->seq[0] = 3;
-	} else if (val == 5) {
-		aw_haptic->seq[0] = 1;
-	} else if (val == 6) {
-		aw_haptic->seq[0] = 2;
-	} else {
-		aw_haptic->seq[0] = 1;
-	}
-	aw_haptic->func->set_wav_seq(aw_haptic, 0, aw_haptic->seq[0]);
-	mutex_unlock(&aw_haptic->lock);
-
-	return count;
-}
-
-static ssize_t rtp_interface_show(struct device *dev,
-        struct device_attribute *attr, char *buf)
-{
-	return 0;
-}
-
-static ssize_t rtp_interface_store(struct device *dev,
-        struct device_attribute *attr, const char *buf, size_t count)
-{
 	return count;
 }
 
@@ -2952,60 +2857,12 @@ static ssize_t dual_rtp_store(struct device *dev, struct device_attribute *attr,
 }
 #endif
 
-static ssize_t strength_show(struct device *dev, struct device_attribute *attr, char *buf)
-{
-	cdev_t *cdev = dev_get_drvdata(dev);
-	struct aw_haptic *aw_haptic = container_of(cdev, struct aw_haptic, vib_dev);
-	uint8_t gain = aw_haptic->gain;
-
-	return snprintf(buf, PAGE_SIZE, "gain = 0x%02X\n", gain);
-}
-
-static ssize_t strength_store(struct device *dev, struct device_attribute *attr, const char *buf,
-			  size_t count)
-{
-	cdev_t *cdev = dev_get_drvdata(dev);
-	struct aw_haptic *aw_haptic = container_of(cdev, struct aw_haptic, vib_dev);
-	uint32_t val = 0;
-	int rc = 0;
-
-	rc = kstrtouint(buf, 0, &val);
-	if (rc < 0)
-		return rc;
-
-	aw_info("value=0x%02X", val);
-
-	mutex_lock(&aw_haptic->lock);
-
-	switch (val) {
-	case 0:
-		aw_haptic->gain = AW_LIGHT_GAIN;
-		break;
-	case 1:
-		aw_haptic->gain = AW_MEDIUM_GAIN;
-		break;
-	case 2:
-		aw_haptic->gain = AW_STRONG_GAIN;
-		break;
-	default:
-		aw_err("Unsupported strength: %d", val);
-		break;
-	}
-
-	aw_haptic->func->set_gain(aw_haptic, aw_haptic->gain);
-	mutex_unlock(&aw_haptic->lock);
-
-	return count;
-}
-
 static DEVICE_ATTR_RO(f0);
 static DEVICE_ATTR_RO(ram_f0);
 static DEVICE_ATTR_RW(seq);
 static DEVICE_ATTR_RW(reg);
 static DEVICE_ATTR_RW(vmax);
 static DEVICE_ATTR_RW(gain);
-static DEVICE_ATTR_RW(strength);
-static DEVICE_ATTR_RW(rtp_interface);
 static DEVICE_ATTR_RW(loop);
 static DEVICE_ATTR_RW(rtp);
 static DEVICE_ATTR_RW(cali);
@@ -3049,9 +2906,7 @@ static struct attribute *vibrator_attributes[] = {
 	&dev_attr_index.attr,
 	&dev_attr_vmax.attr,
 	&dev_attr_gain.attr,
-	&dev_attr_strength.attr,
 	&dev_attr_seq.attr,
-	&dev_attr_rtp_interface.attr,
 	&dev_attr_loop.attr,
 	&dev_attr_reg.attr,
 	&dev_attr_rtp.attr,
